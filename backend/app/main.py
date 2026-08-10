@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import SessionLocal
+from .routers import auth
 from .seed import is_empty, seed
 
 
@@ -58,6 +59,9 @@ async def validation_exception_handler(
             "error": {"code": "validation_error", "message": str(exc.errors())}
         },
     )
+
+
+app.include_router(auth.router)
 
 
 @app.get("/health", tags=["meta"])

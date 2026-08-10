@@ -1513,3 +1513,57 @@ Redocly lint: valid (56 uyarı, hepsi önceden var olan `operation-4xx-response`
 ama **sunucuda** (sabit `123456`); `verify` auto-register YAPMAZ → kayıtsız numara
 `404 user_not_found`. `refresh_token` her zaman üretilir (§0.8: contract'ta nullable ama
 `TokenAuthenticator` onsuz pes edip login gate'ine düşüyor).
+
+### 2026-08-10 — Tur 30: FAZ 5 Aşama 5b — auth uçları (ilk gerçek token)
+
+Dört uç canlı: `/auth/otp/request|verify|refresh|logout`. Sunucu artık **gerçek JWT
+üretiyor** — app-pos'un `login()`'i hâlâ lokal mock ama karşı taraf hazır (5f'de bağlanacak).
+
+**1) OTP mock KALDI ama SUNUCUYA taşındı.** Sabit kod `123456`, `config.py`'de tek sabit.
+Değişen şey kodun **nerede yargılandığı**: cihazdaki `OtpService` yerine sunucu. Gerçek SMS
+sağlayıcısı gelince sadece bu sabitin kaynağı değişecek, başka hiçbir yer değil.
+
+**2) `verify` auto-register YAPMIYOR** (api-endpoints.md A.1 kesin kararı): kayıtsız numara
+`404 user_not_found`, client `POST /users` ile ayrı adımda kaydediyor. `LoginViewModel`'de
+NEEDS_REGISTER dalı zaten var, 5f'de bu 404'e bağlanacak.
+
+**3) `otp/request` hesabın var olup olmadığını SIZDIRMIYOR.** İki numara da 202 + `sent:true`
+alıyor. Kayıtlı numaraya farklı cevap verilseydi bu uç "hangi numaraların hesabı var"
+sorusunun oracle'ı olurdu. Ama `channel` alanı gerçeği yansıtıyor (`APP_PUSH` vs `SMS_OTP`)
+çünkü client ekran metnini ona göre seçiyor — sızıntı değil, çünkü kod zaten telefona gidiyor.
+
+**4) `refresh_token` HER ZAMAN üretiliyor (§0.8).** Contract'ta nullable ama
+`TokenAuthenticator` onu bulamayınca **pes edip login gate'ine düşüyor** — yani vermeyen bir
+sunucu 401→refresh→retry yolunu test edilemez kılardı.
+
+**5) Token tipi kontrol ediliyor.** `typ: access|refresh` claim'i; access token'ı refresh
+yerine kullanma denemesi `401 invalid_token`. Olmasaydı bir access token sessizce **bir aylık**
+bearer'a dönüşürdü (refresh TTL'i 30 gün).
+
+**6) `logout` sunucuda no-op ama 204 dönüyor + token İSTİYOR.** JWT stateless olduğu için
+iptal edilecek bir şey yok; kısa access TTL + client'ın `TokenStore`'u temizlemesi tezgâhtaki
+gerçek riski karşılıyor. Uç yine de var ki client'ın çağıracak tek yeri olsun ve ileride
+revocation list eklenirse **client değişmesin**. Token istiyor: aksi halde biri sahip
+olmadığı oturumu kapatabilirdi.
+
+**Öğrenilenler:**
+- **`jti` olmadan iki token aynı string olabiliyor.** Aynı saniyede aynı user için üretilen
+  JWT'lerin payload'ı birebir aynı → imza da aynı. `TokenAuthenticator` eski/yeni bearer'ı
+  **karşılaştırarak** "başka thread yeniledi mi" diye bakıyor; aynı string onu yanlış dala
+  sokup bayat sandığı token'la retry ettirirdi. Test bunu açıkça koruyor.
+- **`dependency_overrides` lifespan'i kapsamıyor.** `TestClient(app)` startup'ı tetikliyor,
+  o da `SessionLocal`'dan **kendi** session'ını kuruyor → testler gerçek Postgres'e uzanıp
+  container'sız makinede patlıyordu. Çözüm: fixture `seed_on_startup`'ı kapatıyor.
+- **Hata zarfı tek yerden.** `main.py`'deki handler `{error:{code,message}}` şeklini garanti
+  ediyor; FastAPI'nin kendi 401/404'leri de sarmalanıyor, yani hiçbir uç farklı şekilli hata
+  sızdıramıyor (`ErrorEnvelopeDto` bunu bekliyor).
+
+**Doğrulama:** **40 pytest / 0 fail** (23 önceki + 17 auth). Ayrıca **gerçek container'a
+karşı 9 curl senaryosu**: kayıtsız→404, yanlış kod→401, geçersiz telefon→400, request→202,
+token'sız logout→401, token'lı logout→204, refresh→farklı token, access-token-ile-refresh→401,
+`seller_info` nested + `created_at: 2026-07-01T06:00:00Z` (§0.2 düzeltmesi uçtan uca tuttu).
+
+**Sıradaki:** 5c — users + customers (`POST /users` telefonla idempotent, `GET/PATCH /users/me`,
+`become-seller`; `POST/GET /customers` bakiyeli, `/customers/{id}`, `/customers/lookup`).
+`GET /customers` seller-scoped olacak: token'ın kullanıcısının defteri + `SUM` ile türetilmiş
+`balance_minor`.
