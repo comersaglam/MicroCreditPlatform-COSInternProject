@@ -3,7 +3,7 @@ package com.example.app_pos.data
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.remote.RemoteDataSource
 import com.example.app_pos.data.sync.SyncEngine
-import com.example.app_pos.data.sync.SyncOutcome
+import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.mapper.toCreateDto
 import com.squareup.moshi.Moshi
@@ -166,12 +166,7 @@ class OfflineFirstRepository @Inject constructor(
      * syncing is a separate step; this covers the case that matters most — a terminal that
      * was offline is opened again once there is signal.
      */
-    override suspend fun syncNow() {
-        drainAndReport()
-    }
-
-    /** The same drain, with the counts — for a caller that wants to show them. */
-    suspend fun drainAndReport(): SyncOutcome = syncEngine.drainOutbox()
+    override suspend fun syncNow(): SyncOutcome = syncEngine.drainOutbox()
 
     /** How many writes have not reached the server yet. */
     override fun observeUnsentCount(): Flow<Int> = local.observeUnsentCount()

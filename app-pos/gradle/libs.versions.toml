@@ -22,9 +22,11 @@ datastore = "1.1.1"
 # 2.59 is the first Hilt whose Gradle plugin supports AGP 9 (earlier ones look for the
 # removed BaseExtension DSL type and fail to apply).
 hilt = "2.60.1"
-# AndroidX's Hilt bridge (hiltNavGraphViewModels / @HiltViewModel with Navigation).
-# Versioned separately from Dagger's Hilt — they are different artifacts.
-androidxHilt = "1.2.0"
+# AndroidX's Hilt bridge (@HiltWorker + its factory). Versioned separately from Dagger's
+# Hilt — they are different artifacts and their numbers are unrelated.
+androidxHilt = "1.4.0"
+# Background sync. 2.12.x is still beta; 2.11.2 is the current stable line.
+work = "2.11.2"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -60,7 +62,10 @@ moshi-kotlin-codegen = { group = "com.squareup.moshi", name = "moshi-kotlin-code
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
-androidx-hilt-navigation-fragment = { group = "androidx.hilt", name = "hilt-navigation-fragment", version.ref = "androidxHilt" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+# Lets Hilt build Workers (@HiltWorker) — a separate processor from Dagger's own.
+androidx-hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "androidxHilt" }
+androidx-hilt-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "androidxHilt" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }

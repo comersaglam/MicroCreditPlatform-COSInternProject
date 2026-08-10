@@ -5,6 +5,7 @@ import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.Flow
@@ -89,7 +90,7 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
     override fun observeUnsentCount(): Flow<Int> = flowOf(queue.size)
 
     // Draining needs a remote source; the composing repository overrides this.
-    override suspend fun syncNow() = Unit
+    override suspend fun syncNow(): SyncOutcome = SyncOutcome()
 
     // --- the rest is out of scope for the session tests -----------------------
 

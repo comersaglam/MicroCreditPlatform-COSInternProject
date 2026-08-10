@@ -11,6 +11,7 @@ import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.Repository
+import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.User
@@ -253,7 +254,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
      * needs a remote source, so it belongs to the composing repository — which overrides
      * this. Present only because LocalSource extends the full Repository contract.
      */
-    override suspend fun syncNow() = Unit
+    override suspend fun syncNow(): SyncOutcome = SyncOutcome()
 
     /** Rows still waiting to reach the server, oldest first. */
     override suspend fun pendingOutbox(): List<OutboxEntity> = outbox.all()

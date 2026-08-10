@@ -1380,3 +1380,75 @@ idempotency header'ı, sıra, kopan soket, 500/400/409 ayrımı, bozuk payload.
 **Sıradaki:** WorkManager (arka plan periyodik drain — `WorkerFactory` + Hilt entegrasyonu, ayrı tur;
 şu an sadece açılış + yazma sonrası tetikleniyor). Sonra app-mobile'a `:core-network` kopyası +
 Aşama 0 timestamp geçişi. `login()`'in gerçek `AuthApi.verifyOtp`'ye bağlanması da bekliyor (FAZ 4b).
+
+### 2026-08-06 — Tur 28: FAZ 4 Aşama 9 — WorkManager ile arka plan senkronizasyonu
+
+Aşama 8'de kuyruk ve `SyncEngine` vardı ama **sadece iki anda** boşalıyordu: uygulama açılışı ve
+OTP sonrası. Boşluk: uygulama kapalıyken sinyal gelirse hiçbir şey olmuyordu — sinyalsiz tezgâhta
+gün boyu yazılan veresiyeler, ertesi gün uygulama açılana kadar sunucuya gitmiyordu. Bu tur drain'i
+işletim sistemine emanet ediyor.
+
+**1) `SyncWorker` (`:app/sync/`, `@HiltWorker`):** karar tablosu —
+- `isSessionValid()` false → **`Result.retry()`, kuyruğa DOKUNMAZ.**
+  **Bu guard'ın olmaması doğrudan veri kaybıydı:** token yokken sunucu 401 döner, `SyncEngine`
+  401'i 4xx sayıp "kalıcı ret" olarak kaydı **SİLER**. Yani çıkış yapmış esnafın gönderilmemiş
+  veresiyeleri arka planda sessizce yok olurdu.
+- `outcome.retryable > 0` → `retry()` (WorkManager kendi exponential backoff'unu uygular)
+- exception → `retry()`, **asla `failure()`**: kalıcı failure işi düşürür, kuyruk temelli tıkanır.
+
+**Worker `:app`'te, `:core-data`'da DEĞİL:** `:core-data` depolamayı ve ağı bilir, **ne zaman**
+senkron olunacağını bilmez — zamanlama uygulama kararı. Kütüphane modülünü WorkManager'a bağlamak
+zamanlama politikasını veri katmanına gömerdi.
+
+**2) Manifest'te `WorkManagerInitializer` KALDIRILDI (`tools:node="remove"`):** WorkManager kendini
+`androidx.startup` ile `App.onCreate`'ten ÖNCE başlatıyor ve stok worker factory'yi kullanıyor —
+o da constructor parametreli `@HiltWorker`'ı kuramaz. Sonuç **derleme hatası değil, runtime'da
+"could not instantiate SyncWorker"**. Bu satır optimizasyon değil, WIRING'in kendisi.
+Merged manifest'te debug+release için `grep -c` = 0 ile doğrulandı.
+
+**3) `SyncScheduler` (`:app`, WorkManager'ı bilen TEK yer):**
+- Periyodik: **15 dk** (WorkManager'ın tabanı; altı sessizce yükseltilir) + `NetworkType.CONNECTED`
+  (sinyalsizken hiç uyanmaz) + **`ExistingPeriodicWorkPolicy.KEEP`**. KEEP kritik: `UPDATE` olsaydı
+  her açılışta periyot sıfırlanır, sık açılan bir POS'ta iş **hiç çalışmazdı**.
+- Tek-sefer: satış sonrası, `ExistingWorkPolicy.KEEP` (arka arkaya satışlar tek koşuda birleşir).
+
+**4) `OtpViewModel`'de `appScope.launch { repo.syncNow() }` → `syncScheduler.syncNow()`:**
+`appScope` process'e bağlıydı; esnaf satıştan sonra uygulamayı recents'ten atarsa push yarıda
+kalıyordu. Work request process'i aşar, ayrıca ağ kısıtı sayesinde offline'da boşuna tur atmaz.
+
+**5) `SyncOutcome` `:core-data` → `:core-domain`'e TAŞINDI, `Repository.syncNow()` artık onu
+DÖNÜYOR** (eskiden `Unit`'ti + `OfflineFirstRepository.drainAndReport()` vardı). Sebep: Worker
+"tekrar denemeli miyim" sorusunu cevaplamak zorunda; `Unit` dönseydi Worker somut
+`OfflineFirstRepository`'ye bağlanacaktı. Tek metot, arayüz üzerinden, `drainAndReport` silindi.
+
+**Öğrenilenler:**
+- **`WorkerParameters`'ın public constructor'ı yok** → JVM testinde `SyncWorker` kurulamıyor;
+  gerçeğini koşturmak Robolectric + scheduler demekti. Karar mantığı `companion object`'te saf
+  `suspend fun decide(repository)` olarak ayrıldı → 4 dal unit-test maliyetine doğrulanıyor.
+  `doWork()` tek satır delegasyon.
+- **`:app`'te `BuildConfig` YOK** (`buildConfig` feature'ı sadece `:core-network`'te açık).
+  Mevcut `NetworkConfig.isDebug` kullanıldı — sırf aynı bilgi için `:app`'e feature açmaya gerek yok.
+- **Ölü catalog alias'ı temizlendi:** `androidx-hilt-navigation-fragment` Aşama 7'de eklenmiş ama
+  hiç kullanılmamıştı; `androidxHilt` 1.2.0 → **1.4.0** (hilt-work için) çekilirken silindi.
+
+**Doğrulama:** `:core-domain:build` ✓, `:app:assembleDebug` ✓, `:app:assembleRelease` ✓,
+**50 unit test / 0 fail / 0 skip** (22 network + 10 session + 10 SyncEngine + **7 SyncWorker** + 1 örnek).
+Uyarı yok. Hilt'in `SyncWorker_AssistedFactory_Impl` ürettiği doğrulandı.
+Sürümler: WorkManager **2.11.2**, androidx.hilt **1.4.0** (Google Maven'dan teyit; 2.12.x beta).
+**DB versiyonu 2'de KALDI**, migration/uninstall YOK.
+
+**CİHAZ TESTİ:** Aşama 7+8 listeleri bozulmamalı. Aşama 9'a özel:
+1. **Prism kapalı** → 2-3 veresiye yaz → normal çalışmalı (ekran beklemez).
+2. Uygulamayı **tamamen kapat** (recents'ten at), Prism'i aç.
+3. **Uygulamayı AÇMADAN** bekle → 15 dk içinde kuyruk boşalmalı (Prism'de `POST /transactions`).
+   Hızlandırma: `adb shell dumpsys jobscheduler | grep app_pos` ile jobId bul →
+   `adb shell cmd jobscheduler run -f com.example.app_pos <jobId>`.
+4. **Oturumsuz senaryo (asıl risk):** kuyrukta kayıt varken **çıkış yap**, kapat, Prism açık bekle
+   → `POST /transactions` **GELMEMELİ**, kayıtlar durmalı. Giriş yap → gitmeli.
+5. Prism **açıkken** veresiye yaz → anında POST (tek-sefer iş).
+
+**Sıradaki:** FAZ 4b — `login()` gerçek `AuthApi.requestOtp/verifyOtp`'ye bağlanır (şu an lokal
+doğruluyor ama session gerçek `SessionDto` olarak diske yazılıyor → sadece token'ın kaynağı
+değişecek). Sonra app-mobile'a `:core-network` + outbox + WorkManager kopyası.
+Küçük opsiyon: `Repository.observeUnsentCount()` **var ama hiçbir ekran kullanmıyor** —
+dashboard'a "N kayıt gönderilmedi" rozeti tek fragment değişikliği.

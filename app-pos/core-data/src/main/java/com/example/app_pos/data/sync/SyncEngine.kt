@@ -2,6 +2,7 @@ package com.example.app_pos.data.sync
 
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.remote.RemoteDataSource
+import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.network.ApiResult
 import com.example.app_pos.network.isRetryable
 import com.example.app_pos.network.dto.TransactionCreateDto
@@ -10,17 +11,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/** What one drain accomplished, for logging and for a caller that wants to report it. */
-data class SyncOutcome(
-    val sent: Int = 0,
-    /** Left in the queue to try again — offline, timeout, or a server-side failure. */
-    val retryable: Int = 0,
-    /** Removed without being accepted: the server refused in a way retrying cannot fix. */
-    val dropped: Int = 0
-) {
-    val attempted: Int get() = sent + retryable + dropped
-}
 
 /**
  * Drains the offline outbox: takes the writes Room already accepted and pushes them to the

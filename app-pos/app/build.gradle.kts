@@ -65,10 +65,16 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
-    // by hiltNavGraphViewModels / by viewModels() on an injected ViewModel.
-    implementation(libs.androidx.hilt.navigation.fragment)
+
+    // Background sync: the OS drains the outbox even while the app is closed.
+    implementation(libs.androidx.work.runtime.ktx)
+    // @HiltWorker support. Its processor is AndroidX's, separate from Dagger's above —
+    // both have to run, or the Worker's factory is never generated.
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

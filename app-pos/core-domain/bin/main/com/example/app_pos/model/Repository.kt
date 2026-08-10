@@ -61,13 +61,13 @@ interface Repository {
     // --- sync ---
 
     /**
-     * Pushes writes that have not reached the server yet.
+     * Pushes writes that have not reached the server yet, and reports what happened.
      *
      * Safe to call at any time: a no-op when nothing is queued, single-flight, and every
-     * send is idempotent. Failures are absorbed — the queue simply keeps the entry — so a
-     * caller does not have to handle an offline device.
+     * send is idempotent. Never throws — failures come back in the result, because the
+     * caller that matters (the background sync) has to decide whether to try again.
      */
-    suspend fun syncNow()
+    suspend fun syncNow(): SyncOutcome
 
     /** How many writes are still unsent; 0 means the device and server agree. */
     fun observeUnsentCount(): Flow<Int>

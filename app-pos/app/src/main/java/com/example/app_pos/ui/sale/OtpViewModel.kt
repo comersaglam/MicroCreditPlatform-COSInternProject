@@ -4,9 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app_pos.data.OtpService
 import com.example.app_pos.model.Repository
-import com.example.app_pos.data.di.ApplicationScope
+import com.example.app_pos.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.CoroutineScope
 import javax.inject.Inject
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.Transaction
@@ -35,7 +34,7 @@ enum class OtpStatus { SENDING, READY, VERIFYING, DONE, ERROR }
 @HiltViewModel
 class OtpViewModel @Inject constructor(
     private val repo: Repository,
-    @ApplicationScope private val appScope: CoroutineScope
+    private val syncScheduler: SyncScheduler
 ) : ViewModel() {
     private val _status = MutableStateFlow(OtpStatus.SENDING)
     val status: StateFlow<OtpStatus> = _status.asStateFlow()
@@ -103,12 +102,15 @@ class OtpViewModel @Inject constructor(
             _status.value = OtpStatus.DONE
             onWritten()
 
-            // Best-effort immediate delivery, on a scope that OUTLIVES this screen.
-            // onWritten() above closes the sale flow, which clears this ViewModel and
-            // cancels viewModelScope — a push started there would be killed mid-request.
-            // The entry would survive in the queue, but it would not go out until the next
-            // drain, which is a needless delay when the device is online right now.
-            appScope.launch { repo.syncNow() }
+            // Hand the push to WorkManager rather than running it here.
+            //
+            // onWritten() above closes the sale flow, which clears this ViewModel — a
+            // coroutine started here would be cancelled mid-request, and even an
+            // application-scoped one dies if the merchant swipes the app away. A work
+            // request survives both, and its network constraint means an offline device is
+            // not woken to fail. The entry is already safe in Room either way; this only
+            // decides how promptly it leaves.
+            syncScheduler.syncNow()
         }
     }
 
