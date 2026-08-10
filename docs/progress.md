@@ -2,6 +2,10 @@
 
 Bu dosya her adımda güncellenir: ne yaptık, neden, sıradaki ne. Amaç: unutmamak.
 
+> **Yarım bırakılanlar için: [deferred.md](deferred.md)** — bilinçli olarak ertelenen her şey
+> (mock kalan login/OTP, app-mobile'ın FAZ 4 eksiği, `future` uçlar) gerekçesi ve kod
+> konumuyla orada. Bu dosya *ne yaptığımızı*, o dosya *neyi bıraktığımızı* anlatır.
+
 Sıra: **app-pos + shared-contracts → app-mobile → backend.**
 Yöntem: kısa parçalar, her adımda açıklama + onay, XML views, Clean Architecture,
 overengineering yok. Emülatör: medium-size, Google Play imajı (iki cihaz için de).
@@ -1452,3 +1456,60 @@ doğruluyor ama session gerçek `SessionDto` olarak diske yazılıyor → sadece
 değişecek). Sonra app-mobile'a `:core-network` + outbox + WorkManager kopyası.
 Küçük opsiyon: `Repository.observeUnsentCount()` **var ama hiçbir ekran kullanmıyor** —
 dashboard'a "N kayıt gönderilmedi" rozeti tek fragment değişikliği.
+
+### 2026-08-10 — Tur 29: FAZ 5 Aşama 5a — backend iskeleti + Docker + şema + seed
+
+`backend/` artık boş değil. FastAPI + PostgreSQL 16 + Docker Compose ayakta, altı tablo
+kurulu, seed atılmış. Henüz **hiçbir uç yok** (sadece `/health`) — bu tur temeli atıyor.
+
+**Plan yazılırken kod okundu, 8 ayrışma bulundu** ([faz5-backend-plan.md](faz5-backend-plan.md) §0).
+En önemlisi 5a'nın kapsamını değiştirdi:
+
+**1) İKİ FARKLI SEED VARDI (§0.1).** app-pos ve app-mobile aynı id'lere farklı satırlar
+yüklüyordu: `t4`/`t5` app-pos'ta `u_owner`→`c2`, app-mobile'da `u_market`→`m1`. Tek DB
+olduğu için biri kazanmalıydı. **app-mobile'ınki seçildi**, çünkü üst küme: ikinci satıcı
+(`u_market`), çapraz defterler (`m1`/`o1`), approval satırları onda var. app-pos seed'iyle
+gidilseydi **`/me/debts` boş liste dönerdi** → 5e hiç test edilemezdi. app-pos'un tek
+fazlalığı `c2` (UNCLAIMED müşteri, claim akışı için gerekli) korundu → 15 transaction.
+
+**2) Contract örnekleri 3 saat bayattı (§0.2).** `openapi.yaml`'da `t1` için
+`2026-07-20T09:15:00Z` yazıyordu; bu Istanbul yerel saatine `Z` eklenmiş hali. app-pos
+Aşama 0'da aynı anı `06:15:00Z` olarak yazmıştı. **8 örnek düzeltildi** (−3 saat), ayrıca
+`User` örneğindeki `display_name: Ahmet Bakkal` → `Ahmet Demirtaş` (kişi adı ≠ dükkan adı;
+seed'in kasıtlı ayrımı contract'ta bozulmuştu). Redocly lint temiz kaldı.
+
+**3) Append-only DB seviyesinde zorlanıyor.** Plan "REVOKE UPDATE, DELETE" diyordu ama
+uygulama şemanın **sahibi** olarak bağlanıyor ve owner kendi yetkisini revoke edemez →
+**trigger** kullanıldı. `UPDATE`/`DELETE` denemesi
+`transactions is append-only: UPDATE is not permitted` ile patlıyor (ikisi de denendi).
+
+**4) Seed idempotent (§0.7).** Alembic her container açılışında koşuyor; koşulsuz seed
+bakiyeleri katlardı. `users` boşsa seed eder — app-pos'un `SeedCallback.isEmpty()` deseni.
+`docker compose restart` sonrası satır sayıları sabit kaldı (users=4, tx=15).
+
+**5) Port 4010 seçildi** — app-pos'un debug build'i zaten `http://10.0.2.2:4010/` (eski
+Prism portu) adresine bakıyor. Compose onu 4010'a map ediyor → **Android tarafında tek satır
+bile değişmiyor** (5f'nin işini azaltır).
+
+**Öğrenilenler:**
+- **SQLAlchemy insert'leri tabloya göre gruplar, FK sırasını bilmez.** İlk `compose up`
+  `ForeignKeyViolation` ile patladı: `customers.claimed_by_user_id` → `users` FK'sı varken
+  customers önce flush edildi. Çözüm: users'tan sonra ve customers'tan sonra açık
+  `db.flush()`. Sıra umut edilmez, **söylenir**.
+- **Trigger, REVOKE'tan daha doğru araç.** Kural "kimse UPDATE edemez" değil, "bu tablo
+  append-only" — rol yetkisi değil, tablo özelliği. Owner-connection senaryosunda REVOKE
+  hiçbir şey yapmazdı, yani yanlış bir güvenlik hissi verirdi.
+- **`jti` şart.** JWT'ye unique id koyulmasaydı aynı saniyede aynı user için üretilen iki
+  token **aynı string** olurdu; `TokenAuthenticator` eski/yeni bearer'ı karşılaştırarak
+  "başka thread yeniledi mi" diye bakıyor → aynı string onu yanlış dala sokardı.
+
+**Doğrulama:** `docker compose up -d --build` ✓, `alembic upgrade head` ✓, `/health` 200 ✓,
+**23 pytest / 0 fail** (telefon normalizasyonu + seed bakiyeleri + ledger sorguları).
+Seed bakiyeleri **SQL ile teyit edildi**, hepsi plandaki değerlerle birebir:
+c1 40,00 / c2 165,00 / c3 0 / c4 25,50 / c5 210,00 / m1 100,00 / o1 60,00.
+Redocly lint: valid (56 uyarı, hepsi önceden var olan `operation-4xx-response` stil notu).
+
+**Sıradaki:** 5b — auth uçları (`/auth/otp/request|verify|refresh|logout`). OTP mock kalır
+ama **sunucuda** (sabit `123456`); `verify` auto-register YAPMAZ → kayıtsız numara
+`404 user_not_found`. `refresh_token` her zaman üretilir (§0.8: contract'ta nullable ama
+`TokenAuthenticator` onsuz pes edip login gate'ine düşüyor).

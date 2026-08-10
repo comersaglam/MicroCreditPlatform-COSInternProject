@@ -299,9 +299,9 @@ paths:
                 items: { $ref: '#/components/schemas/Transaction' }
               # Ahmet's (c1) ledger from the seed: 50 + 30 − 40 = 40,00 TL (newest first).
               example:
-                - { transaction_id: t3, seller_id: u_owner, customer_id: c1, amount_minor: 4000, type: PAYMENT, description: Nakit ödeme, basket_id: null, settled_via_pgw: false, receipt_no: null, created_at: '2026-07-22T18:00:00Z' }
-                - { transaction_id: t2, seller_id: u_owner, customer_id: c1, amount_minor: 3000, type: DEBT, description: Peynir, basket_id: null, settled_via_pgw: false, receipt_no: null, created_at: '2026-07-21T10:40:00Z' }
-                - { transaction_id: t1, seller_id: u_owner, customer_id: c1, amount_minor: 5000, type: DEBT, description: 'Ekmek, süt', basket_id: null, settled_via_pgw: false, receipt_no: null, created_at: '2026-07-20T09:15:00Z' }
+                - { transaction_id: t3, seller_id: u_owner, customer_id: c1, amount_minor: 4000, type: PAYMENT, description: Nakit ödeme, basket_id: null, settled_via_pgw: false, receipt_no: null, created_at: '2026-07-22T15:00:00Z' }
+                - { transaction_id: t2, seller_id: u_owner, customer_id: c1, amount_minor: 3000, type: DEBT, description: Peynir, basket_id: null, settled_via_pgw: false, receipt_no: null, created_at: '2026-07-21T07:40:00Z' }
+                - { transaction_id: t1, seller_id: u_owner, customer_id: c1, amount_minor: 5000, type: DEBT, description: 'Ekmek, süt', basket_id: null, settled_via_pgw: false, receipt_no: null, created_at: '2026-07-20T06:15:00Z' }
   /balances:
     get:
       tags: [transactions]
@@ -396,8 +396,8 @@ paths:
                 items: { $ref: '#/components/schemas/Approval' }
               # Two seed approvals (app-mobile): p1 waits on u1, p2 on u_owner.
               example:
-                - { approval_id: p1, initiator_user_id: u_owner, initiator_role: SELLER, target_user_id: u1, seller_id: u_owner, shop_name: Ahmet Bakkal, customer_id: c1, amount_minor: 5000, type: DEBT, description: 'Ekmek, süt', channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T10:05:00Z' }
-                - { approval_id: p2, initiator_user_id: u_market, initiator_role: SELLER, target_user_id: u_owner, seller_id: u_market, shop_name: Ayşe Market, customer_id: o1, amount_minor: 7500, type: DEBT, description: Temizlik malzemesi, channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T11:20:00Z' }
+                - { approval_id: p1, initiator_user_id: u_owner, initiator_role: SELLER, target_user_id: u1, seller_id: u_owner, shop_name: Ahmet Bakkal, customer_id: c1, amount_minor: 5000, type: DEBT, description: 'Ekmek, süt', channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T07:05:00Z' }
+                - { approval_id: p2, initiator_user_id: u_market, initiator_role: SELLER, target_user_id: u_owner, seller_id: u_market, shop_name: Ayşe Market, customer_id: o1, amount_minor: 7500, type: DEBT, description: Temizlik malzemesi, channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T08:20:00Z' }
   /approvals/{id}/approve:
     post:
       tags: [approvals]
@@ -571,16 +571,19 @@ components:
     User:
       type: object
       required: [user_id, phone, display_name, is_buyer, is_seller, created_at]
-      # Example mirrors FakeRepository's u_owner seed (shopkeeper: both roles).
+      # Example mirrors the u_owner seed (shopkeeper: both roles). The person's name and
+      # the shop's name are deliberately DIFFERENT: buyer-facing screens show the shop,
+      # seller-facing screens show the person, and identical names would hide a screen
+      # reading the wrong one.
       example:
         user_id: u_owner
         phone: '+905554443322'
-        display_name: Ahmet Bakkal
+        display_name: Ahmet Demirtaş
         is_buyer: true
         is_seller: true
         email: null
-        seller_info: { shop_name: Ahmet Bakkal, shop_phone: null }
-        created_at: '2026-07-01T09:00:00Z'
+        seller_info: { shop_name: Ahmet Bakkal, shop_phone: '+902121112233' }
+        created_at: '2026-07-01T06:00:00Z'
       properties:
         user_id: { type: string }
         phone: { type: string }
@@ -690,7 +693,7 @@ components:
         basket_id: null
         settled_via_pgw: false
         receipt_no: null
-        created_at: '2026-07-20T09:15:00Z'
+        created_at: '2026-07-20T06:15:00Z'
       properties:
         transaction_id: { type: string, format: uuid }
         seller_id: { type: string }
@@ -763,7 +766,7 @@ components:
         description: Ekmek, süt
         channel: APP_PUSH
         status: PENDING
-        requested_at: '2026-07-25T10:05:00Z'
+        requested_at: '2026-07-25T07:05:00Z'
       properties:
         approval_id: { type: string }
         initiator_user_id: { type: string }

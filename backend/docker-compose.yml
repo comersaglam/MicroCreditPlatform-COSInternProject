@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: veresiye
+      POSTGRES_PASSWORD: veresiye
+      POSTGRES_DB: veresiye
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # The API's entrypoint runs `alembic upgrade head` immediately; without this gate it
+    # would race the database's first-boot initialisation and exit before Postgres listens.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veresiye -d veresiye"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://veresiye:veresiye@db:5432/veresiye
+      JWT_SECRET: dev-secret-not-for-production
+      TOKEN_TTL_SECONDS: 3600
+      SEED_ON_STARTUP: "true"
+    # 4010 is what app-pos's debug build already points at (http://10.0.2.2:4010/, the
+    # Prism port). Mapping to it here means the Android side needs no change at all.
+    ports:
+      - "4010:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
