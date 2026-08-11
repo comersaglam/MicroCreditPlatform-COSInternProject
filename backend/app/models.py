@@ -47,11 +47,23 @@ class Customer(Base):
     claimed_by_user_id: Mapped[str | None] = mapped_column(
         String, ForeignKey("users.user_id"), nullable=True
     )
+
+    # Which shop first wrote this person down. The customer ROW is shared -- several
+    # shops know the same person -- so this is not ownership; it exists because book
+    # membership is otherwise derived from the ledger, and a customer who has been added
+    # but not yet charged has no ledger rows and would belong to no book at all.
+    created_by_seller_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.user_id"), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # No balance column on purpose: the balance is SUM(ledger), never stored. A stored
     # copy is the one place where the server and the device could drift apart.
-    __table_args__ = (Index("idx_customers_phone", "phone"),)
+    __table_args__ = (
+        Index("idx_customers_phone", "phone"),
+        Index("idx_customers_created_by", "created_by_seller_id"),
+    )
 
 
 class Basket(Base):

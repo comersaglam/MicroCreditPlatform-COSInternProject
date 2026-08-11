@@ -7,9 +7,37 @@ values are plain `str` on purpose, matching the client's EnumMapping: a value ne
 recognises must be droppable, not a parse error that fails a whole response.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+
+
+def _iso_utc(value: datetime) -> str:
+    """
+    Render exactly "2026-07-20T06:15:00Z" -- second precision, literal Z, always UTC.
+
+    The client parses with SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'"), which matches
+    that pattern LITERALLY: microseconds or a "+00:00" offset both fail to parse. On the
+    display path a failure is silent (TimeFormat falls back to the raw string, so the user
+    sees "2026-07-20T06:15:00.123456Z" where a date belongs), which is exactly the kind of
+    bug that survives to production -- so the shape is pinned here, once, for every
+    timestamp the API emits.
+
+    A naive value is treated as ALREADY UTC rather than converted. Everything written here
+    is UTC by construction (`datetime.now(UTC)` and the seed's literals), but a driver may
+    hand the value back without its tzinfo -- SQLite does exactly that. Calling
+    astimezone() on such a value would assume the SERVER's local zone and shift the
+    timestamp: on a UTC+3 machine a replayed entry came back three hours later than the
+    original, which is the same class of error the seed literals once had.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+# Every datetime on the wire goes through the serializer above.
+IsoUtc = Annotated[datetime, PlainSerializer(_iso_utc, return_type=str)]
 
 # --- auth ---
 
@@ -50,7 +78,7 @@ class User(BaseModel):
     is_seller: bool
     email: str | None = None
     seller_info: SellerInfo | None = None
-    created_at: datetime
+    created_at: IsoUtc
 
 
 class UserCreate(BaseModel):
@@ -72,7 +100,7 @@ class BecomeSeller(BaseModel):
 class Session(BaseModel):
     token: str
     refresh_token: str | None = None
-    expires_at: datetime
+    expires_at: IsoUtc
     user: User
 
 
@@ -132,7 +160,7 @@ class Transaction(BaseModel):
     basket_id: str | None = None
     settled_via_pgw: bool = False
     receipt_no: str | None = None
-    created_at: datetime
+    created_at: IsoUtc
 
 
 class TransactionCreate(BaseModel):
@@ -151,7 +179,7 @@ class Balance(BaseModel):
     seller_id: str
     customer_id: str
     balance_minor: int
-    as_of: datetime
+    as_of: IsoUtc
 
 
 class SellerDebt(BaseModel):
@@ -178,7 +206,7 @@ class Approval(BaseModel):
     description: str | None = None
     channel: str
     status: str
-    requested_at: datetime
+    requested_at: IsoUtc
 
 
 class ApprovalCreate(BaseModel):

@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import SessionLocal
-from .routers import auth
+from .routers import approvals, auth, buyer, customers, ledger, users
 from .seed import is_empty, seed
 
 
@@ -62,6 +62,11 @@ async def validation_exception_handler(
 
 
 app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(customers.router)
+app.include_router(ledger.router)
+app.include_router(buyer.router)
+app.include_router(approvals.router)
 
 
 @app.get("/health", tags=["meta"])

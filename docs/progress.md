@@ -1567,3 +1567,195 @@ token'sız logout→401, token'lı logout→204, refresh→farklı token, access
 `become-seller`; `POST/GET /customers` bakiyeli, `/customers/{id}`, `/customers/lookup`).
 `GET /customers` seller-scoped olacak: token'ın kullanıcısının defteri + `SUM` ile türetilmiş
 `balance_minor`.
+
+### 2026-08-10 — Tur 31: FAZ 5 Aşama 5c — users + customers (ilk seller-scoped okuma)
+
+Sekiz uç canlı: `POST /users`, `GET/PATCH /users/me`, `POST /users/me/become-seller`;
+`POST/GET /customers`, `GET /customers/{id}`, `GET /customers/lookup`. Bakiye ilk kez
+**sunucuda türetilip** tele gidiyor.
+
+**ŞEMA DEĞİŞİKLİĞİ — `customers.created_by_seller_id` (migration 0002).** Kod yazılırken
+çıkan gerçek boşluk: `customers` tablosunda `seller_id` **yok** (doğru karar — müşteri satırı
+dükkanlar arasında PAYLAŞILIYOR, `m1`/`c1` aynı kişi). Defter üyeliği ledger'dan türetiliyordu:
+"bu satıcı bu müşteriye satır yazmışsa defterindedir". Ama **yeni eklenmiş ama henüz
+borçlandırılmamış müşterinin hiç ledger satırı yok** → `POST /customers` 201 dönüyor,
+`GET /customers` onu **göstermiyordu**. Kullanıcı kararı: nullable kolon eklendi.
+Üyelik artık iki kaynaklı: *ledger'da satırı var* **VEYA** *bu satıcı oluşturmuş*
+(`_book_customer_ids()` union'ı). Sahiplik DEĞİL — kimin ilk yazdığı.
+
+**1) `POST /users` telefonla idempotent ve mevcut satırı DEĞİŞTİRMİYOR.** Aynı telefon → 200
++ var olan satır (409 değil): client bu uca `verify`'ın 404'ünden sonra geliyor, cevabı kaybolan
+bir retry kullanıcıya yorumlaması gereken hataya dönüşmemeli. **Ama gövdedeki `display_name`/
+`is_seller` yok sayılıyor** — bu uç `security: []`, yani kimlik doğrulaması istemiyor; mevcut
+satırı güncelleseydi **herkes bir yabancının profilini "kayıt olarak" ezebilirdi.**
+
+**2) `PATCH /users/me` telefonu değiştiremiyor.** Telefon hesabın anahtarı; burada değiştirmek
+hesabı kimsenin sahipliğini kanıtlamadığı bir numaraya taşırdı → kendi OTP akışının işi.
+`exclude_unset` ile "alan yok" ≠ "alan null geldi" ayrımı korundu, yoksa e-postayı **silmek
+ifade edilemezdi**.
+
+**3) `become-seller` bayrağı ve dükkan adını BİRLİKTE yazıyor.** Domain tipi
+`is_seller ⇔ seller_info != null` diyor; bayrak var ama `shop_name` yoksa client'ın tipinin
+tutamayacağı bir şekil serialize edilirdi.
+
+**4) `GET /customers` tek grouped sorgu.** `ledger.py:balances_by_customer()` (5a'da yazılmış,
+çağıranı yoktu) devreye girdi. Müşteri listesi ana ekran — satır başına sorgu tek ekranı
+N round-trip'e çevirirdi.
+
+**5) `lookup` başka dükkanın müşterisini BULUYOR ama bakiyesi 0 dönüyor.** Amaç esnafın
+sistemin zaten tanıdığı birini yeniden yazmasını önlemek; bakiye seller-scoped kaldığı için
+**hiçbir dükkan başka yerdeki borcu öğrenmiyor**. "Benim mi, başkasının mı" ayrımı client'ın
+kararı (`CustomerLookup`).
+
+**6) `POST /customers` 409'u DEFTER BAZINDA.** Global unique telefon yanlış olurdu: iki dükkanın
+aynı kişiyi tanıması normal durum, her biri kendi satırını tutar. Test bunu açıkça koruyor.
+
+**Öğrenilenler:**
+- **Rota sırası sessiz kırılma noktası.** `/customers/lookup` **`/customers/{id}`'den ÖNCE**
+  tanımlanmalı, yoksa "lookup" bir id olarak yakalanır ve uç erişilemez olur — derleme hatası
+  değil, 404. Ayrı bir test bunu kilitliyor.
+- **Şema boşlukları uç yazılırken çıkıyor.** `created_by_seller_id` tasarım turlarında değil,
+  `POST` ve `GET`'i yan yana koyunca göründü. Contract'ın yanlış olduğu bir yer değil —
+  contract'ın hiç konuşmadığı bir yer.
+
+**Doğrulama:** **76 pytest / 0 fail** (40 önceki + 16 users + 20 customers). Migration 0002
+gerçek Postgres'e **artımlı** uygulandı (0001 yeniden koşmadı), sonra `down -v` ile sıfırdan:
+users=4 / customers=7 / tx=15, `created_by_seller_id` seed'de doğru dağıldı (c1-c5→u_owner,
+m1/o1→u_market). Container'a karşı 8 curl: seller-scoped liste (m1/o1 **sızmıyor**), türetilmiş
+bakiyeler (4000/16500/0/2550/21000), `users/me` nested `seller_info`, lookup 200/404,
+`POST /customers` 201 → **borçlandırılmadan listede görünüyor** (0002'nin kanıtı), tekrar → 409,
+`POST /users` 201→200.
+
+**Sıradaki:** 5d — ledger, asıl iş. `POST /transactions` (+`Idempotency-Key`): aynı key+aynı
+gövde → **200**, aynı key+farklı gövde → **409**, `seller_id` **token'dan**; basket varsa
+`baskets`+`basket_items` aynı DB transaction'ında. Ayrıca `GET /transactions?customer_id=` ve
+`GET /balances?customer_id=`.
+
+### 2026-08-11 — Tur 32: FAZ 5 Aşama 5d — ledger (idempotency, asıl iş)
+
+Üç uç: `POST /transactions` (+`Idempotency-Key`), `GET /transactions?customer_id=`,
+`GET /balances?customer_id=`. Offline-first tasarımın dayandığı sözleşme artık **sunucu
+tarafında da** var.
+
+**1) Üç yollu idempotency.** Yeni key → **201**; aynı key + **aynı gövde** → **200** ve
+orijinal satır **değişmeden** döner; aynı key + **farklı gövde** → **409**, sessiz overwrite
+DEĞİL. 409 kritik: ledger append-only, ikinci farklı gövde birincinin üzerine yazsaydı
+**bayat bir retry, esnafla müşterinin üzerinde anlaştığı geçmişi yeniden yazardı.**
+Client bunu zaten varsayıyordu — `SyncEngine` 2xx görünce kuyruk satırını siliyor
+([SyncEngine.kt:70](../app-pos/core-data/src/main/java/com/example/app_pos/data/sync/SyncEngine.kt))
+ve 200/201 ayrımı yapmıyor.
+
+**2) `Idempotency-Key` == `transaction_id` zorunlu** (uyuşmazsa 400). Header ikinci bir
+bağımsız id değil; farklı olmalarına izin vermek iki farklı kaydın aynı key'i paylaşmasına
+ya da tek kaydın iki key altında yazılmasına kapı açardı.
+
+**3) `seller_id` token'dan.** `TransactionCreateDto`'da bu alan zaten yok, ama gövdeye
+elle konsa bile yok sayılıyor — test bunu açıkça koruyor. Aksi halde giriş yapmış herkes
+başkasının defterine satır ekleyebilirdi.
+
+**4) Bilinmeyen `type` → 400.** DEBT/PAYMENT dışı bir değer bakiye toplamının **hiçbir
+tarafına** düşmezdi; kayıt var olur ama temsil ettiği para sessizce kaybolurdu.
+
+**5) Sepet (orderBody) aynı DB transaction'ında.** `baskets` + `basket_items` + ledger satırı
+tek `commit`. Ayrı yazılsalar ya sahipsiz sepet ya kırık FK kalırdı. Replay'de sepet
+**yeniden yazılmıyor** (item'lar çiftlenmiyor).
+
+**🔴 BULUNAN BUG — timestamp formatı (test yakaladı, iki katmanlı):**
+
+*(a) Mikrosaniye + eksik `Z`.* Client `SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'")` ile
+**LİTERAL** parse ediyor ([TimeFormat.kt:22](../app-pos/app/src/main/java/com/example/app_pos/util/TimeFormat.kt)) —
+mikrosaniye de `+00:00` ofseti de parse edilemez. Pydantic'in varsayılanı mikrosaniye
+basıyordu, replay yolunda ise `Z` düşüyordu. **Hata sessiz olurdu:** `toDisplayDateTime()`
+parse edemeyince ham string'e düşüyor, yani esnaf tarih yerine `2026-08-11T09:15:28.123456Z`
+görürdü. Çözüm: `schemas.py`'de `IsoUtc` tipi — **API'nin yaydığı her timestamp** tek yerden
+`%Y-%m-%dT%H:%M:%SZ`.
+
+*(b) Naive datetime 3 saat kaydırıyordu.* (a) düzeltilince altından çıktı: SQLite tzinfo'yu
+**düşürüyor**, `astimezone(UTC)` naive değeri **sunucunun yerel saati** sayıp UTC+3
+makinede 3 saat ileri atıyordu — replay orijinalden 3 saat sonra görünüyordu. Bu §0.2'deki
+seed hatasının **tam olarak aynı sınıfı**. Çözüm: naive değer **zaten UTC** kabul ediliyor
+(buraya yazılan her şey `datetime.now(UTC)` veya seed literali, yani UTC by construction).
+Postgres aware döndürdüğü için üretimde görünmezdi — **SQLite testi kurtardı.**
+
+**Öğrenilenler:**
+- **`assert first.json() == second.json()` en ucuz idempotency testi.** "Aynı satır dönüyor
+  mu" sorusunu byte düzeyinde soruyor; iki ayrı bug'ı (format + saat kayması) bu tek satır
+  yakaladı. Alan alan karşılaştırma ikisini de kaçırırdı.
+- **Serileştirme şekli sözleşmenin parçası.** `created_at` "ISO-8601" demek yetmiyor;
+  client'ın parser'ı hangi varyantı kabul ediyorsa **o** sözleşme. Tek yerden zorlanmalı,
+  yoksa her yeni uç kendi varyantını üretir.
+
+**Doğrulama:** **101 pytest / 0 fail** (76 önceki + 25 ledger). Gerçek Postgres'e karşı
+**12 curl senaryosu**: 201→200→409 üçlüsü, **3 POST → DB'de 1 satır**, bakiye 4000+2500=6500
+(tek kez sayıldı), geçmiş yeniden-eskiye, `m1` (başka defter) `[]`, sepetli yazım 201 →
+replay 200 → **baskets=1/items=2** (çiftlenmedi), key uyuşmazlığı 400, header yok 422.
+Replay `created_at` **byte-birebir aynı** (`09:15:28Z`), seed satırları `06:15:00Z`.
+Test verisi temizlendi (`down -v`), container temiz seed'le ayakta.
+
+**Sıradaki:** 5e — buyer + approvals. `GET /me/debts|transactions|balances` (app-mobile'ın
+`observeDebtsBySeller`'ının sunucu karşılığı) + `POST /approvals`, `GET /approvals`,
+`approve`/`reject`. Onay kuralı: **isteği başlatan onaylamaz**; `approve` ledger'a yazan tek
+nokta, `reject` hiçbir şey yazmaz (satır silinmez, `status` değişir). §0.3 yetki kontrolü:
+`initiator_role == SELLER` ise `seller_id == token.sub` doğrulanacak.
+
+### 2026-08-11 — Tur 33: FAZ 5 Aşama 5e — buyer + approvals (Bölüm A TAMAMLANDI)
+
+Yedi uç: `GET /me/debts|transactions|balances` + `POST /approvals`, `GET /approvals`,
+`approve`, `reject`. **Contract'ın Bölüm A'sı bitti — 22 uç canlı, `future` etiketli hiçbir
+uç yazılmadı** (canlı `/openapi.json` contract'la program ile karşılaştırıldı).
+
+**1) Buyer okumaları seller'ın SİMETRİĞİ.** Satıcı "bana kim borçlu" sorar, alıcı "kime ne
+borçluyum". Aynı ledger ikisini de cevaplıyor. Scope `claimed_by_user_id` üzerinden: bir alıcı
+**dükkan başına bir** müşteri kaydı tutuyor (u1 = Ahmet Bakkal'da `c1`, Ayşe Market'te `m1`)
+→ `_my_customer_id_with()` "herhangi bir kaydım" fallback'i YAPMIYOR; yanlış kaydı seçmek
+başka dükkanın defterinden okumak olurdu.
+
+**2) `/me/debts` sıfır bakiyeli dükkanı ATLIYOR.** 0 satır borç değil; listelemek ekrana
+"hiçbir şey borçlu olmadığın dükkanlar"ı koyardı. `shop_name` non-nullable olduğu için
+`shop_name → display_name → phone` fallback zinciri var (dükkan adı girmemiş satıcı da
+okunabilir bir kart üretmeli).
+
+**3) Onay kuralı: KARŞI TARAF onaylar, başlatan asla.** Yön `initiator_role`'den geliyor:
+SELLER başlattıysa onaylayan `customer.claimed_by_user_id`, BUYER başlattıysa `seller_id`.
+Sadece müşteri kaydından türetilseydi **alıcının başlattığı ödeme yine alıcıya giderdi** —
+app-mobile'da Tur 24b'de bulunan bug'ın ta kendisi.
+
+**4) §0.3 yetki kontrolü uygulandı.** `seller_id` gövdede (buyer da başlatabildiği için
+token'dan gelemez) → saldırılabilecek tek alan. `initiator_role == SELLER` ise
+`seller_id == token.sub` doğrulanıyor, değilse **403**. Ayrıca BUYER dalında müşteri kaydının
+**kendisine ait** olması aranıyor, yoksa bir alıcı başkasının defterine ödeme beyan edebilirdi.
+
+**5) İki dal, tek uç.** CLAIMED karşı taraf → **201** PENDING satır, ledger'a **hiçbir şey
+yazılmaz**. UNCLAIMED → kimse "onayla"ya basamaz, SMS-OTP dalı → **200** + Transaction,
+anında yazılır. Contract bu iki şekli zaten tanımlıyordu, client dallanıyor.
+
+**6) `approve` ledger'a yazan TEK nokta; yazım + status tek `commit`.** Ayrı olsalar ya
+"status değişmemiş kayıt" (tekrar onaylanabilir) ya "kayıtsız APPROVED" (borç tamamen kaybolur)
+kalırdı. İkinci onay → **409 `already_decided`** (çift dokunuş / retry koruması).
+
+**7) Karar verilen satır SİLİNMİYOR.** `status` değişiyor, bekleyen sorgusu `PENDING`
+filtreliyor → kullanıcıya davranış aynı, denetim izi duruyor (db-schema.md A.6 kararı).
+DB'de teyit edildi: `p1 -> APPROVED` satırı yerinde.
+
+**Öğrenilenler:**
+- **`transaction_out` paylaşıldı (`serializers.py`).** Önce `ledger.py`'de lokaldi, `buyer.py`
+  fonksiyon-içi import ile çekiyordu. Aynı satır iki yönden okunuyor; farklı serialize edilseydi
+  client'ın çözemeyeceği bir çelişki olurdu.
+- **Uç envanterini programla doğrulamak ucuz.** Canlı `/openapi.json` ile contract'ı
+  karşılaştıran ~20 satırlık script "Bölüm A bitti mi, future sızdı mı" sorusunu kesin
+  cevapladı. (Not: `{id}` vs `{customer_id}` isim farkı yanlış alarm verdi — parametre adı
+  konumsal, tel üzerinde fark yok.)
+
+**Doğrulama:** **137 pytest / 0 fail** (101 önceki + 11 buyer + 25 approvals). Gerçek
+Postgres'e karşı **13 curl senaryosu**: `/me/debts` iki dükkan (Ahmet Bakkal 4000 / Ayşe Market
+10000 — contract örneğiyle birebir), `/me/transactions` dükkan bazında ayrışıyor (t3,t2,t1 vs
+t6,t5,t4), **başlatan onaylayamıyor 403**, hedef onaylıyor → bakiye **4000→9000**, ikinci onay
+**409**, UNCLAIMED dalı **200** + bakiye 2550→3550, CLAIMED dalı **201** + bakiye **0'da kaldı**,
+§0.3 başka dükkan **403**, `p1 -> APPROVED` DB'de duruyor. Test verisi temizlendi (`down -v`),
+container temiz seed'le ayakta (users=4/customers=7/tx=15/approvals=2).
+
+**Sıradaki:** 5f — app-pos'u gerçek backend'e bağla. **İLK ADIM `adb uninstall`** (§0.6: lokal
+id'ler sunucuda yok → kuyruktaki kayıtlar 404 alır, `SyncEngine` 4xx'i kalıcı ret sayıp
+**siler** = sessiz veri kaybı). Sonra `OfflineFirstRepository.login()` → gerçek
+`requestOtp`/`verifyOtp`, `logout()` → `remote.logout()` (§0.5). `NetworkConfig` zaten 4010'a
+bakıyor, değişmeyecek.

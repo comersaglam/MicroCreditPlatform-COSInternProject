@@ -34,3 +34,25 @@ def user_out(user: models.User) -> schemas.User:
         seller_info=seller_info,
         created_at=user.created_at,
     )
+
+
+def transaction_out(tx: models.Transaction) -> schemas.Transaction:
+    """
+    A ledger entry on the wire.
+
+    Shared by the seller-scoped and buyer-scoped readers so the same row looks identical
+    from both directions -- the two sides are describing one entry, and a field rendered
+    differently depending on who asked would be a contradiction the client cannot resolve.
+    """
+    return schemas.Transaction(
+        transaction_id=tx.transaction_id,
+        seller_id=tx.seller_id,
+        customer_id=tx.customer_id,
+        amount_minor=tx.amount_minor,
+        type=tx.type,
+        description=tx.description,
+        basket_id=tx.basket_id,
+        settled_via_pgw=tx.settled_via_pgw,
+        receipt_no=tx.receipt_no,
+        created_at=tx.created_at,
+    )

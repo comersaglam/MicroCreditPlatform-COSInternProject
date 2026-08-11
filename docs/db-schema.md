@@ -50,18 +50,29 @@ CREATE TABLE users (
 | `phone` | TEXT | NO | kimlik; pratikte hep dolu |
 | `claim_status` | TEXT | NO | UNCLAIMED \| CLAIMED |
 | `claimed_by_user_id` | TEXT | YES | FK→users; CLAIMED ⇔ not null |
+| `created_by_seller_id` | TEXT | YES | FK→users; **defter üyeliği** (Tur 31, migration 0002) |
 | `created_at` | TIMESTAMP | NO | |
 
-- Index: `INDEX(phone)` (lookup). **Global UNIQUE(phone) açık karar** (bkz. api-endpoints.md §1);
-  mock'ta uygulama-katmanı `customerPhoneExists`.
+- Index: `INDEX(phone)` (lookup), `INDEX(created_by_seller_id)`. **Global UNIQUE(phone) açık
+  karar** (bkz. api-endpoints.md §1); backend'de 409 **defter bazında** (iki dükkan aynı kişiyi
+  tanıyabilir).
 - `balance_minor` YOK (ledger'dan türetilir).
+- **`seller_id` kolonu YOK ve olmayacak** — müşteri satırı dükkanlar arasında PAYLAŞILIR
+  (`c1` ve `m1` aynı kişi, farklı defterler). Defter üyeliği **türetilir**: *ledger'da bu
+  satıcının satırı var* **VEYA** *`created_by_seller_id` bu satıcı*.
+- **`created_by_seller_id` neden gerekti (Tur 31):** üyelik yalnız ledger'dan türetilseydi,
+  yeni eklenmiş ama henüz borçlandırılmamış müşterinin hiç ledger satırı olmadığı için
+  `POST /customers` 201 döner ama `GET /customers` onu göstermezdi. Sahiplik değil, **kimin ilk
+  yazdığı** — bu yüzden nullable ve paylaşımı engellemiyor.
 
 ```sql
 CREATE TABLE customers (
   customer_id TEXT PRIMARY KEY, display_name TEXT NOT NULL, phone TEXT NOT NULL,
   claim_status TEXT NOT NULL, claimed_by_user_id TEXT REFERENCES users(user_id),
+  created_by_seller_id TEXT REFERENCES users(user_id),
   created_at TEXT NOT NULL );
 CREATE INDEX idx_customers_phone ON customers(phone);
+CREATE INDEX idx_customers_created_by ON customers(created_by_seller_id);
 ```
 
 ## A.3 `transactions` (append-only ledger)

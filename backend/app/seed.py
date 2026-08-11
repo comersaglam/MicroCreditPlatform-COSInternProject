@@ -58,17 +58,19 @@ def seed(db: Session) -> None:
     # rows must land first, so the ordering is stated here rather than hoped for.
     db.flush()
 
-    # u1 is one person with a record in each shop's book (c1 and m1).
-    _customer(db, "c1", "Ahmet Yılmaz", "+905551112233", "CLAIMED", "u1")
-    _customer(db, "m1", "Ahmet Y.", "+905551112233", "CLAIMED", "u1")
+    # u1 is one person with a record in each shop's book (c1 and m1). The last argument
+    # is which shop wrote them down -- it puts the row in that book even before the first
+    # ledger entry exists.
+    _customer(db, "c1", "Ahmet Yılmaz", "+905551112233", "CLAIMED", "u1", "u_owner")
+    _customer(db, "m1", "Ahmet Y.", "+905551112233", "CLAIMED", "u1", "u_market")
     # The shopkeeper's own record as a buyer at the other shop -- a customer row is a
     # PERSON, so it carries their name, not their shop's.
-    _customer(db, "o1", "Ahmet Demirtaş", "+905554443322", "CLAIMED", "u_owner")
-    _customer(db, "c3", "Mehmet Kaya", "+905554445566", "CLAIMED", "u3")
+    _customer(db, "o1", "Ahmet Demirtaş", "+905554443322", "CLAIMED", "u_owner", "u_market")
+    _customer(db, "c3", "Mehmet Kaya", "+905554445566", "CLAIMED", "u3", "u_owner")
     # Carried over from app-pos's seed: the UNCLAIMED customer the claim flow needs.
-    _customer(db, "c2", "Ayşe Demir", "+905552223344", "UNCLAIMED", None)
-    _customer(db, "c4", "Fatma Şahin", "+905556667788", "UNCLAIMED", None)
-    _customer(db, "c5", "Hasan Öztürk", "+905558889900", "UNCLAIMED", None)
+    _customer(db, "c2", "Ayşe Demir", "+905552223344", "UNCLAIMED", None, "u_owner")
+    _customer(db, "c4", "Fatma Şahin", "+905556667788", "UNCLAIMED", None, "u_owner")
+    _customer(db, "c5", "Hasan Öztürk", "+905558889900", "UNCLAIMED", None, "u_owner")
 
     # Same reason: transactions.customer_id is a FK to the rows just added.
     db.flush()
@@ -111,10 +113,11 @@ def _user(db, user_id, phone, name, is_seller, shop_name, shop_phone, created_at
     ))
 
 
-def _customer(db, customer_id, name, phone, claim, claimed_by):
+def _customer(db, customer_id, name, phone, claim, claimed_by, created_by_seller):
     db.add(models.Customer(
         customer_id=customer_id, display_name=name, phone=phone,
         claim_status=claim, claimed_by_user_id=claimed_by,
+        created_by_seller_id=created_by_seller,
         created_at=_at("2026-07-01T06:00:00"),
     ))
 
