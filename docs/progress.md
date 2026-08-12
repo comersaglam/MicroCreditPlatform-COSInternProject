@@ -1759,3 +1759,115 @@ id'ler sunucuda yok → kuyruktaki kayıtlar 404 alır, `SyncEngine` 4xx'i kalı
 **siler** = sessiz veri kaybı). Sonra `OfflineFirstRepository.login()` → gerçek
 `requestOtp`/`verifyOtp`, `logout()` → `remote.logout()` (§0.5). `NetworkConfig` zaten 4010'a
 bakıyor, değişmeyecek.
+
+### 2026-08-12 — Tur 34: FAZ 5 Aşama 5f — app-pos gerçek backend'e bağlandı
+
+`login()` mock'u SİLİNDİ. Oturum artık sunucunun: gerçek JWT, gerçek expiry, gerçek
+refresh token. **Cihaz testi yapıldı ve 10/10 geçti** (aşağıdaki tablo); bağlantı Wi-Fi'dan
+**USB tüneline** taşındı.
+
+**PLAN SAPMASI — login ekranında OTP alanı YOKTU (kod okumasıyla bulundu).** Plan
+"`requestOtp` → `verifyOtp`" diyordu ama giriş ekranı **tek alanlıydı** (telefon) ve
+`verifyOtp` kod istiyor. `OtpViewModel` satış akışına ait, giriş akışına değil. Kullanıcı
+kararı: **login'e OTP adımı eklendi** — tek ekran, iki adım (telefon → [Kod Gönder] → kod
+alanı belirir → [Giriş Yap]). Ayrı ekran değil, çünkü esnaf zaten titreyen telefonu elinde
+tutuyor; araya geçiş koymak sadece bakışını kaldıracağı bir an eklerdi.
+
+**İKİNCİ SAPMA — kayıt kararı lokalden sunucuya taşındı.** `LoginViewModel` önce
+`repo.findUserByPhone()` (Room) çağırıyordu. §0.6 temiz kurulum gerektirdiği için **Room boş**
+olacaktı → **her numara NEEDS_REGISTER'a düşerdi**, hesabı olan esnaf dahil. Artık karar
+sunucunun: `verifyOtp` 404 `user_not_found` → NEEDS_REGISTER, 200 → SUCCESS. 5b'nin
+"auto-register YAPMAZ" kararının client karşılığı.
+
+**1) `Repository.login(phone): Boolean` → `requestOtp` + `signIn`.** Boolean üç sonucu tek
+"tekrar dene"ye indiriyordu; `SignInResult` (yeni, `:core-domain`) ayırıyor: `Success`,
+`NeedsRegister`, `InvalidCode`, `Unreachable`, `Failed`. Üçü farklı yere gidiyor — yanlış kod
+aynı ekranda tekrarlanır, kayıtsız numara kayıt sorar, ölü ağ kimsenin hatası değil.
+
+**2) `LocalSource.upsertUser` eklendi (bulunan bug).** `mirrorUser` önce `registerUser`
+çağırıyordu — o **yeni rastgele UUID üretiyor**. Ama `observeCurrentUser` session'daki
+**sunucu** user id'sini lokal tabloyla eşleştiriyor → id'ler asla tutmazdı, esnaf başarıyla
+giriş yapıp **boş profil** görürdü. `UserDao`'ya `@Upsert` + `LocalSource.upsertUser`:
+sunucunun id'si aynen korunuyor.
+
+**3) `registerUser` artık ÖNCE sunucuya yazıyor.** Sadece lokal yazsaydı sunucunun hiç
+duymadığı bir UUID üretilirdi ve ilk girişte üzerine yazılırdı — eski id altına yazılan her
+şey sahipsiz kalırdı. Sunucu telefonla idempotent; ulaşılamazsa lokal fallback sürüyor.
+
+**4) `logout()` sunucuya da gidiyor (§0.5), ama lokal temizlik KOŞULSUZ.** Başarısız bir
+revoke (sinyal yok, token bitmiş) esnafı hâlâ girişli görünen bir kabukta bırakmamalı.
+
+**5) Debug URL artık sabit değil — `posApiHost` Gradle property'si.** Emülatör `10.0.2.2`
+ister, gerçek cihaz makinenin LAN IP'sini. Aynı property **iki yeri** besliyor:
+`core-network`'ün `API_BASE_URL`'i ve `:app`'in `debug_api_host` string resource'u
+(`resValues = true` gerekti — AGP 9'da kapalı). İkisi ayrışsaydı app, cleartext izni olmayan
+bir host'u çağırırdı ve hata **"sunucu ölü" gibi görünürdü**.
+
+**6) `src/debug/res/xml/network_security_config.xml` (YENİ).** LAN cleartext istisnası
+**sadece debug'da**; release `main/`deki sıkı sürümü kullanmaya devam ediyor → istisna
+release APK'ya giremez. Release APK'da `192.168.*` grep'i **0 sonuç** verdi. XML resource
+manifest placeholder alamıyor, ama başka bir resource'u gösterebiliyor — bu yüzden
+`@string/debug_api_host`.
+
+**Öğrenilenler:**
+- **Bayat Gradle daemon jlink hatasını taşıyordu.** `JAVA_HOME` doğruyken bile build
+  VS Code'un JRE'sinden `jlink` arıyordu; `./gradlew --stop` sonrası ilk denemede geçti.
+  Ortam değişkeni yeni daemon'a uygulanıyor, çalışana değil.
+- **DHCP gerçekten kayıyor.** Doğrulama sırasında makinenin IP'si `.96` → `.31` değişti
+  (aynı oturum içinde!). Sabit yazsaydım kullanıcı testte "sunucu ölü" görürdü. Property
+  kararı tam da bunun için doğruydu.
+- **Session testleri MockWebServer'a taşındı.** Giriş artık ağa çıkıyor; testler
+  `login()` çağırıyordu. Kapsam korundu: gate açılır/kapanır, süre biter, process'i aşar,
+  bilinmeyen user null döner — artı iki yeni dal (404 → NeedsRegister, 401 → InvalidCode).
+
+**Doğrulama (makinede):** `:app:assembleDebug` ✓, `:app:assembleRelease` ✓,
+`:core-domain:build` ✓, **50 unit test / 0 fail** (20 core-data + 8 app + 22 core-network).
+`API_BASE_URL` ve `debug_api_host` **aynı IP'yi** taşıyor (generated dosyalardan teyit).
+Release APK'da LAN IP yok. Backend LAN IP üzerinden `/health` 200.
+
+**CİHAZ TESTİ YAPILDI (2026-08-12, Xiaomi 23049PCD8G / MIUI, Android 14) — 10/10 GEÇTİ.**
+
+Sonuçlar (sunucu logu + DB sayımıyla doğrulandı):
+
+| # | Test | Sonuç | Kanıt |
+|---|---|---|---|
+| 3 | Gerçek giriş | ✓ | `otp/request` 202 → `otp/verify` 200 |
+| 4 | Kayıtsız numara → kayıt | ✓ | `verify` **404** → `POST /users` **201** → `verify` 200 |
+| 5 | Yanlış kod `000000` | ✓ | `verify` **401**, ekranda kaldı |
+| 6 | Kapat-aç | ✓ | login sormadı |
+| 7 | Çıkış | ✓ | ekrandan doğrulandı (logdaki tek `logout` 401 satırı **uninstall öncesi bayat token** kalıntısı, bu turun denemesi değil) |
+| 8 | Profil dolu | ✓ | isim/telefon göründü → `upsertUser` düzeltmesi tuttu |
+| 9 | Veresiye yaz | ✓ | `POST /transactions` **201** |
+| 10 | Offline yaz → kuyruk | ✓ | uçak modunda yazıldı, çıkınca gönderildi, DB **17 → 18** (tam +1) |
+
+**Wi-Fi yerine USB (bu turun asıl kararı).** Wi-Fi sürekli kopuyordu ve DHCP kirası kayınca
+app "sunucu ölü" gibi davranıyordu. `adb reverse tcp:4010 tcp:4010` telefonun `localhost`unu
+kablodan makineye bağlıyor → `posApiHost` artık **sabit** `127.0.0.1`, bu yüzden izlenen
+`gradle.properties`'e yazıldı (LAN IP'nin aksine makineye özgü değil). Kod değişmedi;
+debug `network_security_config.xml` `127.0.0.1`/`localhost`u zaten içeriyordu.
+Wi-Fi'a dönüş hâlâ mümkün: `./gradlew -PposApiHost=$(ipconfig getifaddr en0) :app:installDebug`.
+
+**Öğrenilenler:**
+- **Port 4010, 8080 değil.** `docker-compose.yml` `4010:8000` publish ediyor (host 4010 →
+  container 8000). Tünel host portuna kurulur; 8080'e kurulsa hiçbir şey dinlemez.
+- **`adb reverse` USB kopunca silinir ve geri takınca kendiliğinden gelmez.** Bu turda iki kez
+  ısırdı. Dahası: APK `-PposApiHost=<LAN IP>` ile kurulduysa tüneli zaten kullanmaz —
+  `API_BASE_URL` derleme zamanında gömülü, host değiştirmek **yeniden kurulum** ister.
+- **MIUI `INSTALL_FAILED_USER_RESTRICTED`.** Build değil kurulum reddi: Geliştirici
+  seçenekleri → **USB ile uygulama yükleme** açık olmalı (MIUI bunu bir süre sonra kendi
+  kapatıyor). Ayrıca "USB hata ayıklama (Güvenlik ayarları)".
+- **SMS yok, olması da beklenmiyor.** `config.py` `mock_otp_code = "123456"` — sunucu tarafı
+  mock, sağlayıcı bağlı değil, kod telefona gitmez. "Kod gönderildi" yazısı mock'un parçası;
+  her numara için `123456` girilir.
+- **Oto-login bug değil, §6'nın ta kendisi.** `MainActivity` açılışta `isSessionValid()` ile
+  start destination seçiyor, `DataStoreTokenStore` oturumu diskte tutuyor, token TTL 3600 sn.
+  Test için login ekranını görmek gerekirse: uygulamadan çıkış yap, ya da
+  `adb shell run-as com.example.app_pos rm -rf /data/data/com.example.app_pos/files/datastore`
+  (MIUI'de `pm clear` çalışmaz).
+- **`/auth/logout` 200 değil 204 döner** (`auth.py:104`, `HTTP_204_NO_CONTENT`).
+
+**§10'un kapsamı — dürüst sınır:** doğrulanan şey **offline yazma → kuyruk → tek satır**
+zinciri. Ağ ilk denemede başardığı için aynı `Idempotency-Key` ile **ikinci** bir istek hiç
+oluşmadı; yani anahtarın mükerreri emmesi burada değil, backend testlerinde kapsanıyor.
+
+**Sıradaki:** 5g (dokümanlar) + app-mobile mirror turu.

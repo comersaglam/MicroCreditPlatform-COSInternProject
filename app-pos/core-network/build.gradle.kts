@@ -19,10 +19,16 @@ android {
 
     buildTypes {
         debug {
-            // The emulator reaches the host machine at 10.0.2.2, never 127.0.0.1 (which is
-            // the emulator itself). Prism serves the contract mock on port 4010. A physical
-            // POS terminal needs the host's LAN address here instead.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:4010/\"")
+            // Where a debug build looks for the backend (docker compose publishes it on
+            // 4010). Overridable because the right answer depends on the device:
+            //
+            //   emulator        10.0.2.2      its alias for the host; 127.0.0.1 is itself
+            //   physical device the host's LAN IP, reachable over the same Wi-Fi
+            //
+            // Set `posApiHost` in a local gradle.properties (untracked) rather than editing
+            // this line, so a changed LAN address never shows up as a source diff.
+            val apiHost = (project.findProperty("posApiHost") as String?) ?: "10.0.2.2"
+            buildConfigField("String", "API_BASE_URL", "\"http://$apiHost:4010/\"")
         }
         release {
             buildConfigField("String", "API_BASE_URL", "\"https://api.veresiye.example/\"")

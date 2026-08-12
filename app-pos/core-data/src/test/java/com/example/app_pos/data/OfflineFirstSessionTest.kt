@@ -10,8 +10,12 @@ import com.example.app_pos.network.api.UserApi
 import com.example.app_pos.data.remote.RemoteDataSource
 import com.example.app_pos.data.sync.SyncEngine
 import com.squareup.moshi.Moshi
+import com.example.app_pos.model.SignInResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -20,6 +24,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * The session gate, which is what phase 7 actually changes.
@@ -30,15 +38,22 @@ import retrofit2.converter.moshi.MoshiConverterFactory
  * isSessionValid() synchronously, before the nav graph exists, so a regression here shows up
  * as "the app asks for a login it should not" (or worse, does not ask when it should).
  *
- * No network is involved: the repository is offline-first and none of these paths call out.
+ * Sign-in DOES reach the network now (the server decides whether an account exists), so a
+ * MockWebServer stands in for the backend. Everything else here stays offline.
  */
 class OfflineFirstSessionTest {
 
     private val tokens = FakeTokenStore()
+    private val server = MockWebServer()
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
 
     private fun repo(vararg users: com.example.app_pos.model.User): OfflineFirstRepository {
         val local = FakeLocalSource(users.toList())
-        val remote = unusedRemote()
+        val remote = remoteAgainstServer()
         val moshi = Moshi.Builder().build()
         return OfflineFirstRepository(
             local = local,
@@ -47,6 +62,41 @@ class OfflineFirstSessionTest {
             tokens = tokens,
             moshi = moshi
         )
+    }
+
+    /**
+     * Queues the session the real backend would answer verify with. Two responses because
+     * OfflineFirstRepository re-registers nothing here, but logout() also calls out.
+     */
+    private fun enqueueSession(userId: String = "u_owner", expiresAt: String = farFuture()) {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """
+                {"token":"t-access","refresh_token":"t-refresh","expires_at":"$expiresAt",
+                 "user":{"user_id":"$userId","phone":"+905554443322","display_name":"Ahmet",
+                         "is_buyer":true,"is_seller":true,"email":null,"seller_info":null,
+                         "created_at":"2026-07-01T06:00:00Z"}}
+                """.trimIndent()
+            )
+        )
+    }
+
+    private fun enqueueError(code: Int, errorCode: String) {
+        server.enqueue(
+            MockResponse().setResponseCode(code)
+                .setBody("""{"error":{"code":"$errorCode","message":"nope"}}""")
+        )
+    }
+
+    /** Well past any TTL these tests advance the clock by. */
+    private fun farFuture(): String = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT)
+        .apply { timeZone = TimeZone.getTimeZone("UTC") }
+        .format(Date(tokens.now + 7L * 24 * 60 * 60 * 1000))
+
+    /** Signs in through the stubbed server, the way the app now does. */
+    private suspend fun OfflineFirstRepository.signInOk(): Boolean {
+        enqueueSession()
+        return signIn("05554443322", "123456") == SignInResult.Success
     }
 
     @Test
@@ -61,26 +111,32 @@ class OfflineFirstSessionTest {
     fun `signing in opens the gate and names the seller`() = runTest {
         val repo = repo(testUser())
 
-        assertTrue(repo.login("05554443322"))
+        assertTrue(repo.signInOk())
 
         assertTrue(repo.isSessionValid())
         assertEquals("u_owner", repo.currentSellerId())
     }
 
     @Test
-    fun `an unknown number cannot sign in`() = runTest {
+    /**
+     * The server owns this answer, not a local lookup: verify does not auto-register, so an
+     * unknown number comes back as a branch the caller acts on rather than a failure.
+     */
+    fun `an unknown number is told to register instead`() = runTest {
         val repo = repo(testUser())
+        enqueueError(404, "user_not_found")
 
-        assertFalse(repo.login("05550001122"))
+        assertEquals(SignInResult.NeedsRegister, repo.signIn("05550001122", "123456"))
 
         assertFalse(repo.isSessionValid())
     }
 
     @Test
-    fun `a null number cannot sign in`() = runTest {
+    fun `a wrong code does not open the gate`() = runTest {
         val repo = repo(testUser())
+        enqueueError(401, "invalid_code")
 
-        assertFalse(repo.login(null))
+        assertEquals(SignInResult.InvalidCode, repo.signIn("05554443322", "000000"))
 
         assertFalse(repo.isSessionValid())
     }
@@ -92,7 +148,7 @@ class OfflineFirstSessionTest {
      */
     @Test
     fun `a session outlives the repository instance`() = runTest {
-        repo(testUser()).login("05554443322")
+        repo(testUser()).signInOk()
 
         val afterRestart = repo(testUser())
 
@@ -103,7 +159,7 @@ class OfflineFirstSessionTest {
     @Test
     fun `an expired session closes the gate`() = runTest {
         val repo = repo(testUser())
-        repo.login("05554443322")
+        repo.signInOk()
         assertTrue(repo.isSessionValid())
 
         // Past the 7-day TTL the login minted.
@@ -116,7 +172,7 @@ class OfflineFirstSessionTest {
     @Test
     fun `signing out clears the stored session`() = runTest {
         val repo = repo(testUser())
-        repo.login("05554443322")
+        repo.signInOk()
 
         repo.logout()
 
@@ -130,7 +186,7 @@ class OfflineFirstSessionTest {
 
         assertNull("signed out means no user", repo.observeCurrentUser().first())
 
-        repo.login("05554443322")
+        repo.signInOk()
 
         val user = repo.observeCurrentUser().first()
         assertNotNull(user)
@@ -141,7 +197,7 @@ class OfflineFirstSessionTest {
     @Test
     fun `signing out emits a null user`() = runTest {
         val repo = repo(testUser())
-        repo.login("05554443322")
+        repo.signInOk()
         assertNotNull(repo.observeCurrentUser().first())
 
         repo.logout()
@@ -156,7 +212,7 @@ class OfflineFirstSessionTest {
     @Test
     fun `a session for an unknown user resolves to null`() = runTest {
         val repo = repo(testUser())
-        repo.login("05554443322")
+        repo.signInOk()
 
         val emptyDb = repo()  // same token store, no users
 
@@ -164,15 +220,13 @@ class OfflineFirstSessionTest {
     }
 
     /**
-     * A RemoteDataSource that is constructed but never called: phase 7 wires the network in
-     * without putting it on any screen's path. Retrofit only needs a syntactically valid
-     * base URL to create the interfaces — no server is started, and nothing here would reach
-     * one anyway.
+     * A RemoteDataSource pointed at the mock server. Only the auth calls are exercised;
+     * every other path in these tests stays on the local source.
      */
-    private fun unusedRemote(): RemoteDataSource {
+    private fun remoteAgainstServer(): RemoteDataSource {
         val moshi = Moshi.Builder().build()
         val retrofit = Retrofit.Builder()
-            .baseUrl("http://localhost/")
+            .baseUrl(server.url("/"))
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
         return RemoteDataSource(

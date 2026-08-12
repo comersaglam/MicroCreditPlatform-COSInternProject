@@ -11,6 +11,7 @@ import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.Repository
+import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
@@ -56,12 +57,15 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     override fun currentSellerId(): String? =
         session.value?.takeIf { it.expiresAt > System.currentTimeMillis() }?.userId
 
-    override suspend fun login(phone: String?): Boolean {
-        val user = phone?.let { findUserByPhone(it) } ?: return false
-        val now = System.currentTimeMillis()
-        session.value = Session(user.userId, UUID.randomUUID().toString(), now + SESSION_TTL_MILLIS)
-        return true
-    }
+    /**
+     * Never reached in the app: OfflineFirstRepository owns sign-in and does not delegate
+     * it here. Kept because LocalSource extends Repository, and answering false is the
+     * honest response — this class cannot verify a code, only the server can.
+     */
+    override suspend fun requestOtp(phone: String): Boolean = false
+
+    override suspend fun signIn(phone: String, code: String): SignInResult =
+        SignInResult.Unreachable
 
     override suspend fun logout() {
         session.value = null
@@ -89,6 +93,8 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
      */
     override fun observeAllUsers(): Flow<List<User>> =
         users.observeAll().map { list -> list.map { it.toDomain() } }
+
+    override suspend fun upsertUser(user: User) = users.upsert(user.toEntity())
 
     // --- users ---------------------------------------------------------------
 

@@ -20,8 +20,10 @@ import dagger.hilt.android.AndroidEntryPoint
  * The login gate — the app's start destination. The merchant cannot reach the
  * dashboard until signed in (see nav_graph startDestination).
  *
- * Mock for now: the button signs in regardless of the phone field. Real login
- * later adds an OTP step; this same screen stays, driven by LoginViewModel.state.
+ * One screen, two steps: the phone field asks the server for a code, then the code field
+ * appears and the same button verifies it. Which step is showing is derived entirely from
+ * [LoginViewModel.state], so a rotation or a process death cannot leave the screen in a
+ * different half than the ViewModel thinks it is in.
  */
 @AndroidEntryPoint
 class LoginFragment : Fragment() {
@@ -46,8 +48,18 @@ class LoginFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         binding.btnLogin.setOnClickListener {
-            val phone = binding.phoneInput.text?.toString()?.trim().orEmpty()
-            viewModel.login(phone.ifEmpty { null })
+            // One button, two jobs, chosen by which field is on screen. The state decides,
+            // not the button's own text, so the two can never disagree.
+            if (binding.codeLayout.visibility == View.VISIBLE) {
+                viewModel.verify(binding.codeInput.text?.toString())
+            } else {
+                val phone = binding.phoneInput.text?.toString()?.trim().orEmpty()
+                viewModel.sendCode(phone.ifEmpty { null })
+            }
+        }
+        binding.btnEditPhone.setOnClickListener {
+            binding.codeInput.text = null
+            viewModel.editPhone()
         }
         observeState()
     }
@@ -63,15 +75,29 @@ class LoginFragment : Fragment() {
     }
 
     private fun renderState(state: LoginState) {
+        // Which half of the flow is on screen. Derived from the state rather than tracked
+        // separately, so there is nothing to fall out of sync after a rotation.
+        //
+        // SUBMITTING says nothing about which half we are in — it happens on both — so it
+        // leaves the fields exactly as they were. Recomputing on it would collapse the code
+        // field for the length of every verify request.
+        if (state != LoginState.SUBMITTING) {
+            val onCodeStep = state in CODE_STEP_STATES
+            binding.codeLayout.visibility = if (onCodeStep) View.VISIBLE else View.GONE
+            binding.btnEditPhone.visibility = if (onCodeStep) View.VISIBLE else View.GONE
+            binding.phoneLayout.isEnabled = !onCodeStep
+            binding.btnLogin.setText(
+                if (onCodeStep) R.string.login_button else R.string.login_send_code
+            )
+        }
+
+        binding.btnLogin.isEnabled = state != LoginState.SUBMITTING
+
         when (state) {
-            LoginState.IDLE -> {
-                binding.btnLogin.isEnabled = true
-                binding.statusText.visibility = View.GONE
-            }
-            LoginState.SUBMITTING -> {
-                binding.btnLogin.isEnabled = false
-                binding.statusText.visibility = View.GONE
-            }
+            LoginState.IDLE, LoginState.SUBMITTING -> hideStatus()
+
+            LoginState.CODE_SENT -> showStatus(R.string.msg_login_code_sent, isError = false)
+
             LoginState.SUCCESS -> {
                 // If a CREDIT handoff was waiting, the activity resumes the sale flow
                 // and handles navigation; otherwise go to the dashboard (dropping the
@@ -81,17 +107,32 @@ class LoginFragment : Fragment() {
                     findNavController().navigate(R.id.action_global_dashboard_after_login)
                 }
             }
+
             LoginState.NEEDS_REGISTER -> {
-                binding.btnLogin.isEnabled = true
-                binding.statusText.visibility = View.GONE
+                hideStatus()
                 showRegisterDialog()
             }
-            LoginState.ERROR -> {
-                binding.btnLogin.isEnabled = true
-                binding.statusText.setText(R.string.msg_login_wrong_number)
-                binding.statusText.visibility = View.VISIBLE
-            }
+
+            LoginState.INVALID_CODE -> showStatus(R.string.msg_login_invalid_code)
+            LoginState.OFFLINE -> showStatus(R.string.msg_login_offline)
+            LoginState.ERROR -> showStatus(R.string.msg_login_wrong_number)
         }
+    }
+
+    private fun showStatus(messageRes: Int, isError: Boolean = true) {
+        binding.statusText.setText(messageRes)
+        binding.statusText.setTextColor(
+            com.google.android.material.color.MaterialColors.getColor(
+                binding.statusText,
+                if (isError) com.google.android.material.R.attr.colorError
+                else com.google.android.material.R.attr.colorOnSurfaceVariant
+            )
+        )
+        binding.statusText.visibility = View.VISIBLE
+    }
+
+    private fun hideStatus() {
+        binding.statusText.visibility = View.GONE
     }
 
     /** Confirmation for registering an unknown number; already-showing = no-op. */
@@ -112,5 +153,21 @@ class LoginFragment : Fragment() {
         registerDialog?.dismiss()
         registerDialog = null
         _binding = null
+    }
+
+    private companion object {
+        /**
+         * States that mean "a code is outstanding", so the code field belongs on screen.
+         *
+         * SUBMITTING is deliberately absent: it occurs in BOTH halves, and treating it as
+         * either one would make the fields flicker to the other step while a request is in
+         * flight. Leaving it out keeps whatever is already showing in place, which is what
+         * a spinner should do.
+         */
+        val CODE_STEP_STATES = setOf(
+            LoginState.CODE_SENT,
+            LoginState.INVALID_CODE,
+            LoginState.NEEDS_REGISTER
+        )
     }
 }

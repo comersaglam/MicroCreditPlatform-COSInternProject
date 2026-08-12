@@ -18,7 +18,24 @@ interface Repository {
     fun currentSellerId(): String?
     fun observeCurrentUser(): Flow<User?>
     val isPairedWithApp: Flow<Boolean>
-    suspend fun login(phone: String?): Boolean
+    /**
+     * Asks the server to send a verification code. True when it accepted the number.
+     *
+     * Separate from [signIn] because the code arrives out of band: the merchant reads it
+     * off their phone and types it back, so the two halves are two round trips with a
+     * person in between.
+     */
+    suspend fun requestOtp(phone: String): Boolean
+
+    /**
+     * Verifies the code and persists the session.
+     *
+     * Whether the number has an account is the SERVER's answer, not a local lookup —
+     * verify does not auto-register, so an unknown number comes back as
+     * [SignInResult.NeedsRegister] and the caller registers as a separate step.
+     */
+    suspend fun signIn(phone: String, code: String): SignInResult
+
     suspend fun logout()
     suspend fun pairWithApp()
 

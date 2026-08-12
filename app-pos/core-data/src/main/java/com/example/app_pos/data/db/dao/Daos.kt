@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.AuditLogEntity
 import com.example.app_pos.data.db.entity.BasketEntity
@@ -36,6 +37,15 @@ import kotlinx.coroutines.flow.Flow
 interface UserDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(user: UserEntity)
+
+    /**
+     * Writes the row whether or not it exists, unlike [insert]'s IGNORE.
+     *
+     * Used to mirror the account the server just authenticated: the server owns the id and
+     * the profile, so a local copy that silently refused to update would drift from it.
+     */
+    @Upsert
+    suspend fun upsert(user: UserEntity)
 
     @Update
     suspend fun update(user: UserEntity)

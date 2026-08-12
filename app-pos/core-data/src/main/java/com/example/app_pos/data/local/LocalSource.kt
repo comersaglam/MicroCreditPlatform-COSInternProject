@@ -23,6 +23,17 @@ interface LocalSource : Repository {
     /** Every stored user, with no session filter applied. */
     fun observeAllUsers(): Flow<List<User>>
 
+    /**
+     * Writes a user EXACTLY as given, keeping the id the caller supplies.
+     *
+     * Distinct from [Repository.registerUser], which mints a fresh local UUID. That is
+     * right when the device is the one inventing the account, and wrong when mirroring an
+     * account the server already owns: the session carries the server's user id, and
+     * observeCurrentUser matches the session against this table, so a locally invented id
+     * would never match and the merchant would sign in to a blank profile.
+     */
+    suspend fun upsertUser(user: User)
+
     // --- the offline outbox ---------------------------------------------------
 
     /**

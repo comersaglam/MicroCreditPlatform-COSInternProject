@@ -4,6 +4,7 @@ import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.Repository
+import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.User
@@ -42,7 +43,10 @@ class FakeSyncRepository(
     override fun currentSellerId(): String? = null
     override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
-    override suspend fun login(phone: String?): Boolean = false
+    override suspend fun requestOtp(phone: String): Boolean = false
+
+    override suspend fun signIn(phone: String, code: String): SignInResult =
+        SignInResult.Unreachable
     override suspend fun logout() = Unit
     override suspend fun pairWithApp() = Unit
     override suspend fun findUserByPhone(phone: String): User? = null

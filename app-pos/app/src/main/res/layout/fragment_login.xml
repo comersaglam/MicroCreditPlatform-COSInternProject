@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Login gate. Mock for now: any tap (with or without a phone) signs the merchant in.
-  Real login later fills the phone field + an OTP step; the screen stays this one.
+  Login gate, in two steps on one screen: the phone field asks for a code, then the code
+  field appears below it and the button becomes "sign in". One screen rather than two
+  because the merchant is holding the phone that just buzzed — a navigation step between
+  the two halves would only add a transition to look away through.
 -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -56,6 +58,42 @@
             android:maxLines="1" />
     </com.google.android.material.textfield.TextInputLayout>
 
+    <!-- Hidden until the server confirms a code went out, so the merchant only ever
+         sees the field they can actually act on. -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/codeLayout"
+        style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="@string/login_code_hint"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/phoneLayout"
+        tools:visibility="visible">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/codeInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:maxLength="6"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- Lets the merchant correct a mistyped number without restarting the app. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnEditPhone"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/login_edit_phone"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/codeLayout"
+        tools:visibility="visible" />
+
     <TextView
         android:id="@+id/statusText"
         android:layout_width="0dp"
@@ -67,7 +105,7 @@
         android:visibility="gone"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/phoneLayout"
+        app:layout_constraintTop_toBottomOf="@id/btnEditPhone"
         tools:text="Giriş başarısız, tekrar deneyin"
         tools:visibility="visible" />
 

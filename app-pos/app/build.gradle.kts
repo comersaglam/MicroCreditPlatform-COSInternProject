@@ -26,6 +26,16 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Feeds the debug-only network security config (res/xml). Must be the SAME value
+            // core-network builds API_BASE_URL from, or the app would call a host it is not
+            // allowed to reach in cleartext -- and the failure would look like a dead server.
+            resValue(
+                "string",
+                "debug_api_host",
+                (project.findProperty("posApiHost") as String?) ?: "10.0.2.2"
+            )
+        }
         release {
             optimization {
                 enable = false
@@ -43,6 +53,10 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        // Off by default in AGP 9. Needed for the debug-only debug_api_host string that the
+        // network security config points at; BuildConfig stays off here (:core-network owns
+        // API_BASE_URL, and NetworkConfig.isDebug already carries the build type).
+        resValues = true
     }
 }
 

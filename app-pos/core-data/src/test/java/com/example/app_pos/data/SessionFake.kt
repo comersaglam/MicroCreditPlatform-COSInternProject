@@ -7,6 +7,7 @@ import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,7 +99,14 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
     override fun currentSellerId(): String? = null
     override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
-    override suspend fun login(phone: String?): Boolean = false
+    override suspend fun requestOtp(phone: String): Boolean = false
+
+    override suspend fun signIn(phone: String, code: String): SignInResult =
+        SignInResult.Unreachable
+    override suspend fun upsertUser(user: User) {
+        _users.value = _users.value.filterNot { it.userId == user.userId } + user
+    }
+
     override suspend fun pairWithApp() = Unit
     override suspend fun registerUser(phone: String, displayName: String, isSeller: Boolean): User =
         error("not used")
