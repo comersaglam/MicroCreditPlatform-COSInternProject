@@ -2647,3 +2647,84 @@ görünmesi asıl kanıt.
 
 **Sıradaki:** Tur 41 — değişmedi: kullanıcının yazacağı onay-yolu tanımı ([deferred.md
 §H](deferred.md)) + Tur 40b'den açık kalan iki UI maddesi (§G.1, §G.2).
+
+### 2026-08-15 — Tur 40d: yazma yolu sunucuya bağlandı + hayalet veri durduruldu
+
+Kullanıcı 4. cihaz testinde yeni hatalar bildirdi ve doğru soruyu sordu: *"3 seferdir debug
+edemiyoruz. sistematik bir hata mı var? her tuş roomdan istemeli, room da sürekli server
+ile sync olmalı diye biliyordum ben."* Beklenti doğruydu; **kod ona uymuyordu**.
+
+**Kök neden 1 — okuma sunucudan, yazma yerelde.** `OfflineFirstRepository` bunu kendi
+yorumunda yazıyordu:
+
+```kotlin
+// --- everything else is local; the outbox (phase 8) is what will involve remote ---
+```
+
+Yalnız `addTransaction` sunucuya gidiyordu. `addCustomer`, `setSeller`, `updateShopName`,
+`updateDisplayName`, `updateEmail` sadece Room'a yazıyordu — backend uçları **ve** istemci
+API'leri hazır olduğu hâlde. `claimCustomerForUser` daha kötüydü: sunucuda **hiç karşılığı
+yoktu**, yani seed dışında hiçbir kayıt gerçekten CLAIMED olamıyordu.
+
+⚠️ **Sessiz veri kaybı (kullanıcının gördüğünden ciddi).** `addCustomer` yerel UUID
+üretiyordu. app-pos müşteriyi açıp hemen ona veresiye yazar (`OtpViewModel` →
+`SaleViewModel`), yani zincir şuydu:
+
+1. yerel UUID → sunucu bilmiyor
+2. veresiye o id ile outbox'a girer
+3. sunucu **404 customer_not_found**
+4. `isRetryable()` false → `SyncEngine` kaydı **outbox'tan siler**, yerel ledger'da bırakır
+
+Sonuç: veresiye ekranda görünür, sunucuda **yoktur**. Kullanıcının "ödeme al deyince böyle
+bir kullanıcı yok diyor" raporunun altındaki asıl risk buydu.
+
+**Kök neden 2 — `allowBackup="true"`.** Android uninstall'da veriyi yedekleyip yeniden
+kurulumda geri yüklüyordu; üç turdur yapılan `adb uninstall`'ların hiçbiri gerçekten
+silmemişti. Kanıt: cihazda `t4` = `u_owner→c2`, sunucuda `t4` = `u_market→m1` — aynı id,
+farklı satır, hiçbir pull'un üretemeyeceği bir durum. Kurulu APK cihazdan çekilip dex'i
+arandı: seed kodu yok, yani veri uninstall'dan sağ çıkıyordu. **Testlerin üç turdur
+hayalet veriyle koştuğu buradan anlaşıldı.**
+
+**Yapılanlar:**
+
+1. **`allowBackup="false"`** (iki manifest). Bunsuz hiçbir düzeltme güvenilir test
+   edilemezdi, o yüzden ilk madde. ⚠️ XML yorumunda `--` geçersiz — manifest bir kez bu
+   yüzden parse edilemedi.
+2. **`addCustomer` sunucu-önce.** Dönüş tipi `String` → `CustomerCreateOutcome`
+   (`Created` / `AlreadyExists` / `Unreachable` / `Failed`). Id'yi hep sunucu üretir; **409
+   hata değil**, mevcut kayda uzlaşma demektir (uçta idempotency-key yok, kayıp 201'in
+   retry'si de 409 görünür). `Unreachable`'da **yerele hiçbir şey yazılmaz** ve satış durur.
+   Bedel bilinçli: yalnız YENİ kayıt açmak sinyal ister, mevcut müşteriye veresiye yazmak
+   offline çalışmaya devam eder.
+3. **Profil yazmaları** sunucuya + aynalama. Bunlar offline-tolerant KALDI: hiçbir şey
+   display name ile anahtarlanmıyor, yani senkronlanmamış düzenleme bayat bir alan, sonradan
+   reddedilecek bir id değil. ⚠️ `updateShopName` mevcut `shopPhone`'u **önce okuyup**
+   gönderir — become-seller iki alanı da atadığı için tek başına ad göndermek numarayı
+   sessizce silerdi.
+4. **`POST /users/me/claim`** (yeni). Telefon **token'dan** gelir, gövdeden değil: claim
+   "bu kayıtlar benim" demektir, numarayı istekte taşımak herkesin başkasının borcunu
+   sahiplenmesine (ve `/me/debts` üzerinden geçmişini okumasına) izin verirdi. Idempotent;
+   başkasının tuttuğu kaydı **asla** devretmez.
+5. **`createdBySellerId` Room'a** (şema v3) ve `observeForSeller` artık ledger üyeliği ile
+   **birleşim** alıyor. Sunucu bu kolonu "işlemi olmayan müşteri hiçbir deftere ait
+   görünmüyor" diye eklemişti; istemciler almamıştı — kullanıcının "eklediğim müşteri
+   listede yok" raporunun kalan yarısı. ⚠️ app-mobile'ın sorgusunda buyer-stub dışlaması
+   var; `OR` eklerken **parantez şart**, yoksa `A OR B AND C` bağlanması Tur 40b'de
+   kapatılan sızıntıyı geri getirirdi.
+
+**Doğrulama.** 154 backend testi (146→154; claim için 6, `created_by_seller_id` için 2
+yeni), iki app'in unit testleri, `assembleDebug`, dex sayımı (`CustomerCreateOutcome` 22,
+`claimMyRecords` app-mobile'da 9 / app-pos'ta 0) ve `aapt2` ile manifest'te
+`allowBackup=false`. Uçtan uca canlı backend'e karşı:
+
+- yeni müşteri → id `c_a44d38b30285` (UUID değil), **işlemi yokken listede görünüyor**
+- seed'deki `05552223344`'ü "aysemsi" adıyla eklemeye çalışmak → **409**, istemci `c2`'ye
+  (Ayşe Demir, 165 TL) uzlaşıyor, **ikinci satır oluşmuyor**
+- Ayşe kaydolup giriyor → claim öncesi `/me/debts` **boş**, claim sonrası **165,00 TL**,
+  dükkân adı ve telefonuyla
+
+**Cihazda ÇALIŞIRKEN doğrulanmadı** — kurulum kullanıcıda. Sıra: `up -d --build api` →
+`app.reset` → iki APK uninstall + kur. Artık `allowBackup=false` olduğu için uninstall
+gerçekten siliyor; **ama bu APK'lar kurulduktan SONRA** geçerli.
+
+**Sıradaki:** Tur 41 — değişmedi (onay-yolu tanımı §H + §G.1, §G.2).

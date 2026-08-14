@@ -233,3 +233,40 @@ adb shell am broadcast -a "androidx.work.diagnostics.REQUEST_DIAGNOSTICS" \
   -p com.example.app_pos
 adb logcat -d | grep -i "WM-" | tail -20
 ```
+
+## D bloğu — Tur 40d: yazma yolu sunucuya bağlandı
+
+⚠️ **Bu blok, `allowBackup=false` içeren APK'lar kurulduktan sonra anlamlı.** Önceki
+kurulumlar uninstall'dan sağ çıkabilir; bir kez temiz kurulum yapıldığından emin ol.
+
+| # | Yap | Bekle |
+|---|-----|-------|
+| D1 | app-pos → yeni müşteri ekle (`05559998877`, "Test Ali") | **Hemen listede görünür** (henüz veresiye YOK) |
+| D2 | psql ile bak | id **`c_` ile başlar** (UUID değil), `created_by_seller_id=u_owner` |
+| D3 | Test Ali'ye veresiye yaz | `transactions`'a düşer, outbox boşalır |
+| D4 | `05552223344`'ü (seed'de Ayşe Demir) **başka isimle** eklemeye çalış | Mevcut kayda uzlaşır, **"aysemsi" diye ikinci satır OLUŞMAZ** |
+| D5 | **USB'yi çek**, yeni müşteri eklemeyi dene | "Sunucuya ulaşılamadı" — kayıt **açılmaz** (id'yi sunucu üretir) |
+| D6 | Uçak modu, **mevcut** müşteriye veresiye yaz | **Çalışır** (offline kuyruk) ← D5'in kısıtı yalnız YENİ kayıt |
+| D7 | app-mobile → `05552223344` ile giriş | Ayşe'nin borcu (**165,00 TL**) görünür ← claim |
+| D8 | Profil → dükkân adını değiştir | `users.shop_name` güncel **ve `shop_phone` SİLİNMEMİŞ** |
+
+Doğrulama komutları:
+
+```bash
+# D2/D4 — tek satır mı, id formatı ne?
+docker exec backend-db-1 psql -U veresiye -d veresiye -c \
+  "SELECT customer_id, display_name, phone, created_by_seller_id FROM customers ORDER BY customer_id;"
+
+# D7 — claim gerçekten sunucuda mı oldu?
+docker exec backend-db-1 psql -U veresiye -d veresiye -c \
+  "SELECT customer_id, claim_status, claimed_by_user_id FROM customers WHERE phone='+905552223344';"
+
+# D8 — rename shop_phone'u silmiş mi?
+docker exec backend-db-1 psql -U veresiye -d veresiye -c \
+  "SELECT user_id, shop_name, shop_phone FROM users WHERE user_id='u_owner';"
+```
+
+> **D5 neden böyle:** müşteri id'sini SUNUCU üretir. İstemci yerel bir id uydurursa, ona
+> yazılan veresiye sunucuda 404 alır; 404 retry edilebilir değildir, dolayısıyla outbox
+> kaydı **atar** ve borç ekranda kalıp sunucuda hiç var olmaz. Tur 40d'ye kadar olan
+> davranış buydu. Bu yüzden "offline'da yeni müşteri açılamaz" bilinçli bir karardır.
