@@ -93,10 +93,19 @@ interface CustomerDao {
     @Query("SELECT * FROM customers")
     fun observeAll(): Flow<List<CustomerEntity>>
 
-    /** The seller's customers: everyone they have at least one ledger entry with. */
+    /**
+     * The seller's customers: everyone they have an entry with, PLUS everyone they wrote
+     * down and have not charged yet.
+     *
+     * The second half is not a convenience. Ledger membership alone means a customer only
+     * joins the book on their first entry, so the person just added vanished from the list
+     * that added them — they were stored, and invisible, until money changed hands. The
+     * server draws the same union for the same reason (backend `_book_customer_ids`).
+     */
     @Query(
         "SELECT * FROM customers WHERE customerId IN " +
-            "(SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId)"
+            "(SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId) " +
+            "OR createdBySellerId = :sellerId"
     )
     fun observeForSeller(sellerId: String): Flow<List<CustomerEntity>>
 

@@ -7,6 +7,7 @@ import com.example.app_pos.model.Repository
 import com.example.app_pos.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
@@ -20,8 +21,16 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 
-/** Where the OTP step is in its request → verify → write lifecycle. */
-enum class OtpStatus { SENDING, READY, VERIFYING, DONE, ERROR }
+/**
+ * Where the OTP step is in its request → verify → write lifecycle.
+ *
+ * CUSTOMER_UNREACHABLE is separate from ERROR because it is not the merchant's mistake and
+ * it has its own remedy: opening a NEW customer record needs the server (it mints the id),
+ * so with no signal the sale cannot start — while a sale to an existing customer still
+ * writes offline. Folding it into ERROR would tell the merchant something went wrong
+ * without telling them the one thing that would let them carry on.
+ */
+enum class OtpStatus { SENDING, READY, VERIFYING, DONE, ERROR, CUSTOMER_UNREACHABLE }
 
 /**
  * Runs the customer-approval step and, on approval, performs the write.
@@ -80,8 +89,30 @@ class OtpViewModel @Inject constructor(
                 _status.value = OtpStatus.ERROR
                 return@launch
             }
-            val customerId =
-                if (isNew) repo.addCustomer(displayName, phone) else knownCustomerId
+            // A new customer must exist ON THE SERVER before anything is booked against
+            // them: the id comes from there, and an entry written against an id the server
+            // does not know is refused, dropped from the outbox, and lost while still
+            // showing on this screen. So a failure here stops the sale instead of writing.
+            val customerId = if (isNew) {
+                when (val outcome = repo.addCustomer(displayName, phone)) {
+                    is CustomerCreateOutcome.Created -> outcome.customerId
+                    // The person was already in this book (a 409, or a retry after a lost
+                    // response). Their existing record is the right one to write against.
+                    is CustomerCreateOutcome.AlreadyExists -> outcome.customerId
+                    CustomerCreateOutcome.Unreachable -> {
+                        _status.value = OtpStatus.CUSTOMER_UNREACHABLE
+                        return@launch
+                    }
+                    // The server refused (an invalid number, not a seller). Retrying the
+                    // same request cannot fix it, so this is the generic failure.
+                    is CustomerCreateOutcome.Failed -> {
+                        _status.value = OtpStatus.ERROR
+                        return@launch
+                    }
+                }
+            } else {
+                knownCustomerId
+            }
             // orderBody is present only for a basket handoff (DEBT from the PGW); when
             // set, the basket + its items are persisted and linked. Money-only passes null.
             repo.addTransaction(

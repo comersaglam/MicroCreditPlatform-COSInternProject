@@ -99,7 +99,12 @@ interface CustomerDao {
     fun observeAll(): Flow<List<CustomerEntity>>
 
     /**
-     * The seller's customers: everyone they have at least one ledger entry with.
+     * The seller's customers: everyone they have an entry with, PLUS everyone they wrote
+     * down and have not charged yet.
+     *
+     * The second half of the union is not a convenience. Ledger membership alone means a
+     * customer only joins the book on their first entry, so the person just added vanished
+     * from the list that added them. The server draws the same union (`_book_customer_ids`).
      *
      * The `claimedByUserId <> :sellerId` clause keeps the BUYER side out. This app is one
      * account in two roles and both write to this table: the buyer pull stores a stub row
@@ -107,12 +112,14 @@ interface CustomerDao {
      * server never tells a buyer the name on a shop's copy). Without the exclusion those
      * stubs surfaced on Müşterilerim as a customer with no name and no number.
      *
-     * A shopkeeper is never their own customer, so excluding their own records costs
-     * nothing and removes the whole class of confusion.
+     * NOTE the parentheses around the union: the exclusion must apply to BOTH halves. As
+     * `A OR B AND C` SQLite would bind the AND tighter and let every buyer stub back in
+     * through the first branch — re-creating the exact bug the clause was added to fix.
      */
     @Query(
-        "SELECT * FROM customers WHERE customerId IN " +
-            "(SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId) " +
+        "SELECT * FROM customers WHERE " +
+            "(customerId IN (SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId) " +
+            "OR createdBySellerId = :sellerId) " +
             "AND (claimedByUserId IS NULL OR claimedByUserId <> :sellerId)"
     )
     fun observeForSeller(sellerId: String): Flow<List<CustomerEntity>>

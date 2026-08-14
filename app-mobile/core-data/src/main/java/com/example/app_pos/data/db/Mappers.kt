@@ -55,6 +55,7 @@ fun CustomerEntity.toDomain(balanceMinor: Long): Customer = Customer(
     phone = phone,
     claimStatus = ClaimStatus.valueOf(claimStatus),
     claimedByUserId = claimedByUserId,
+    createdBySellerId = createdBySellerId,
     balanceMinor = balanceMinor
 )
 

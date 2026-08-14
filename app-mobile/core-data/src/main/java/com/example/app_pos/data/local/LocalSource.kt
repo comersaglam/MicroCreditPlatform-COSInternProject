@@ -2,6 +2,7 @@ package com.example.app_pos.data.local
 
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
+import com.example.app_pos.model.Customer
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.Transaction
@@ -34,6 +35,16 @@ interface LocalSource : Repository {
      * would never match and the user would sign in to a blank profile.
      */
     suspend fun upsertUser(user: User)
+
+    /**
+     * Mirrors customer records the SERVER owns, keyed by its ids.
+     *
+     * The counterpart of [upsertUser] for the book, and needed for the same reason: since
+     * customer records are created server-side, the only correct local copy is the one
+     * written under the server's id. Upsert rather than insert — a name corrected on
+     * another terminal, or a claim that has since happened, must not be silently dropped.
+     */
+    suspend fun storeCustomers(rows: List<Customer>)
 
     // --- the offline outbox ---------------------------------------------------
 

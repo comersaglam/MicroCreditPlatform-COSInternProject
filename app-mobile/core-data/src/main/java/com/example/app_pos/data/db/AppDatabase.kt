@@ -53,7 +53,10 @@ import com.example.app_pos.data.db.entity.UserEntity
         AuditLogEntity::class,
         DeviceEntity::class
     ],
-    version = 2,
+    // v3: customers.createdBySellerId added, so a customer who has been written down but
+    // not yet charged still belongs to a book. Dropping the local copy costs nothing now:
+    // the server owns every row and the next pull restores them.
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

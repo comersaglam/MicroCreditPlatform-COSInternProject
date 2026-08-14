@@ -111,6 +111,13 @@ class RemoteDataSource @Inject constructor(
     suspend fun becomeSeller(info: SellerInfo): ApiResult<User> =
         apiCall(moshi) { userApi.becomeSeller(info.toBecomeSellerDto()).toDomain() }
 
+    /**
+     * Claims every UNCLAIMED record written against this account's phone, and answers with
+     * the records now held. The phone is the token's, so there is nothing to pass.
+     */
+    suspend fun claimMyRecords(): ApiResult<List<Customer>> =
+        apiCall(moshi) { userApi.claimMyRecords().map { it.toDomain() } }
+
     // --- customers (implicitly scoped to the token's seller) -------------------
 
     suspend fun createCustomer(displayName: String, phone: String): ApiResult<Customer> =

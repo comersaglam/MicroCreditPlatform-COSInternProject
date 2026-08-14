@@ -67,6 +67,9 @@
     <string name="otp_sending">Onay kodu gönderiliyor…</string>
     <string name="otp_verifying">Onaylanıyor…</string>
     <string name="msg_otp_failed">Onay başarısız, tekrar deneyin</string>
+    <!-- A NEW customer record is opened on the server (it mints the id), so this step needs
+         a connection. Says what to do rather than blaming the number or the merchant. -->
+    <string name="msg_customer_unreachable">Sunucuya ulaşılamadı — yeni müşteri kaydı için bağlantı gerekiyor</string>
 
     <!-- Sale flow cancel guard -->
     <string name="cancel_dialog_title">İşlemi iptal et</string>

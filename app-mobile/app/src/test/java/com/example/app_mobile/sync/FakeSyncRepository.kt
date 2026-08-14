@@ -1,5 +1,6 @@
 package com.example.app_mobile.sync
 
+import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
@@ -71,7 +72,8 @@ class FakeSyncRepository(
         emptyList()
 
     override fun observeCustomers(sellerId: String): Flow<List<Customer>> = flowOf(emptyList())
-    override suspend fun addCustomer(displayName: String, phone: String): String = ""
+    override suspend fun addCustomer(displayName: String, phone: String): CustomerCreateOutcome =
+        CustomerCreateOutcome.Created("c_test")
     override suspend fun findCustomerById(sellerId: String, customerId: String): Customer? = null
     override suspend fun findCustomerByPhone(sellerId: String, phone: String): Customer? = null
     override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup =

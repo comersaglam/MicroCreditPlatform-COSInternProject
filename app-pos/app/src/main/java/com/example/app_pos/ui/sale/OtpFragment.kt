@@ -107,6 +107,18 @@ class OtpFragment : Fragment() {
                 btnVerify.isEnabled = true
                 Toast.makeText(requireContext(), R.string.msg_otp_failed, Toast.LENGTH_SHORT).show()
             }
+            // Nothing was written, here or on the server. Said plainly, because the sale
+            // can be retried the moment there is signal — and because blaming the merchant
+            // for a dropped connection is the mistake ss6 already taught us.
+            OtpStatus.CUSTOMER_UNREACHABLE -> {
+                statusText.visibility = View.GONE
+                btnVerify.isEnabled = true
+                Toast.makeText(
+                    requireContext(),
+                    R.string.msg_customer_unreachable,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             OtpStatus.DONE -> Unit // handled in the write callback
         }
     }

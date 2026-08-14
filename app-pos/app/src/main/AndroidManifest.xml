@@ -9,8 +9,8 @@
     <!-- allowBackup is OFF, and that is load-bearing (Turn 40c). Android backs the app's
          data up on uninstall and RESTORES it on the next install, so `adb uninstall` did
          not actually reset the device: three rounds of testing ran against rows from a
-         seed deleted back in Turn 39. The giveaway was `t4` holding u_owner->c2 locally
-         and u_market->m1 on the server -- one id, two different rows, which no pull could
+         seed deleted back in Turn 39. The giveaway was `t4` holding u_owner/c2 locally
+         and u_market/m1 on the server: one id, two different rows, which no pull could
          have produced.
 
          Backing this database up is wrong on its own terms anyway: the server owns the

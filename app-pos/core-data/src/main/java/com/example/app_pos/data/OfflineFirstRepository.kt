@@ -9,6 +9,8 @@ import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.mapper.toCreateDto
 import com.squareup.moshi.Moshi
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.CustomerCreateOutcome
+import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
@@ -26,6 +28,7 @@ import com.example.app_pos.network.dto.UserDto
 import com.example.app_pos.network.mapper.toDomain
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -176,20 +179,103 @@ class OfflineFirstRepository @Inject constructor(
             else -> local.registerUser(phone, displayName, isSeller)
         }
 
+    /**
+     * Profile writes go to the server first, then mirror what it answers.
+     *
+     * Unlike [addCustomer] these stay offline-tolerant: on failure the local row is still
+     * written and the merchant keeps moving. That is safe here in a way it is not there —
+     * nothing is keyed by a display name, so a local edit that has not synced yet is a
+     * stale field, not an id the server will later reject.
+     */
     override suspend fun setSeller(userId: String, shopName: String, shopPhone: String?) =
-        local.setSeller(userId, shopName, shopPhone)
+        when (val result = remote.becomeSeller(SellerInfo(shopName, shopPhone))) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.setSeller(userId, shopName, shopPhone)
+        }
 
     override suspend fun updateDisplayName(userId: String, displayName: String) =
-        local.updateDisplayName(userId, displayName)
+        when (val result = remote.updateProfile(displayName = displayName)) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.updateDisplayName(userId, displayName)
+        }
 
-    override suspend fun updateShopName(userId: String, shopName: String) =
-        local.updateShopName(userId, shopName)
+    /**
+     * Renaming reuses become-seller, which is how the server spells it.
+     *
+     * The existing shop phone is READ FIRST and sent along. BecomeSeller carries both
+     * fields and the server assigns both, so sending the name alone would blank a number
+     * the shop had already set — a rename quietly deleting a phone number.
+     */
+    override suspend fun updateShopName(userId: String, shopName: String) {
+        // Read from the local mirror of this account rather than asking the server again:
+        // it is the same row /users/me would return, and a rename should not need two
+        // round-trips. Null only when the shop never set a number, which is what to send.
+        val keptPhone = local.observeAllUsers().first()
+            .firstOrNull { it.userId == userId }?.sellerInfo?.shopPhone
+        when (val result = remote.becomeSeller(SellerInfo(shopName, keptPhone))) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.updateShopName(userId, shopName)
+        }
+    }
 
     override fun observeCustomers(sellerId: String): Flow<List<Customer>> =
         local.observeCustomers(sellerId)
 
-    override suspend fun addCustomer(displayName: String, phone: String): String =
-        local.addCustomer(displayName, phone)
+    /**
+     * Opens the record ON THE SERVER, then mirrors it locally. The server owns the id.
+     *
+     * Server-first, and not offline-tolerant — the one write on this path that is not.
+     * A local UUID is what caused a veresiye to vanish: the id reached the server attached
+     * to a ledger entry, the server had never heard of that customer, and the resulting 404
+     * is not retryable, so the outbox DROPPED the entry. The debt stayed on the merchant's
+     * screen and existed nowhere else. Refusing to invent an id is what closes that hole.
+     *
+     * The cost is bounded on purpose: only OPENING a record needs signal. Writing a
+     * veresiye for a customer who already exists still queues offline, which is the case
+     * that actually happens on a shop floor.
+     */
+    override suspend fun addCustomer(displayName: String, phone: String): CustomerCreateOutcome =
+        when (val result = remote.createCustomer(displayName, phone)) {
+            is ApiResult.Success -> {
+                local.storeCustomers(listOf(result.data))
+                CustomerCreateOutcome.Created(result.data.customerId)
+            }
+
+            is ApiResult.ApiError ->
+                if (result.code == CODE_CUSTOMER_EXISTS) {
+                    // Not a failure: the server is saying this phone is ALREADY in this
+                    // seller's book. The right record exists, so find it and carry on with
+                    // it — a second row would split one person's history in two. The
+                    // endpoint takes no idempotency key, so a 409 is also what a retry
+                    // after a lost 201 looks like; reconciling covers both.
+                    existingCustomerFor(phone)
+                } else {
+                    CustomerCreateOutcome.Failed(result.message)
+                }
+
+            // Nothing written, locally or remotely. Saying so is the whole point: the
+            // caller must not go on to write an entry against a customer that does not
+            // exist. ("Unreachable is not empty" — the same rule the pull path follows.)
+            is ApiResult.NetworkError -> CustomerCreateOutcome.Unreachable
+            is ApiResult.UnexpectedError -> CustomerCreateOutcome.Failed(UNREADABLE_ANSWER)
+        }
+
+    /**
+     * Resolves the record a 409 refers to, so the caller gets a usable id instead of an
+     * error. Mirrors it locally too — this device evidently did not have it.
+     */
+    private suspend fun existingCustomerFor(phone: String): CustomerCreateOutcome =
+        when (val lookup = remote.lookupCustomerByPhone(phone)) {
+            is ApiResult.Success -> {
+                local.storeCustomers(listOf(lookup.data))
+                CustomerCreateOutcome.AlreadyExists(lookup.data.customerId)
+            }
+            // The row is known to exist (that is what the 409 said), so failing to read it
+            // back is a transport problem, not an absent customer.
+            is ApiResult.NetworkError -> CustomerCreateOutcome.Unreachable
+            is ApiResult.ApiError -> CustomerCreateOutcome.Failed(lookup.message)
+            is ApiResult.UnexpectedError -> CustomerCreateOutcome.Failed(UNREADABLE_ANSWER)
+        }
 
     override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup =
         local.lookupCustomerForSeller(sellerId, phone)
@@ -356,6 +442,13 @@ class OfflineFirstRepository @Inject constructor(
         // Refusals that mean the card is stale rather than the request being wrong.
         const val CODE_FORBIDDEN = "forbidden"
         const val CODE_ALREADY_DECIDED = "already_decided"
+
+        // "This phone is already in your book" — a 409 that means reconcile, not fail.
+        const val CODE_CUSTOMER_EXISTS = "customer_exists"
+
+        // An answer this build could not read. Not a server message -- there is none --
+        // so the user is told the truth in the one language the screen speaks.
+        const val UNREADABLE_ANSWER = "Sunucu yanıtı okunamadı"
 
         const val STATUS_APPROVED = "APPROVED"
         const val STATUS_REJECTED = "REJECTED"

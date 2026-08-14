@@ -10,6 +10,7 @@ import com.example.app_pos.data.db.toDomain
 import com.example.app_pos.data.db.toEntity
 import com.example.app_pos.data.db.toItemEntities
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
@@ -150,20 +151,22 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             rows.map { it.toDomain(balanceOf(sellerId, it.customerId, ledger)) }
         }
 
-    override suspend fun addCustomer(displayName: String, phone: String): String {
-        val id = UUID.randomUUID().toString()
-        customers.insert(
-            com.example.app_pos.data.db.entity.CustomerEntity(
-                customerId = id,
-                displayName = displayName.trim(),
-                phone = storedPhone(phone),
-                claimStatus = com.example.app_pos.model.ClaimStatus.UNCLAIMED.name,
-                claimedByUserId = null,
-                createdAt = nowStamp()
-            )
-        )
-        return id
-    }
+    /**
+     * Storage cannot open a customer record: the SERVER mints the id.
+     *
+     * This used to mint a local UUID, and that is what made a veresiye disappear. The
+     * entry queued against that id reached a server which had never heard of the customer,
+     * answered 404, and a 404 is not retryable — so the outbox dropped the entry. The debt
+     * stayed on the merchant's screen and existed nowhere else.
+     *
+     * The composing repository overrides this with the real thing, exactly as it does for
+     * the session members. Reported as Unreachable rather than inventing a row, so a caller
+     * wired only to storage cannot quietly reintroduce the same class of bug.
+     */
+    override suspend fun addCustomer(
+        displayName: String,
+        phone: String
+    ): CustomerCreateOutcome = CustomerCreateOutcome.Unreachable
 
     override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup {
         val stored = storedPhone(phone)
@@ -309,6 +312,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
                         phone = customer.phone.orEmpty(),
                         claimStatus = customer.claimStatus.name,
                         claimedByUserId = customer.claimedByUserId,
+                        createdBySellerId = customer.createdBySellerId,
                         // The server does not send a created-at for customers, and this
                         // column only orders local lists. An existing row keeps whatever it
                         // had; a new one is stamped now.

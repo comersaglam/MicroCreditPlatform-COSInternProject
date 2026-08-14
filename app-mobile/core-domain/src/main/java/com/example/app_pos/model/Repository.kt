@@ -75,7 +75,14 @@ interface Repository {
 
     // --- customers (seller-scoped: the merchant surface) ---
     fun observeCustomers(sellerId: String): Flow<List<Customer>>
-    suspend fun addCustomer(displayName: String, phone: String): String
+    /**
+     * Opens a customer record. The SERVER mints the id, so this can fail.
+     *
+     * Returns an outcome rather than a String because "could not reach the server"
+     * and "here is your customer" are different answers, and the caller must not
+     * write a ledger entry on the strength of the first one.
+     */
+    suspend fun addCustomer(displayName: String, phone: String): CustomerCreateOutcome
     suspend fun findCustomerById(sellerId: String, customerId: String): Customer?
     suspend fun findCustomerByPhone(sellerId: String, phone: String): Customer?
 

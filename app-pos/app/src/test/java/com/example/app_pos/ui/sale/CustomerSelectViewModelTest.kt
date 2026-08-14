@@ -44,6 +44,7 @@ class CustomerSelectViewModelTest {
         phone = "+90555000000",
         claimStatus = ClaimStatus.UNCLAIMED,
         claimedByUserId = null,
+        createdBySellerId = null,
         balanceMinor = 0L
     )
 

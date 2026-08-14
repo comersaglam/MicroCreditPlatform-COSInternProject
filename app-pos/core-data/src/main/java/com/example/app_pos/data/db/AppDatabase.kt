@@ -50,7 +50,10 @@ import com.example.app_pos.data.db.entity.UserEntity
     // v2: createdAt switched from "dd.MM.yyyy HH:mm" to ISO-8601 UTC. The column type is
     // unchanged, but stored values are not comparable across the two formats, so the
     // destructive fallback rebuilds the seeded database rather than migrating it.
-    version = 2,
+    // v3: customers.createdBySellerId added, so a customer who has been written down but
+    // not yet charged still belongs to a book. Dropping the local copy costs nothing now:
+    // the server owns every row and the next pull restores them.
+    version = 3,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

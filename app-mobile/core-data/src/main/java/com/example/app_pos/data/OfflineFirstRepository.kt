@@ -6,6 +6,8 @@ import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.CustomerCreateOutcome
+import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.PAYMENT_DESCRIPTION
@@ -171,17 +173,46 @@ class OfflineFirstRepository @Inject constructor(
             else -> local.registerUser(phone, displayName, isSeller)
         }
 
+    /**
+     * Profile writes go to the server first, then mirror what it answers.
+     *
+     * Unlike [addCustomer] these stay offline-tolerant: on failure the local row is still
+     * written and the user keeps moving. That is safe here in a way it is not there —
+     * nothing is keyed by a display name, so a local edit that has not synced yet is a
+     * stale field, not an id the server will later reject.
+     */
     override suspend fun setSeller(userId: String, shopName: String, shopPhone: String?) =
-        local.setSeller(userId, shopName, shopPhone)
+        when (val result = remote.becomeSeller(SellerInfo(shopName, shopPhone))) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.setSeller(userId, shopName, shopPhone)
+        }
 
-    override suspend fun updateShopName(userId: String, shopName: String) =
-        local.updateShopName(userId, shopName)
+    /**
+     * Renaming reuses become-seller, which is how the server spells it.
+     *
+     * The existing shop phone is READ FIRST and sent along. BecomeSeller carries both
+     * fields and the server assigns both, so sending the name alone would blank a number
+     * the shop had already set — a rename quietly deleting a phone number.
+     */
+    override suspend fun updateShopName(userId: String, shopName: String) {
+        val keptPhone = local.shopPhoneOf(userId)
+        when (val result = remote.becomeSeller(SellerInfo(shopName, keptPhone))) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.updateShopName(userId, shopName)
+        }
+    }
 
     override suspend fun updateDisplayName(userId: String, displayName: String) =
-        local.updateDisplayName(userId, displayName)
+        when (val result = remote.updateProfile(displayName = displayName)) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.updateDisplayName(userId, displayName)
+        }
 
     override suspend fun updateEmail(userId: String, email: String) =
-        local.updateEmail(userId, email)
+        when (val result = remote.updateProfile(email = email)) {
+            is ApiResult.Success -> local.upsertUser(result.data)
+            else -> local.updateEmail(userId, email)
+        }
 
     override suspend fun shopNameOf(sellerId: String): String = local.shopNameOf(sellerId)
 
@@ -190,16 +221,72 @@ class OfflineFirstRepository @Inject constructor(
     override fun observeShopPhone(sellerId: String): Flow<String?> =
         local.observeShopPhone(sellerId)
 
+    /**
+     * Claims on the SERVER, then mirrors what it returns.
+     *
+     * Claiming used to be a local UPDATE only, which meant it changed nothing anybody else
+     * could see: outside the seed no record was ever really CLAIMED, so a buyer installing
+     * the app found no debts — the rows existed, and nothing connected them to the account.
+     * /me/debts is answered from the server's `claimed_by_user_id`, so this is the write
+     * that makes the buyer's whole screen work.
+     *
+     * On failure the local claim still runs. It cannot invent anything: it only links rows
+     * this device already holds, the id it links them to is the server's, and the next
+     * successful sign-in re-runs the real claim.
+     */
     override suspend fun claimCustomerForUser(userId: String, phone: String): List<Customer> =
-        local.claimCustomerForUser(userId, phone)
+        when (val result = remote.claimMyRecords()) {
+            is ApiResult.Success -> result.data.also { local.storeCustomers(it) }
+            else -> local.claimCustomerForUser(userId, phone)
+        }
 
     // --- customers / ledger reads (local; the pull path is Turn 39) -----------
 
     override fun observeCustomers(sellerId: String): Flow<List<Customer>> =
         local.observeCustomers(sellerId)
 
-    override suspend fun addCustomer(displayName: String, phone: String): String =
-        local.addCustomer(displayName, phone)
+    /**
+     * Opens the record ON THE SERVER, then mirrors it locally. The server owns the id.
+     *
+     * Server-first, and not offline-tolerant. A local UUID is an id the server has never
+     * heard of, so any ledger entry written against it is refused — and a refusal that is
+     * not retryable makes the outbox drop the entry, losing a debt that is still on screen.
+     * Refusing to invent an id closes that hole.
+     *
+     * This app has no book pull, so there is nothing to reconcile a bad local row later:
+     * server-first is not just the better option here, it is the only correct one.
+     */
+    override suspend fun addCustomer(displayName: String, phone: String): CustomerCreateOutcome =
+        when (val result = remote.createCustomer(displayName, phone)) {
+            is ApiResult.Success -> {
+                local.storeCustomers(listOf(result.data))
+                CustomerCreateOutcome.Created(result.data.customerId)
+            }
+
+            is ApiResult.ApiError ->
+                if (result.code == CODE_CUSTOMER_EXISTS) {
+                    // The phone is already in this seller's book. The right record exists,
+                    // so reconcile onto it — a second row would split one person's history.
+                    existingCustomerFor(phone)
+                } else {
+                    CustomerCreateOutcome.Failed(result.message)
+                }
+
+            is ApiResult.NetworkError -> CustomerCreateOutcome.Unreachable
+            is ApiResult.UnexpectedError -> CustomerCreateOutcome.Failed(UNREADABLE_ANSWER)
+        }
+
+    /** Resolves the record a 409 refers to, so the caller gets a usable id, not an error. */
+    private suspend fun existingCustomerFor(phone: String): CustomerCreateOutcome =
+        when (val lookup = remote.lookupCustomerByPhone(phone)) {
+            is ApiResult.Success -> {
+                local.storeCustomers(listOf(lookup.data))
+                CustomerCreateOutcome.AlreadyExists(lookup.data.customerId)
+            }
+            is ApiResult.NetworkError -> CustomerCreateOutcome.Unreachable
+            is ApiResult.ApiError -> CustomerCreateOutcome.Failed(lookup.message)
+            is ApiResult.UnexpectedError -> CustomerCreateOutcome.Failed(UNREADABLE_ANSWER)
+        }
 
     override suspend fun findCustomerById(sellerId: String, customerId: String): Customer? =
         local.findCustomerById(sellerId, customerId)
@@ -475,6 +562,13 @@ class OfflineFirstRepository @Inject constructor(
         // Error codes the sign-in flow branches on, exactly as the contract spells them.
         const val CODE_USER_NOT_FOUND = "user_not_found"
         const val CODE_INVALID_CODE = "invalid_code"
+
+        // "This phone is already in your book" — a 409 that means reconcile, not fail.
+        const val CODE_CUSTOMER_EXISTS = "customer_exists"
+
+        // An answer this build could not read. Not a server message -- there is none --
+        // so the user is told the truth in the one language the screen speaks.
+        const val UNREADABLE_ANSWER = "Sunucu yanıtı okunamadı"
 
         // Who started the request, in the contract's vocabulary.
         const val ROLE_SELLER = "SELLER"

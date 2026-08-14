@@ -2,6 +2,7 @@ package com.example.app_mobile.ui.customers
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.PhoneFormat
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -69,7 +70,7 @@ class CustomersViewModel @Inject constructor(
         /** Created; open the detail screen for this id. */
         data class Added(val customerId: String, val displayName: String) : AddCustomerResult
 
-        /** Known to another shop — confirm before adopting the existing record. */
+        /** Known to another shop — con11firm before adopting the existing record. */
         data class ConfirmKnown(val existing: Customer) : AddCustomerResult
 
         /** Already in this seller's book; they should pick them from the list. */
@@ -77,6 +78,18 @@ class CustomersViewModel @Inject constructor(
 
         /** The number could not be read as a phone number. */
         object InvalidPhone : AddCustomerResult
+
+        /**
+         * The server was never reached, so no record was opened — here or there.
+         *
+         * Distinct from [InvalidPhone] because nothing is wrong with what was typed, and
+         * distinct from a generic failure because the remedy is simply to try again with a
+         * connection. The record cannot be created locally: the server mints the id.
+         */
+        object Unreachable : AddCustomerResult
+
+        /** The server refused, and said why. */
+        data class Failed(val message: String) : AddCustomerResult
     }
 
     /**
@@ -91,9 +104,15 @@ class CustomersViewModel @Inject constructor(
             val result = when (val lookup = repo.lookupCustomerForSeller(sellerId, stored)) {
                 is CustomerLookup.AlreadyMine -> AddCustomerResult.AlreadyMine
                 is CustomerLookup.KnownToOtherSeller -> AddCustomerResult.ConfirmKnown(lookup.existing)
-                CustomerLookup.New -> {
-                    val id = repo.addCustomer(name, stored)
-                    AddCustomerResult.Added(id, name.trim())
+                CustomerLookup.New -> when (val outcome = repo.addCustomer(name, stored)) {
+                    is CustomerCreateOutcome.Created ->
+                        AddCustomerResult.Added(outcome.customerId, name.trim())
+                    // The lookup above said New, so this means the server knows something
+                    // this device does not. Its record is the right one either way.
+                    is CustomerCreateOutcome.AlreadyExists ->
+                        AddCustomerResult.Added(outcome.customerId, name.trim())
+                    CustomerCreateOutcome.Unreachable -> AddCustomerResult.Unreachable
+                    is CustomerCreateOutcome.Failed -> AddCustomerResult.Failed(outcome.message)
                 }
             }
             onResult(result)

@@ -121,6 +121,13 @@ class CustomersFragment : Fragment() {
                             dialog.dismiss()
                             openCustomerDetail(result.customerId, result.displayName)
                         }
+                        // Nothing was created. The dialog stays open with what was typed
+                        // still in it, so the merchant can simply retry once there is
+                        // signal — closing it would make them enter everything again.
+                        CustomersViewModel.AddCustomerResult.Unreachable ->
+                            phoneLayout.error = getString(R.string.msg_customer_unreachable)
+                        is CustomersViewModel.AddCustomerResult.Failed ->
+                            phoneLayout.error = result.message
                     }
                 }
             }

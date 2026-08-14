@@ -52,6 +52,11 @@ data class CustomerEntity(
     val phone: String,
     val claimStatus: String,          // UNCLAIMED | CLAIMED
     val claimedByUserId: String?,
+    // Which seller wrote this person down. Mirrors the server's column, and it is what
+    // puts a just-added customer in a book: CustomerDao.observeForSeller otherwise scopes
+    // purely by ledger membership, so somebody added and not yet charged was stored and
+    // invisible on the very screen that added them.
+    val createdBySellerId: String?,
     val createdAt: String
 )
 

@@ -3,6 +3,7 @@ package com.example.app_pos.data
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.local.LocalSource
+import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
@@ -158,6 +159,13 @@ class FakeLocalSource(
 
     override fun observeAllUsers(): Flow<List<User>> = flowOf(emptyList())
     override suspend fun upsertUser(user: User) = Unit
+
+    /** Customer rows mirrored from the server — what a claim or a create stores. */
+    val storedCustomers = mutableListOf<Customer>()
+
+    override suspend fun storeCustomers(rows: List<Customer>) {
+        storedCustomers += rows
+    }
     override suspend fun pendingOutbox(): List<OutboxEntity> = emptyList()
     override suspend fun deleteOutbox(id: String) = Unit
     override suspend fun recordOutboxFailure(id: String) = Unit
@@ -186,7 +194,8 @@ class FakeLocalSource(
     override suspend fun claimCustomerForUser(userId: String, phone: String): List<Customer> = emptyList()
 
     override fun observeCustomers(sellerId: String): Flow<List<Customer>> = flowOf(emptyList())
-    override suspend fun addCustomer(displayName: String, phone: String): String = ""
+    override suspend fun addCustomer(displayName: String, phone: String): CustomerCreateOutcome =
+        CustomerCreateOutcome.Created("c_test")
     override suspend fun findCustomerByPhone(sellerId: String, phone: String): Customer? = null
     override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup =
         CustomerLookup.New

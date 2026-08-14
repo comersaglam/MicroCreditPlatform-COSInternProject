@@ -254,7 +254,7 @@ class ApprovalWritePathTest {
             customer = Customer(
                 customerId = "m1", displayName = "Ahmet Y.", phone = "+905551112233",
                 claimStatus = ClaimStatus.CLAIMED, claimedByUserId = "u1",
-                balanceMinor = 0L
+                createdBySellerId = null, balanceMinor = 0L
             ),
             buyerCustomerId = "m1"
         )

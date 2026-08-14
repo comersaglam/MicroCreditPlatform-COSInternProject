@@ -79,6 +79,9 @@
     <string name="msg_name_required">Müşteri adı gerekli</string>
     <string name="msg_phone_invalid">Geçerli bir numara girin (0555 444 3322)</string>
     <string name="msg_phone_exists">Bu müşteri zaten defterinizde — listeden seçin</string>
+    <!-- A NEW customer record is opened on the server (it mints the id), so this needs a
+         connection. Not the user's mistake, and nothing was written either side. -->
+    <string name="msg_customer_unreachable">Sunucuya ulaşılamadı — tekrar deneyin</string>
     <!-- Phone belongs to someone another shop already knows: reuse that record -->
     <string name="known_customer_title">Kayıtlı müşteri</string>
     <string name="known_customer_message">Bu numara sistemde \"%1$s\" adına kayıtlı. Müşteri defterinize eklenecek ve işlem bu kişiye yazılacak.</string>

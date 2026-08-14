@@ -23,6 +23,7 @@ fun CustomerDto.toDomain(): Customer {
         // Keep the "CLAIMED ⇔ a linked user id exists" invariant even if the payload
         // disagrees with itself, so downstream code can rely on the pair.
         claimedByUserId = claimedByUserId?.takeIf { status == ClaimStatus.CLAIMED },
+        createdBySellerId = createdBySellerId,
         balanceMinor = balanceMinor
     )
 }

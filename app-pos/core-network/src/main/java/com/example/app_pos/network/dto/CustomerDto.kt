@@ -19,6 +19,9 @@ data class CustomerDto(
     @param:Json(name = "phone") val phone: String,
     @param:Json(name = "claim_status") val claimStatus: String,
     @param:Json(name = "claimed_by_user_id") val claimedByUserId: String? = null,
+    // Which shop wrote this person down. Carries a customer who has been added but not yet
+    // charged: on ledger membership alone they would belong to no book and never be listed.
+    @param:Json(name = "created_by_seller_id") val createdBySellerId: String? = null,
     @param:Json(name = "balance_minor") val balanceMinor: Long = 0L
 )
 

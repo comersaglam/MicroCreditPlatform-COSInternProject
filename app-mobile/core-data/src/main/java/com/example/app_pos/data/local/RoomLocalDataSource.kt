@@ -12,6 +12,7 @@ import com.example.app_pos.data.db.toEntity
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.PendingApproval
@@ -174,19 +175,39 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             rows.map { it.toDomain(balanceOf(sellerId, it.customerId, ledger)) }
         }
 
-    override suspend fun addCustomer(displayName: String, phone: String): String {
-        val id = UUID.randomUUID().toString()
-        customers.insert(
-            CustomerEntity(
-                customerId = id,
-                displayName = displayName.trim(),
-                phone = storedPhone(phone),
-                claimStatus = ClaimStatus.UNCLAIMED.name,
-                claimedByUserId = null,
-                createdAt = nowStamp()
-            )
-        )
-        return id
+    /**
+     * Storage cannot open a customer record: the SERVER mints the id.
+     *
+     * This used to mint a local UUID the server had never heard of — an id that any entry
+     * written against it would be rejected for. The composing repository overrides this
+     * with the real thing; reported as Unreachable rather than inventing a row, so a caller
+     * wired only to storage cannot quietly reintroduce the same bug.
+     */
+    override suspend fun addCustomer(
+        displayName: String,
+        phone: String
+    ): CustomerCreateOutcome = CustomerCreateOutcome.Unreachable
+
+    override suspend fun storeCustomers(rows: List<Customer>) {
+        db.withTransaction {
+            rows.forEach { customer ->
+                customers.upsert(
+                    CustomerEntity(
+                        customerId = customer.customerId,
+                        displayName = customer.displayName,
+                        phone = customer.phone.orEmpty(),
+                        claimStatus = customer.claimStatus.name,
+                        claimedByUserId = customer.claimedByUserId,
+                        createdBySellerId = customer.createdBySellerId,
+                        // The server sends no created-at for customers, and this column only
+                        // orders local lists. An existing row keeps what it had.
+                        createdAt = customers.findById(customer.customerId)?.createdAt ?: nowStamp()
+                    )
+                )
+            }
+        }
+        // The server's balance is intentionally dropped: every screen derives it from the
+        // ledger, and a stored second copy is how two numbers begin to disagree.
     }
 
     override suspend fun findCustomerById(sellerId: String, customerId: String): Customer? {
@@ -325,6 +346,11 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
                         phone = "",
                         claimStatus = ClaimStatus.CLAIMED.name,
                         claimedByUserId = userId,
+                        // NULL, deliberately: this is the buyer's stub for a record kept in
+                        // somebody ELSE's book. Naming this device's user here would list
+                        // the row on their own Müşterilerim, which is the same leak the
+                        // claimedByUserId exclusion in observeForSeller exists to stop.
+                        createdBySellerId = null,
                         createdAt = nowStamp()
                     )
                 )

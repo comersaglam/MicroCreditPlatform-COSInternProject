@@ -1,6 +1,7 @@
 package com.example.app_pos.network.api
 
 import com.example.app_pos.network.dto.BecomeSellerDto
+import com.example.app_pos.network.dto.CustomerDto
 import com.example.app_pos.network.dto.UserCreateDto
 import com.example.app_pos.network.dto.UserDto
 import com.example.app_pos.network.dto.UserPatchDto
@@ -29,4 +30,14 @@ interface UserApi {
      */
     @POST("users/me/become-seller")
     suspend fun becomeSeller(@Body body: BecomeSellerDto): UserDto
+
+    /**
+     * Takes over every UNCLAIMED book entry written against this account's phone — how a
+     * customer inherits debt recorded before they had the app.
+     *
+     * No body: the phone comes from the token. That IS the authorisation, and naming a
+     * number in a request would let any account claim a stranger's debts.
+     */
+    @POST("users/me/claim")
+    suspend fun claimMyRecords(): List<CustomerDto>
 }
