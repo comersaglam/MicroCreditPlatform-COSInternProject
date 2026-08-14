@@ -4,7 +4,7 @@
 > değil. Ama altı ay sonra koda bakan (sen dahil) "burası neden yarım?" diye soracak. Cevaplar
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
-> Son güncelleme: 2026-08-14, Tur 39 (pull ekseni) sonrası.
+> Son güncelleme: 2026-08-14, Tur 40b (pull tamamlandı + cihaz testi düzeltmeleri) sonrası.
 > Kalıcı adım günlüğü: [progress.md](progress.md). Uygulama planı ve §0 kararları:
 > [faz5-backend-plan.md](faz5-backend-plan.md). Kararların gerekçesi:
 > [architecture-pos.md](architecture-pos.md), [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md).
@@ -35,8 +35,18 @@ saniye hassasiyetinde olduğu için dışlayıcı bir `since` aynı saniyedeki s
 düşürürdü; ayrıca karara bağlanmış satır `since`'e hiç düşmediği için "hayalet kart" geri
 gelirdi. Tam liste otoriter → gelmeyen satır silinir. Gerekçe: [progress.md](progress.md) Tur 39.
 
-**Kalan büyük iş:** okuma yolunun **geri kalanı** (Borçlarım / Müşterilerim / geçmiş) — aynı
-desen, Tur 40. Ve **cihaz testi**: Tur 39 iki cihazda hiç koşulmadı.
+**Tur 40: okuma yolu TAMAMLANDI.** `pullMyLedger` (mobile: `/me/debts` + `/me/transactions`)
+ve `pullBook` (pos: `/customers` + `/transactions`) yazıldı; artık **her ekran sunucudan
+besleniyor**. Ledger pull'u onaylardan farklı çalışır: onayda gelmeyen satır silinir (karar
+verilmiştir), ledger'da **silinmez** (append-only, cevap kısmi olabilir) — bu ayrım iki ayrı
+metotla derleme zamanında korunuyor.
+
+**Tur 40b: cihaz testi 3. tur.** Dört hata düzeltildi (buyer stub satırlarının POS müşteri
+listesine sızması, `/me/debts`'te eksik `shop_phone`, ağ hatasının "Geçersiz numara" diye
+gösterilmesi, alt navigasyonda sönen sekme). Asıl kök neden bir **build hatasıydı**: app-pos
+için `assembleDebug` koşulmamıştı, telefondaki APK Tur 39'a aitti.
+
+**Kalan iş:** §G'deki iki UI maddesi + kullanıcının yazacağı **onay yolu tanımı** (§H).
 
 ---
 
@@ -63,11 +73,15 @@ app-pos henüz ona bağlanmadı → app-mobile mirror turunun işi.
 alınacak? Backend geldi ama bu soru cevaplanmadı — `/approvals`'ın UNCLAIMED dalı (anında yaz)
 kısmi bir cevap, CLAIMED dalı hâlâ ağ istiyor.
 
-### A.3 `RemoteDataSource`'ın okuma sarmalları — ⚠️ KISMEN (Tur 39)
+### ~~A.3 `RemoteDataSource`'ın okuma sarmalları~~ ✅ KAPANDI (Tur 39 + 40)
 
-**Onaylar kapandı:** `pendingApprovals()` artık `PullEngine` tarafından çağrılıyor.
-**Kalan okuma uçları hâlâ çağrılmıyor** (`customers()`, `transactionHistory()`, `balance()`,
-`myDebts()`, `me()`) — müşteri listesi, bakiye ve geçmiş hâlâ Room'dan geliyor. Tur 40.
+**Tur 39** `pendingApprovals()`'ı bağladı, **Tur 40** geri kalanını: `customers()` ve
+`transactionHistory()` → `pullBook()` (app-pos), `myDebts()` + `transactionHistory()` →
+`pullMyLedger()` (app-mobile). Bakiye sarmalı (`balance()`) **kasıtlı olarak bağlanmadı** —
+bakiye yerel olarak `SUM(transactions)` ile türetiliyor ve sunucunun `balance_minor`'ını da
+yazmak, defterle bakiyenin ayrışabildiği ikinci bir gerçeklik yaratırdı. `storeCustomers`
+sunucudan gelen bakiyeyi bilerek atar.
+
 Aşağıdaki teşhis Tur 39 öncesine ait:
 
 <details><summary>Orijinal teşhis</summary>
@@ -332,7 +346,7 @@ gün eklemek ucuz.
 
 ---
 
-## E. Cihaz testi — app-mobile doğrulandı; **Tur 39 hiç koşulmadı**
+## E. Cihaz testi — app-mobile doğrulandı; app-pos ilk kez koştu (Tur 40b)
 
 **app-mobile 36/37/38 test edildi (2026-08-13)**, iki tur hata çıktı ve düzeltildi:
 **Tur 38b** (çift yazım, telefon normalizasyonu, onaysız yazma, sahte başarı) ve
@@ -342,23 +356,29 @@ gün eklemek ucuz.
 **Tur 38c cihazda doğrulandı (2026-08-13):** takılan onay kartı düşüyor, OTP adımı aynı
 ekranda açılıyor, müşteri listesi mock-pos handoff'unda dolu geliyor.
 
-**Hâlâ doğrulanmamış:**
-- **Tur 39'un tamamı — turun asıl sınavı ve İKİ CİHAZ gerektiriyor.** Adım listesi
-  [progress.md](progress.md) Tur 39 sonunda. Kilit adım: app-mobile'da onaya gönder →
-  **app-pos'un Onaylar ekranında ~15 sn içinde görünmeli**. Şema değişti (app-pos'a approval
-  yüzeyi) → **`adb uninstall` ŞART**.
-- **Backend migration 0003 + `python -m app.reset` gerçek Postgres'te koşulmadı** (Docker
-  daemon kapalıydı). pytest **SQLite** üstünde ve şemayı `models.py`'den kuruyor, yani
-  **Alembic hiç çalıştırılmıyor**; `TRUNCATE ... CASCADE` de Postgres'e özgü. Reset'in tablo
-  listesi ve seed döngüsü SQLite'ta ayrıca sınandı, ama cihaz testinden **önce**
-  `docker compose up` + `alembic upgrade head` ile doğrulanmalı.
-- **app-pos Tur 34 (5f)** — hiç cihazda çalıştırılmadı. app-pos'un backend bağlantısı
-  (gerçek login, outbox drain) makinede test edilmiş ama cihazda hiç koşmadı. Tur 39 testi
-  bunu da kapsayacak — yani app-pos'un **ilk gerçek cihaz testi** olacak.
+**Tur 39/40 cihazda koşuldu (2026-08-14), bir düzeltme turu çıktı (40b).** Beklenti tuttu:
+app-pos'un ilk gerçek cihaz testinden dört hata + bir build hatası çıktı, ayrıntısı
+[progress.md](progress.md) Tur 40b'de.
 
-⚠️ **Beklenti:** app-mobile'ın ilk cihaz testinden **iki düzeltme turu** (38b, 38c) çıkmıştı
-ve 38b'deki çift yazım ledger'ı bozuyordu. app-pos hiç test edilmediği için burada da bir
-**Tur 39b** beklemek gerçekçi.
+**Backend Docker'da doğrulandı:** `alembic upgrade head` **0002 → 0003** geçişini gerçek
+Postgres'te koştu, `approvals.updated_at` **NOT NULL** olarak oluştu; `python -m app.reset`
+append-only trigger'a rağmen çalıştı (`TRUNCATE ... CASCADE` doğru seçimdi). §F.1'in
+"doğrulanmadı" uyarısı kapandı.
+
+⚠️ **Ama pytest hâlâ Alembic'i çalıştırmıyor:** `conftest.py` şemayı `models.py`'den
+`create_all` ile kuruyor. Yani **her yeni migration elle `docker compose exec api alembic
+upgrade head` ile doğrulanmalı** — suite bunu yakalamaz. Bu kalıcı bir boşluk, tur bazlı bir
+eksiklik değil.
+
+⚠️ **"Derlendi" ≠ "telefonda çalışıyor" (Tur 40b'nin en pahalı dersi).** Ara adımlarda
+`compileDebugKotlin` koşmak düşük-RAM protokolünün gereği, ama kurulumdan önce
+**`assembleDebug` şart**. Tur 40b'de bu atlandığı için telefondaki app-pos bir tur eskiydi ve
+saatler yanlış semptom kovalamakla geçti. Kurulumdan sonra APK içeriği doğrulanmalı:
+
+```bash
+unzip -p app-pos/app/build/outputs/apk/debug/app-debug.apk classes\*.dex \
+  | strings | grep -c pullBook    # 0 dönerse APK eski
+```
 
 **Ortak koşullar:** sunucu ayakta (`docker compose up`) + `adb reverse tcp:4010 tcp:4010`
 (her USB bağlantısında yeniden). Host ayarı `gradle.properties` → `mobileApiHost` / `posApiHost`.
@@ -381,15 +401,33 @@ sunucu 404 döner, `SyncEngine` 4xx'i kalıcı ret sayıp satırı **siler**.
 
 ---
 
-## F. Okuma yolu (pull) — ✅ AÇILDI (Tur 39, Onaylar hattı); kalanı Tur 40
+## F. Okuma yolu (pull) — ✅ KAPANDI (Tur 39: Onaylar, Tur 40: defter)
 
-**Durum:** Onaylar ekseni **bitti**. `PullEngine` + `Repository.refreshApprovals()` iki app'te
-de var, ekran açıkken 15 sn poll ediyor (app-pos'ta ayrıca `PullWorker`, 15 dk arka plan).
-Artık **app-mobile'da açılan bir onay POS'ta görünüyor** — bu maddenin "imkânsız" dediği şey.
+**Durum:** okuma ekseninin **tamamı** bağlı. `PullEngine` iki app'te de iki metot taşıyor:
 
-**Kalan:** Borçlarım / Müşterilerim / geçmiş pull'u (`/me/debts`, `/customers`,
-`/transactions`) hâlâ **lokalden okunuyor**. Aynı desen, Tur 40. §F.2'deki customers-bakiye
-asimetrisi o turda çözülecek.
+| app | onay hattı | defter hattı |
+|---|---|---|
+| app-mobile | `pullApprovals` | `pullMyLedger` → `/me/debts` + `/me/transactions` |
+| app-pos | `pullApprovals` | `pullBook` → `/customers` + `/transactions` |
+
+Tetikleme: ekran açıkken 15 sn (onaylar) / 30 sn (borçlar), açılışta bir kez, app-pos'ta
+ayrıca `PullWorker` 15 dk. Artık **app-mobile'da açılan bir onay POS'ta görünüyor** ve
+**ekranlar cihaz seed'i olmadan doluyor** — bu maddenin "imkânsız" dediği iki şey.
+
+**İki pull'un silme kuralı FARKLI, ve bu ayrım kasıtlı olarak tipte:**
+
+| | cevapta olmayan satır | neden |
+|---|---|---|
+| onaylar | **silinir** | karar başka cihazda verilmiştir; kalması "hayalet kart" demek |
+| ledger | **silinmez** | defter append-only; satır geri alınmaz, cevap kısmi olabilir |
+
+Tek bir `pull(entity)` metodu bu farkı çalışma-zamanı bayrağına indirirdi. Ayrı metotlar =
+derleme zamanında korunan kural. Test: `an empty debt list never deletes stored entries`.
+
+**§F.2'nin customers-bakiye asimetrisi Tur 40'ta şöyle çözüldü:** `storeCustomers` sunucudan
+gelen `balance_minor`'ı **atar**. Bakiye tek kaynaktan türetilir (`SUM(transactions)`), yani
+tazeliği ledger pull'undan gelir. İki kaynak yazmak, defterle bakiyenin ayrışabildiği bir
+durum yaratırdı.
 
 Aşağıdaki teşhis, deseni neden böyle kurduğumuzu açıklamak için duruyor.
 
@@ -505,7 +543,58 @@ gerekiyordu (kök neden). Kök neden = okuma yolunun olmaması.
    **Teknik not:** `transactions` üstündeki append-only trigger (`BEFORE UPDATE OR DELETE`)
    düz `DELETE`'i patlatıyor → `TRUNCATE ... RESTART IDENTITY CASCADE` kullanıldı. TRUNCATE
    tablo-seviyesi bir işlem, satır trigger'ı tetiklenmiyor; append-only garantisi bozulmuyor.
-   ⚠️ **Gerçek Postgres'te henüz koşulmadı** (Docker kapalıydı) — bkz. §E.
+   ✅ **Gerçek Postgres'te doğrulandı (Tur 40b):** reset trigger'a takılmadan tamamlandı,
+   `alembic upgrade head` 0002 → 0003 geçişini yaptı.
 
 4. **Boş isimli hesap** (`u_0e8a790ce5d9`, telefon = bir dükkanın shopPhone'u): bug DEĞİL.
    İsim opsiyonel, profilden doldurulur — tasarım tercihi. Reset ile temizlenecek.
+   **Ama sunum tarafı eksik çıktı** — bkz. §G.1.
+
+---
+
+## G. Cihaz testi 3. turdan (Tur 40b) kalan UI maddeleri
+
+Kullanıcının ekran-ekran raporundaki iki madde **bilerek bu turda yapılmadı**: ikisi de
+gösterim kuralı, veri yolu değil, ve onay yollarının yeniden tanımlanmasıyla (§H) aynı
+ekranlara dokunuyorlar.
+
+### G.1 Adsız müşteri satırı boş görünüyor  ⚠️ AÇIK
+
+Bir müşterinin adı yoksa satır tamamen boş çiziliyor. **İstenen davranış (kullanıcının
+sözleriyle):** *"en azından telefon numarası gözükmeli ve ismi yoksa da isim girilmemiş
+demesi lazım."*
+
+İki parçalı iş:
+1. **Sunum:** ad boşsa telefon numarasını başlık yap + "isim girilmemiş" ikincil satır.
+   Şu anki boş satır, verinin kayıp olduğunu düşündürüyor — oysa kayıp olan sadece bir alan.
+2. **Asıl soru:** POS'ta her kayıtta ad **zorunlu** olduğu halde bu satırlar nereden adsız
+   geliyor? İki aday: (a) buyer tarafında türetilen stub satırlar (Tur 40b'de POS listesinden
+   ayıklandı ama buyer tarafında hâlâ adsız), (b) §F.4/4'teki telefonla açılmış hesaplar.
+   Sunumu düzeltmeden önce bu ayrım netleşmeli — yoksa gerçek bir veri boşluğu kozmetikle
+   örtülür.
+
+### G.2 Buyer'ın dükkân detayında "alacak/verecek" başlığı  ⚠️ AÇIK
+
+Ekranın üstünde bu bağlamda anlamsız bir alacak/verecek özeti duruyor (ss4). Buyer bir
+dükkâna yalnızca **borçlanır**; iki yönlü bakiye başlığı seller ekranından kopyalanmış
+görünüyor. İncelenip ya kaldırılmalı ya da tek yönlü "bu dükkâna borcum" özetine
+indirgenmeli.
+
+---
+
+## H. Onay yollarının yeniden tanımı — kullanıcı yazacak  ⏸️ BEKLEMEDE
+
+Kullanıcının açık ertelemesi (2026-08-14): *"posta veresiye ödemesi alırken vs onaya atmıyor
+ama bu pathleri kesinleştircez, sorun yok şimdilik. Bazı onaylar gidicek, bazı onayların yeri
+değişecek, bazıları ise eklenecek. Yazıcam sonraki turda sana."*
+
+**Bu yüzden Tur 40b'de hiçbir onay yönlendirmesi değiştirilmedi** — hangi işlemin onaya
+düşeceği bir **ürün kararı**, ve yarım bilgiyle dokunmak mevcut doğru davranışı da bozardı.
+
+Bugünkü hâl (referans olsun diye): yazma yolu `ApprovalService`'ten geçiyor; karşı taraf
+uygulamayı tutuyorsa (CLAIMED) kart açılıyor, tutmuyorsa (UNCLAIMED) anında yazılıyor. Üç
+onay hattı ve yönleri [[approval-three-lines-pgw-settle]] ve [db-schema.md](db-schema.md)
+§A.6'da.
+
+Kullanıcının tanımı gelince değişecek yerler: `ApprovalService` yönlendirme kuralları,
+`POST /approvals`'ın CLAIMED/UNCLAIMED dalı, ve iki app'in Onaylar ekranlarındaki bölümleme.

@@ -2429,3 +2429,133 @@ iki düzeltme turu çıktığı düşünülürse, burada da bir Tur 39b beklemek
 
 **Sıradaki:** Tur 39b (cihaz testi düzeltmeleri) → Tur 40: pull'un kalan ekseni
 (Borçlarım / Müşterilerim / geçmiş), aynı desen.
+
+### 2026-08-14 — Tur 40: pull'un kalan ekseni — defter de sunucudan geliyor  [PLANLAMA HATASI DÜZELTMESİ]
+
+**Neden bu tur zorunlu hâle geldi.** Tur 39 cihaz testinin ilk denemesinde her iki app'te de
+ekranlar **boştu**: app-mobile'da iki farklı numarayla girildi, Borçlarım 0,00 TL; app-pos'ta
+Ahmet Bakkal'ın defteri görünmüyordu.
+
+Sebep bir bug değil, **sıralama hatasıydı — benim planlama hatam.** Tur 39 iki şeyi aynı
+anda yaptı: (a) cihaz seed'lerini sildi, (b) **sadece Onaylar** için pull yazdı. Yani
+Borçlarım/Müşterilerim/geçmiş ekranlarının okuduğu Room tabloları hem yerel olarak
+doldurulmuyor, hem de sunucudan çekilmiyordu — boş bir veritabanını doğru şekilde
+gösteriyorlardı.
+
+Doğru sıra "önce tüm pull yolu, sonra seed'i kaldır" olmalıydı. Tur 40 o boşluğu kapatıyor:
+**okuma ekseninin tamamı**.
+
+**1) `PullEngine`'e ikinci metot (iki app'te de, farklı isimle çünkü farklı yön):**
+
+- app-mobile → `pullMyLedger(userId)`: `GET /me/debts` ile hangi dükkâna borçlu olduğunu
+  öğrenir, `storeShopNames(...)` ile dükkân adı/telefonunu yazar, sonra **her dükkân için**
+  `GET /me/transactions?seller_id=…` çağırır ve `storeBuyerLedger(...)` ile ekler.
+- app-pos → `pullBook()`: `GET /customers` + her müşteri için `GET /transactions`;
+  `storeCustomers(...)` + `storeLedger(...)`.
+
+**Silme kuralı ONAYLARDAN FARKLI, ve bu ayrım tipin kendisinde duruyor.** Bir onay cevapta
+yoksa **karar verilmiştir → silinir**. Bir ledger satırı cevapta yoksa **geri alınmamıştır**
+— defter append-only; cevap sadece kısmi gelmiştir. Bu yüzden ledger pull'u hiçbir koşulda
+`delete` çağırmaz; iki yolu tek metotta birleştirmek bu farkı derleme zamanından çalışma
+zamanına indirirdi. Test: `an empty debt list never deletes stored entries`.
+
+**2) `Repository`'ye ikinci fiil:** `refreshMyLedger()` (mobile) / `refreshBook()` (pos).
+Tetikleyiciler:
+
+| Yer | app-mobile | app-pos |
+|---|---|---|
+| Açılış | `App.kt:78` `refreshMyLedger()` | `App.kt:78` `refreshBook()` |
+| Ön plan poll | `DebtsViewModel` 30 sn | `CustomersViewModel` (ekran açılışı) |
+| Arka plan | yok (pil kararı) | `PullWorker` 15 dk → `refreshBook()` + `refreshApprovals()` |
+
+**3) `storeCustomers` sunucunun bakiyesini ATAR.** Sunucu `balance_minor` gönderiyor ama
+yerel model bakiyeyi `SUM(transactions)` ile **türetiyor** — iki kaynak yazmak, ledger ile
+bakiyenin ayrışabildiği bir durum yaratırdı. Bakiye tek yerden gelir: defterin kendisinden.
+
+**4) `storeLedger` / `storeBuyerLedger` insert-IGNORE.** Aynı satır hem outbox drain'inden
+hem pull'dan gelebilir; `transactionId` birincil anahtar olduğu için ikinci geliş sessizce
+düşer. Çift yazım yapısal olarak imkânsız.
+
+**Sonuç:** ekranların tamamı artık sunucudan besleniyor; cihaz seed'inin kaldırılması
+(Tur 39, C.4) ancak bu turla birlikte tutarlı hâle geldi.
+
+**Öğrenilen:** **Bir kaynağı kapatmadan önce yerine geçecek kaynağın tamamı bağlanmış
+olmalı.** "Seed'i kaldır" ve "pull'u yaz" aynı turda ama yarım yapıldığında, sistem hatasız
+şekilde yanlış çalışır — hiçbir yerde exception yok, sadece her yer boş.
+
+### 2026-08-14 — Tur 40b: cihaz testi 3. tur — 4 UI/veri hatası + bir build hatası
+
+Kullanıcı ekran-ekran (8 ss) hata raporu verdi. Bulgular ve kök nedenleri:
+
+**0) ASIL KÖK NEDEN — kurulu APK Tur 40'ı içermiyordu (benim hatam).** Tur 40 sonrası
+app-pos için sadece `:app:compileDebugKotlin` koştum, **`assembleDebug` koşmadım** → telefona
+kurulu APK 12:35'teki Tur 39 build'iydi. Raporlanan "posta müşteri görünmüyor" semptomlarının
+çoğu buradan geliyordu.
+
+**Kanıt sunucu loglarındaydı:** `GET /me/debts` → 34 çağrı, `GET /customers` → **0 çağrı**.
+app-pos hiç sormamıştı, çünkü soracak kod APK'da yoktu.
+
+**Yeni alışkanlık:** kurulumdan sonra APK'nın içeriği doğrulanıyor —
+`unzip -p app-debug.apk classes*.dex | strings | grep -c pullBook`. "Derlendi" ile
+"telefonda çalışıyor" arasındaki farkı komutla kapatan tek şey bu.
+
+**1) ss3 — buyer'ın stub müşteri satırları POS'un "Müşterilerim" listesine sızıyordu.**
+`storeBuyerLedger` bir satır yazarken karşı taraf için müşteri kaydı türetiyor
+(`claimedByUserId = buyer`). Ama `CustomerDao.observeForSeller` bunları da döndürüyordu →
+listede isimsiz/numarasız satırlar. Düzeltme sorgunun kendisinde:
+`AND (claimedByUserId IS NULL OR claimedByUserId <> :sellerId)` — kendi hesabına ait stub
+satır, o hesabın müşteri listesine giremez.
+
+**2) ss1 — Ayşe Market'in telefonu görünmüyordu.** `GET /me/debts` dükkân **adını**
+gönderiyordu ama **numarasını** göndermiyordu; ekranın gösterecek verisi yoktu. Uçtan uca
+eklendi: `backend/app/routers/buyer.py` (`shop_phone=(seller.shop_phone or seller.phone)`)
+→ `schemas.SellerDebt.shop_phone` → `SellerDebtDto` → `PullEngine` → `storeShopNames`.
+
+Yerel yazımda kural: `existing.shopPhone ?: shopPhone` — kullanıcının kendi girdiği numara
+sunucudan gelenle **ezilmez**.
+
+**3) ss6 — "Geçersiz numara" hatası, oysa numara kayıtlı.** Kullanıcının kendi teşhisi
+doğruydu: *"uygulamanın server ile bağlantısı kopunca diyor bunu, arada usb koptuğu için."*
+`requestOtp` **`Boolean`** dönüyordu → "sunucu reddetti" ile "sunucuya ulaşılamadı" tek
+`false`'ta birleşiyordu. Ağ kopması kullanıcıya *kendi hatası* gibi gösteriliyordu.
+
+Düzeltme: `OtpRequestResult` = `Sent` / `Refused` / `Unreachable` (iki app'te de), +
+`LoginState.UNREACHABLE`. Tur 39'un `PullOutcome` dersinin aynısı, bu sefer login yolunda.
+
+**4) ss2 — alt navigasyonda hiçbir sekme seçili görünmüyordu** (detay ekranından çıkınca).
+`setupWithNavController` yalnızca **sekme olan** hedefi vurguluyor; detay ekranı sekme
+olmadığı için bar tamamen sönüyordu ve geri dönünce de yanmıyordu (zaten "ayrılmış" sayılan
+sekmeye dönmek seçim değişikliği üretmiyor). `keepTabSelectedOnSubScreens` her alt ekranı
+ebeveyn sekmesine eşliyor.
+
+⚠️ Burada bir tuzak var: `selectedItemId = …` atamak sekmeye **tıklanmış gibi** davranır ve
+kullanıcıyı açtığı detay ekranından geri fırlatır. Doğrusu `item.isChecked = true` — sadece
+vurguyu boyar.
+
+**Sunucu hiçbir ödemeyi kaybetmemişti.** psql ile doğrulandı: 252525 TL ve 2000 TL kayıtlı;
+"görünmeyen" 1000 TL ise `348571dc…` no'lu approval ve hâlâ `PENDING` — çünkü hedefi
+**u_market (Ayşe Market)**, app-pos'un hesabı değil. Yani doğru davranış.
+
+**Doğrulama:** backend **146 test**, app-mobile **55 test**, app-pos **43 test** — 0 fail.
+Bu sefer iki app'te de `assembleDebug` koşuldu ve **APK içeriği grep ile doğrulandı**:
+`app-pos: pull metodu 6 / OtpRequestResult 24`, `app-mobile: pull metodu 5 /
+OtpRequestResult 24`. Sunucu `python -m app.reset` ile sıfırlandı, telefondan
+`/health` → **200**.
+
+**AÇIK KALAN (kullanıcı raporundan, bu turda yapılmadı):**
+- **ss3 kalanı:** müşterinin adı yoksa satır boş görünüyor. İstenen: **en azından telefon
+  numarası gösterilsin, ad yoksa "isim girilmemiş" densin.** POS'ta her kayıtta ad zorunlu
+  olduğu için bu satırların adsız olması ayrıca incelenmeli →
+  [deferred.md §G.1](deferred.md).
+- **ss4:** buyer'ın dükkân detayında üstteki "alacak/verecek" başlığı bu ekranda anlamsız →
+  [deferred.md §G.2](deferred.md).
+- **Onay yolları (kullanıcının açık ertelemesi):** *"posta veresiye ödemesi alırken vs onaya
+  atmıyor… bazı onaylar gidicek, bazı onayların yeri değişecek, bazıları eklenecek. Yazıcam
+  sonraki turda."* → **bu turda hiçbir onay yönlendirmesi değiştirilmedi**;
+  [deferred.md §H](deferred.md).
+
+**Test kılavuzu:** [cihaz-testi-komutlari.md](cihaz-testi-komutlari.md) (Tur 39/40/40b
+adımları, A/B/C blokları hâlinde).
+
+**Sıradaki:** Tur 41 — kullanıcının yazacağı onay-yolu tanımı + yukarıdaki iki açık UI
+maddesi.
