@@ -6,8 +6,8 @@ Kapsam: Tur 39 (onay pull'u) + Tur 40 (defter pull'u) + Tur 40b (düzeltmeler).
 ## Kurulum (her testten önce)
 
 ```bash
-# 1. Sunucu ayakta mı
-cd backend && docker compose up -d && cd ..
+# 1. Sunucuyu YENİDEN DERLEYEREK kaldır — `--build` şart, bkz. aşağıdaki uyarı
+cd backend && docker compose up -d --build api && cd ..
 
 # 2. Sunucuyu temizle + seed'le  (HTTP ucu YOK, sadece bu komut)
 docker compose -f backend/docker-compose.yml exec -T api python -m app.reset
@@ -29,6 +29,32 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 > **MIUI/HyperOS notu:** `INSTALL_FAILED_USER_RESTRICTED` alırsanız
 > Ayarlar → Ek ayarlar → Geliştirici seçenekleri → **"USB ile yükleme"** açık olmalı.
+
+> ⚠️ **`--build`'i atlamayın (Tur 40c).** `docker compose up -d` çalışan container'ı
+> **yeniden derlemez**; backend'de yeni yazdığınız kod sunucuda çalışmaz. Bu, Tur 40c'de
+> düzelttiği sanılan bir hatanın (dükkân telefonu) cihazda hâlâ görünmesine yol açtı ve
+> saatlerce yanlış yerde arandı. Şüphelendiğinizde container'daki dosyayı doğrudan okuyun:
+>
+> ```bash
+> docker exec backend-api-1 grep -n shop_phone /code/app/schemas.py
+> ```
+>
+> Aynı mantık cihaz için de geçerli: `compileDebugKotlin` **APK üretmez**, kurmadan önce
+> `assembleDebug` + dex grep'i gerekir (Tur 40b).
+
+> ⚠️ **Sıra önemli: önce sunucu, sonra cihaz.** `app.reset` yalnız **sunucuyu** sıfırlar.
+> Cihazdaki Room'a dokunmaz ve buyer ledger pull'u **additive** olduğu için cihaz eski
+> satırları kendiliğinden bırakmaz — 4. adımdaki uninstall bu yüzden reset'ten **sonra**
+> gelmeli. Tersi sırada eski satırlar geri gelir.
+>
+> Bunu atlamak Tur 40c'de "aynı işlem iki kere görünüyor" olarak ortaya çıktı: cihazda eski
+> yerel seed'in satırları (`t4`–`t10`) duruyordu, sunucu aynı içeriği farklı id'lerle
+> (`t11`–`t15`) yolluyordu. **insert-IGNORE PK'ya bakar, içeriğe değil** — çakışma
+> korumasının hiçbiri devreye girmez.
+
+> ℹ️ **Kendi test yazımlarınız sunucuda kalıcıdır.** Uygulamayı silip kursanız da geri
+> gelirler; sunucu tek gerçeklik, cihaz onun aynası. Temizlemenin tek yolu 2. adımdaki
+> `app.reset`.
 
 ### 6. APK GERÇEKTEN yeni mi?  ⚠️ atlanmaz
 

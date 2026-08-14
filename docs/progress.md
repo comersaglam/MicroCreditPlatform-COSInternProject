@@ -2559,3 +2559,91 @@ adımları, A/B/C blokları hâlinde).
 
 **Sıradaki:** Tur 41 — kullanıcının yazacağı onay-yolu tanımı + yukarıdaki iki açık UI
 maddesi.
+
+### 2026-08-14 — Tur 40c: cihaz testi 4. tur — bildirilen 5 hatanın hiçbiri sandığı yerde değildi
+
+Kullanıcı Tur 40b'nin test adımlarını koşarken beş hata bildirdi: onay kutusunda yanlış
+kişi, çift işlem satırları, isim yerine `u_market` id'si, dükkân telefonunun hâlâ
+görünmemesi, ve iki hesap arasında telefon görünürlüğünün tutarsız olması.
+
+**Önce ne YANLIŞ değildi.** Kullanıcının ilk şüphesi seed'di (*"seed bozuk da olabilir"*).
+Postgres'e bakıldı: Ayşe Korkmaz kaydı **var**, telefonlar **dolu**, çift satır **yok**.
+Seed ve backend verisi baştan beri doğruydu. Beş hatanın hepsi **istemci/ortam** tarafında
+çıktı — ve ikisi zaten Tur 40b'de düzeltilmiş koddu.
+
+**Kök neden 1 — çalışan container koddan eskiydi.** `docker exec ... grep shop_phone`:
+container'daki `schemas.SellerDebt`'te alan **yok**, yerel dosyada **var**. Canlı
+`/me/debts` çağrısı doğruladı — yanıtta `shop_phone` hiç gelmiyordu. Tur 40b'nin
+uçtan-uca eklediği alan doğruydu; imaj `--build` almadığı için sunucuda çalışmıyordu.
+
+Bu tek başına iki bildirimi açıklıyor: ss4'ün telefonsuz dükkânı, ve *"u_owner'ın
+numarası görünüyor ama u_market'inki görünmüyor"* tutarsızlığı. İkincisi tutarsızlık
+değildi: `u_owner` satırı cihaza **kendi girişinden** (tam profil), `u_market` satırı
+ise yalnız `/me/debts`'ten (telefonsuz) yazılmıştı. Cihaz DB'si bunu birebir gösterdi.
+
+**Kök neden 2 — cihazlarda eski yerel seed'in VERİSİ duruyordu.** Tur 39 `SeedCallback`
+**kodunu** kaldırmıştı; cihazdaki satırlar kalmıştı. Eski seed `t4`–`t10`, sunucu aynı
+içeriği `t11`–`t15` ile yolluyor. insert-IGNORE **PK'ya** bakar, içeriğe değil:
+
+```
+t4 |u_owner|c2|12000|DEBT|Market alışverişi|2026-07-18   ← eski yerel seed
+t14|u_owner|c2|12000|DEBT|Market alışverişi|2026-07-18   ← sunucudan
+```
+
+ss3'ün çift satırları bu. c4 ve c5'te de aynısı vardı. Ayrıca ss1'i de açıklıyor: eski
+seed'de `t4/t5` u_owner→c2 satırlarıydı, app-mobile'ın seed'inde aynı id'ler u_market→m1.
+Cihazın app-pos DB'sinde `u_market` kullanıcısı ve `m1/o1` müşterileri **hiç yoktu** —
+Ayşe Korkmaz'ın görünmemesinin sebebi buydu. Onay kartında dükkân adının ("Ayşe Market")
+yazması ise tasarım gereği doğru; yanlış olan o dükkânın sahibinin cihazda bulunmamasıydı.
+
+⚠️ **Ders:** seed'i yerelden sunucuya taşırken **id'ler değişti** (`t4`→`t14`). Aynı içeriği
+farklı PK ile yollamak, insert-IGNORE'un tüm çarpışma korumasını **sessizce** devre dışı
+bırakır. Seed id'lerini sabit tutmak bu sınıf hatayı baştan keser.
+
+**Bu turda düzeltilen iki gerçek kod hatası** (ikisi de teşhis sırasında bulundu,
+bildirilenler arasında değildi):
+
+**1) `SellerDetailViewModel.shopPhone` tek-atışlık okumaydı** — `flow { emit(...) }`, Flow
+değil. Numara ledger pull'uyla yazılıyor ve bu ekran çoğu zaman pull'dan **önce** açılıyor;
+o anda okunan null bir daha yenilenmiyordu, saniyeler sonra numara gelse bile satır tüm
+ziyaret boyunca gizli kalıyordu. `Repository.observeShopPhone` eklendi (Room'un mevcut
+`observeById`'si üzerinden), ekran artık gözlüyor. **Backend düzeltilse bile bu hata tek
+başına ss4'ü tekrar üretirdi.**
+
+**2) Borçlar listesi ham `u_market` id'sini gösteriyordu.** Bu pencere gerçek: liste
+**ayrı yazılan iki tablonun** JOIN'i (`storeBuyerLedger` girişleri, `storeShopNames`
+adları), ve iki yazım arasında satırın bakiyesi var adı yok. Eski fallback (`shopName ?:
+sellerId`) o aralıkta kullanıcıya iç anahtar gösteriyordu — hiçbir şey dememekten kötü,
+çünkü **veri gibi görünüyor**. Nötr "Dükkan" etiketiyle değiştirildi; boş string de yok
+sayılıyor (boş satır, bekleyen satır değil, bozuk satır gibi okunur).
+
+**Yol üstünde bulunan bir hata:** `seed.py`'de `select_from` → `selecunt_from` yazım hatası
+(kullanıcının düzenlemesinden kalma). Bu haliyle backend açılışta seed guard'ında
+`AttributeError` ile patlardı. Geri alındı.
+
+**Doğrulama:** `compileDebugKotlin` + `testDebugUnitTest` yeşil, `assembleDebug` koşuldu ve
+APK dex'i doğrulandı: `observeShopPhone` 18 kez, `Dükkan` 1 kez. ⚠️ `strings` UTF-8
+çoklu-baytı böldüğü için `Dükkan`ı yakalayamadı — dex byte olarak arandı. Grep'in
+bulamaması "yok" demek değil.
+
+**Kullanıcıya bırakılan iki adım** (biri imajı derliyor, diğeri veriyi siliyor):
+
+```
+docker compose -f backend/docker-compose.yml up -d --build api   # önce bu
+docker compose -f backend/docker-compose.yml exec api python -m app.reset
+```
+
+Sıra önemli. Ardından iki APK da uninstall + yeniden kurulmalı: `app.reset` **sunucuyu**
+sıfırlar, cihazdaki Room'a dokunmaz — ve buyer ledger pull'u **additive** olduğu için
+cihaz eski kopyayı kendiliğinden bırakmaz.
+
+ℹ️ **Kullanıcının 1000/2000 TL'lik test ödemeleri sunucuda duruyor** ve uninstall sonrası
+geri geliyor. Bu doğru davranış: sunucu tek gerçeklik, cihaz onun aynası. Silmek için
+`app.reset` gerekiyor.
+
+**Cihazda ÇALIŞIRKEN doğrulanmadı:** yalnız derleme, testler ve dex içeriği doğrulandı.
+Backend güncellenip cihazlar sıfırlandıktan sonra ss4 tekrar denenmeli; dükkân telefonunun
+görünmesi asıl kanıt.
+
+**Sıradaki:** Tur 41 — değişmedi: kullanıcının yazacağı onay-yolu tanımı ([deferred.md
+§H](deferred.md)) + Tur 40b'den açık kalan iki UI maddesi (§G.1, §G.2).
