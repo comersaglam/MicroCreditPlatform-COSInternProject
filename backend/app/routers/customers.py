@@ -29,6 +29,7 @@ def _customer_out(customer: models.Customer, balance_minor: int) -> schemas.Cust
         phone=customer.phone,
         claim_status=customer.claim_status,
         claimed_by_user_id=customer.claimed_by_user_id,
+        created_by_seller_id=customer.created_by_seller_id,
         balance_minor=balance_minor,
     )
 

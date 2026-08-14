@@ -114,6 +114,12 @@ class Customer(BaseModel):
     claim_status: str
     claimed_by_user_id: str | None = None
 
+    # Which shop wrote this person down. On the wire because the client cannot derive it:
+    # a customer with no ledger entries yet belongs to a book by this field alone, and
+    # without it the device can only list people it has already charged -- so a customer
+    # just added would be stored and still invisible until their first entry.
+    created_by_seller_id: str | None = None
+
     # Derived by the server from the ledger; never stored.
     balance_minor: int
 

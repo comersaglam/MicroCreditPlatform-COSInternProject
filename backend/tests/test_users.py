@@ -140,3 +140,77 @@ def test_become_seller_opens_the_customer_endpoints(client, buyer_auth):
     assert client.get("/customers", headers=buyer_auth).status_code == 403
     client.post("/users/me/become-seller", headers=buyer_auth, json={"shop_name": "Dükkan"})
     assert client.get("/customers", headers=buyer_auth).status_code == 200
+
+
+# --- claim: the bridge between a book entry and an account ---------------------
+
+
+def _sign_in(client, phone: str) -> dict[str, str]:
+    """Register (idempotent) then sign in, returning the auth header."""
+    client.post("/users", json={"phone": phone, "display_name": "Ayşe", "is_seller": False})
+    response = client.post("/auth/otp/verify", json={"phone": phone, "code": "123456"})
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
+def test_claim_takes_over_unclaimed_records_for_my_phone(client, db_session):
+    # c2 (Ayşe Demir, +905552223344) is seeded UNCLAIMED: a shop wrote her down before
+    # she had the app. Signing in with that number is what makes the row hers.
+    auth = _sign_in(client, "+905552223344")
+
+    body = client.post("/users/me/claim", headers=auth).json()
+
+    assert [row["customer_id"] for row in body] == ["c2"]
+    assert body[0]["claim_status"] == "CLAIMED"
+
+
+def test_claim_makes_the_debt_visible_to_the_buyer(client):
+    # The point of claiming: /me/debts is empty before it and shows the shop after.
+    auth = _sign_in(client, "+905552223344")
+    assert client.get("/me/debts", headers=auth).json() == []
+
+    client.post("/users/me/claim", headers=auth)
+
+    debts = client.get("/me/debts", headers=auth).json()
+    # c2 owes u_owner 120,00 + 45,00 = 165,00 (t14 + t15).
+    assert [(d["seller_id"], d["balance_minor"]) for d in debts] == [("u_owner", 16500)]
+
+
+def test_claim_is_idempotent(client):
+    # The client calls this on every sign-in, so a second call must be a no-op that still
+    # answers with the records already held -- not an error.
+    auth = _sign_in(client, "+905552223344")
+    first = client.post("/users/me/claim", headers=auth).json()
+    second = client.post("/users/me/claim", headers=auth)
+
+    assert second.status_code == 200
+    assert second.json() == first
+
+
+def test_claim_never_touches_another_persons_records(client):
+    # c4 (Fatma Şahin) is UNCLAIMED too, but holds a different number. Claiming is scoped
+    # by the TOKEN's phone, so it must not sweep up every unclaimed row in the database.
+    auth = _sign_in(client, "+905552223344")
+    claimed = client.post("/users/me/claim", headers=auth).json()
+
+    assert "c4" not in [row["customer_id"] for row in claimed]
+
+
+def test_claim_does_not_reassign_a_record_somebody_else_holds(client, db_session):
+    # c1 is already CLAIMED by u1. Two accounts disagreeing over one number is a conflict
+    # this endpoint must not settle by overwriting the holder.
+    from app import models
+
+    row = db_session.get(models.Customer, "c1")
+    row.phone = "+905552223344"  # same number as the claimant, but already claimed
+    db_session.commit()
+
+    auth = _sign_in(client, "+905552223344")
+    client.post("/users/me/claim", headers=auth)
+
+    db_session.expire_all()
+    assert db_session.get(models.Customer, "c1").claimed_by_user_id == "u1"
+
+
+def test_claim_requires_authentication(client):
+    assert client.post("/users/me/claim").status_code in (401, 403)

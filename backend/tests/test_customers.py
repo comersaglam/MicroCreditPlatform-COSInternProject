@@ -201,3 +201,21 @@ def test_lookup_rejects_a_malformed_phone(client, owner_auth):
         "/customers/lookup", headers=owner_auth, params={"phone": "12345"}
     )
     assert response.status_code == 400
+
+
+def test_created_customer_carries_the_book_it_belongs_to(client, owner_auth):
+    # On the wire because the client cannot derive it: a customer with no ledger entries
+    # belongs to a book by this field alone. Without it the device lists only people it
+    # has already charged, so someone just added stays invisible until their first entry.
+    body = client.post(
+        "/customers",
+        headers=owner_auth,
+        json={"display_name": "Test Ali", "phone": "05559998877"},
+    ).json()
+
+    assert body["created_by_seller_id"] == "u_owner"
+
+
+def test_listed_customers_carry_created_by_seller_id(client, owner_auth):
+    rows = client.get("/customers", headers=owner_auth).json()
+    assert all("created_by_seller_id" in row for row in rows)

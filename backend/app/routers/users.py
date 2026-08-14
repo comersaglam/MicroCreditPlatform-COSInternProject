@@ -10,7 +10,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from .. import models, schemas
 from ..deps import CurrentUser, DbSession
@@ -120,3 +120,63 @@ def become_seller(
     db.commit()
 
     return user_out(current_user)
+
+
+@router.post("/users/me/claim")
+def claim_my_records(current_user: CurrentUser, db: DbSession) -> list[schemas.Customer]:
+    """
+    Take over every UNCLAIMED book entry written against this account's phone.
+
+    This is the bridge between the two halves of the model: a shopkeeper writes a customer
+    down as a row that only records what they know, and that row becomes a person's own
+    record the moment somebody signs in holding the number. Without it a buyer who installs
+    the app sees nothing -- the debt exists, but nothing connects it to them.
+
+    THE PHONE COMES FROM THE TOKEN, never from a body. It is the entire authorisation:
+    claiming is "these records are mine", and letting the caller name the number would let
+    any account claim a stranger's debts (and, through /me/debts, read their history).
+    Sign-in already proved possession of this number via OTP.
+
+    Idempotent, and deliberately so: the client calls it on every sign-in. A second call
+    matches nothing (the rows are no longer UNCLAIMED) and answers 200 with the records
+    already held, which is the same answer as the first call.
+
+    Only UNCLAIMED rows are touched. A row somebody else holds is never reassigned here --
+    two accounts disagreeing over one number is a conflict this endpoint must not resolve
+    by simply overwriting the loser.
+    """
+    # Already canonical: it was stored through to_stored at registration. Normalising
+    # again would be harmless but would imply the column might hold something else.
+    db.execute(
+        update(models.Customer)
+        .where(
+            models.Customer.claim_status == "UNCLAIMED",
+            models.Customer.phone == current_user.phone,
+        )
+        .values(claim_status="CLAIMED", claimed_by_user_id=current_user.user_id)
+    )
+    db.commit()
+
+    claimed = db.execute(
+        select(models.Customer).where(
+            models.Customer.claimed_by_user_id == current_user.user_id
+        )
+    ).scalars().all()
+
+    # balance_minor is 0 for every row: a claim links an identity and is seller-independent,
+    # while a balance only means something within one shop's book. The buyer's real numbers
+    # come from /me/debts, which sums them per shop.
+    return [_claimed_customer_out(customer) for customer in claimed]
+
+
+def _claimed_customer_out(customer: models.Customer) -> schemas.Customer:
+    """A claimed record on the wire. Mirrors customers.py's _customer_out."""
+    return schemas.Customer(
+        customer_id=customer.customer_id,
+        display_name=customer.display_name,
+        phone=customer.phone,
+        claim_status=customer.claim_status,
+        claimed_by_user_id=customer.claimed_by_user_id,
+        created_by_seller_id=customer.created_by_seller_id,
+        balance_minor=0,
+    )
