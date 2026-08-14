@@ -2,7 +2,9 @@ package com.example.app_mobile.ui.debts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.app_pos.data.RepositoryProvider
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.app_pos.model.SellerDebt
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,9 +21,10 @@ import kotlinx.coroutines.flow.stateIn
  * the right person's debts; a ledger write (an approval, a payment) re-emits live.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class DebtsViewModel : ViewModel() {
-
-    private val repo = RepositoryProvider.instance
+@HiltViewModel
+class DebtsViewModel @Inject constructor(
+    private val repo: Repository
+) : ViewModel() {
 
     val debts: StateFlow<List<SellerDebt>> =
         repo.observeCurrentUser().flatMapLatest { user ->

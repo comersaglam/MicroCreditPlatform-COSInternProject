@@ -5,8 +5,13 @@
     <string name="login_title">Veresiye</string>
     <string name="login_subtitle">Telefon numaranızla giriş yapın</string>
     <string name="login_phone_hint">Telefon (0555 444 3322)</string>
-    <string name="login_button">Giriş yap</string>
+    <string name="login_button">Kod gönder</string>
+    <string name="login_code_hint">SMS kodu</string>
+    <string name="login_verify_button">Giriş yap</string>
+    <string name="login_edit_phone">Numarayı değiştir</string>
     <string name="msg_login_wrong_number">Geçersiz numara, tekrar deneyin</string>
+    <string name="msg_login_code_sent">Telefonunuza gönderilen kodu girin</string>
+    <string name="msg_login_wrong_code">Kod hatalı, tekrar deneyin</string>
     <string name="register_confirm_title">Kayıt ol</string>
     <string name="register_confirm_message">%1$s numarasıyla yeni bir hesap oluşturulacak. Devam edilsin mi?</string>
     <string name="register_confirm_positive">Kayıt ol</string>
@@ -85,6 +90,23 @@
     <string name="detail_take_payment">Ödeme Al</string>
     <string name="detail_approval_sent">Onaya gönderildi</string>
     <string name="detail_written">Deftere yazıldı</string>
+
+    <!-- What actually happened to an entry sent through the approval gate. One wording
+         per outcome, shared by every screen (see util/ApprovalMessage.kt). -->
+    <string name="approval_sent">Onaya gönderildi, karşı taraf onaylayınca deftere işlenecek</string>
+    <string name="approval_written">Deftere yazıldı</string>
+    <string name="approval_no_record">Bu dükkanla kaydınız yok, gönderilemedi</string>
+    <string name="approval_queued_offline">İnternet yok — cihaza kaydedildi, bağlanınca gönderilecek</string>
+    <string name="approval_failed">Gönderilemedi, tekrar deneyin</string>
+
+    <!-- Answering an approval. The two "stale" cases are not user errors: the card should
+         not have been on screen, so they explain rather than blame. -->
+    <string name="decision_not_yours">Bu onay size ait değil, listeden kaldırıldı</string>
+    <string name="decision_already_decided">Bu onay zaten yanıtlanmış, listeden kaldırıldı</string>
+    <string name="decision_unreachable">Sunucuya ulaşılamadı, tekrar deneyin</string>
+
+    <!-- Labelled so it cannot be read as "pay to this number" — it is the shop's line. -->
+    <string name="detail_shop_phone">Dükkan telefonu: %1$s</string>
 
     <!-- Become a seller + pairing -->
     <string name="become_seller_title">Satıcı ol</string>

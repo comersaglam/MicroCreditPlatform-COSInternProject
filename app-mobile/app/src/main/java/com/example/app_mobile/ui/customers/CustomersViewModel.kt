@@ -2,8 +2,10 @@ package com.example.app_mobile.ui.customers
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.app_mobile.util.PhoneFormat
-import com.example.app_pos.data.RepositoryProvider
+import com.example.app_pos.model.PhoneFormat
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -26,9 +28,10 @@ enum class CustomerFilter { ALL, WITH_DEBT }
  * balances here live.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class CustomersViewModel : ViewModel() {
-
-    private val repo = RepositoryProvider.instance
+@HiltViewModel
+class CustomersViewModel @Inject constructor(
+    private val repo: Repository
+) : ViewModel() {
 
     private val query = MutableStateFlow("")
     private val filter = MutableStateFlow(CustomerFilter.ALL)

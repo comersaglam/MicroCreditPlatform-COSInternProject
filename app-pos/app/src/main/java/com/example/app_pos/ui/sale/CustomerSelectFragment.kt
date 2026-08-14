@@ -25,9 +25,9 @@ import dagger.hilt.android.AndroidEntryPoint
 /**
  * Step 2 of the sale flow: choose the customer a credit entry is written to.
  *
- * Only a selector — no totals and no full customer list, because at the till
- * the single open question is who owes this amount. The management view of the
- * same data lives in the dashboard.
+ * Only a selector — the book is listed so the merchant can pick from it, but the
+ * totals and filters of the management view stay in the dashboard, because at the
+ * till the single open question is who owes this amount.
  *
  * Two ways to identify the customer:
  *   • "Uygulama ile bağlan" — the customer's app hands over a credential
@@ -125,13 +125,16 @@ class CustomerSelectFragment : Fragment() {
     }
 
     /**
-     * The hint carries two different messages: an invitation to type before any
-     * search happens, and a "nothing found" once one has.
+     * The hint only appears when the list is empty, and says WHY it is empty: the book
+     * itself has nobody in it yet, or the search matched nothing.
+     *
+     * With a blank query the list now shows every customer, so an empty list at that point
+     * means an empty book — not "you have not searched yet", which is what it used to say.
      */
     private fun renderHint(noMatches: Boolean, query: String) {
         binding.hintView.visibility = if (noMatches) View.VISIBLE else View.GONE
         binding.hintView.setText(
-            if (query.isEmpty()) R.string.search_prompt else R.string.no_customer_found
+            if (query.isEmpty()) R.string.no_customers_yet else R.string.no_customer_found
         )
     }
 

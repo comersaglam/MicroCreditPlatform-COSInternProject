@@ -33,6 +33,10 @@ import com.example.app_pos.data.db.entity.UserEntity
  * registered so their tables exist, even though nothing reads them yet. baskets /
  * basket_items are in the same group here: app-mobile has no PGW handoff, but the
  * schema is kept identical to app-pos's so both sides stay one design.
+ *
+ * v2 — createdAt moved from "dd.MM.yyyy HH:mm" (local) to ISO-8601 UTC, the format the
+ * wire contract publishes. The two are not comparable as text, so the rows are rebuilt
+ * rather than migrated; app-pos made the same jump for the same reason.
  */
 @Database(
     entities = [
@@ -49,7 +53,7 @@ import com.example.app_pos.data.db.entity.UserEntity
         AuditLogEntity::class,
         DeviceEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

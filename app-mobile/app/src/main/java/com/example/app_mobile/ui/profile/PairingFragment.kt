@@ -13,9 +13,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.example.app_mobile.R
 import com.example.app_mobile.databinding.FragmentPairingBinding
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 /** POS pairing (mock single-confirm). Pushed on top of Profile; pops back on done. */
+@AndroidEntryPoint
 class PairingFragment : Fragment() {
 
     private var _binding: FragmentPairingBinding? = null

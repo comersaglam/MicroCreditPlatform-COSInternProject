@@ -15,6 +15,7 @@ import com.example.app_mobile.R
 import com.example.app_mobile.databinding.FragmentProfileBinding
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 /**
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
  * seller, a "Satıcı ol" button (shop name → become a seller). Once a seller, the shop
  * name row + a POS pairing card (NotPaired → pair → Ready) appear. Logout → gate.
  */
+@AndroidEntryPoint
 class ProfileFragment : Fragment() {
 
     private var _binding: FragmentProfileBinding? = null

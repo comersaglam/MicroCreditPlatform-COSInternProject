@@ -34,14 +34,14 @@ overengineering yok. Emülatör: medium-size, Google Play imajı (iki cihaz içi
 ### 2026-07-22 — Tur 1: app-pos mimari tasarımı & folder structure (dokümantasyon)
 
 **Yapılanlar (kod yok, sadece docs):**
-- [docs/architecture-pos.svg](docs/architecture-pos.svg) — katmanlı mimari:
+- [docs/architecture-pos.svg](architecture-pos.svg) — katmanlı mimari:
   sistem görünümü (app-pos ↔ Backend ↔ app-mobile, "client çağırır dinlemez",
   auth kararları) + app-pos içi katmanlar (modül etiketleriyle) + veri modelleri
   paneli + bağımlılık yönü.
-- [docs/flow-pos.svg](docs/flow-pos.svg) — veresiye ödeme akışı: Flow A (POS,
+- [docs/flow-pos.svg](flow-pos.svg) — veresiye ödeme akışı: Flow A (POS,
   esnaf) + Flow B (müşteri, app-mobile), aralarında QR/NFC devir, backend +
   gün sonu reconciliation, hesap logic TODO.
-- [docs/architecture-pos.md](docs/architecture-pos.md) — şemaların yazılı
+- [docs/architecture-pos.md](architecture-pos.md) — şemaların yazılı
   karşılığı: katman rolleri, kavram sözlüğü (ViewModel/Repository/DAO/Retrofit/
   Interceptor/WorkManager), auth kararları, çekirdek 3'lü data class, TODO listesi.
 - Mevcut durum tespiti: app-pos & app-mobile Android Studio **Compose**
@@ -1871,3 +1871,424 @@ zinciri. Ağ ilk denemede başardığı için aynı `Idempotency-Key` ile **ikin
 oluşmadı; yani anahtarın mükerreri emmesi burada değil, backend testlerinde kapsanıyor.
 
 **Sıradaki:** 5g (dokümanlar) + app-mobile mirror turu.
+
+### 2026-08-12 — Tur 35: FAZ 5 Aşama 5g — dokümanlar (FAZ 5 KAPANDI)
+
+Kod turu değil; FAZ 5'in bıraktığı izi kayda geçiriyor. Üç dosya güncellendi.
+
+**1) [deferred.md](deferred.md) — kapanan ve açılan borçlar.**
+- **A.1 KAPANDI:** `login()` mock'u silindi (Tur 34).
+- **A.2 KISMEN:** OTP giriş akışında sunucuya taşındı; **satış akışında hâlâ mock**
+  (`OtpService.verifyOtp` her zaman `true`) — sunucu karşılığı `POST /approvals` yazıldı ama
+  app-pos bağlanmadı. Ayrım artık açıkça yazılı.
+- **C KAPANDI:** "backend klasörü BOŞ" → 22 uç canlı; yedi kuralın hepsi tabloyla eşlendi.
+- **YENİ borçlar kaydedildi:** C.1 (`created_by_seller_id` kolonu), C.4 (**cihaz seed'i ile
+  sunucu seed'i ayrı gerçeklikler** — gerçek veri sunucuda olduğu için cihaz seed'i artık
+  yanıltıcı), B.3 (`upsertUser` tuzağı app-mobile'a da lazım), §E (cihaz testi bekliyor).
+
+**2) İki maddenin ANLAMI değişti, güncellendi:**
+- **A.6 (`TokenStore` şifresiz): bahis yükseldi.** Diskteki artık sahte UUID değil, **gerçek
+  JWT + 30 günlük refresh token** — sızarsa o defterin yazma yetkisi. Karar hâlâ savunulabilir
+  ama gerekçesi "zaten sahte veri" olmaktan çıktı; FAZ 7'ye not düşüldü.
+- **A.7 (destructive migration): risk AZALDI ama ters yönde borç doğdu.** Sunucu artık
+  kayıtların sahibi, Room önbellek → wipe'ın kalıcı kaybettiği tek şey gönderilmemiş outbox.
+  Buna karşılık **Room şeması sunucudan geride** (0002'deki kolon Room'da yok).
+
+**3) `future` uçlar için bilinçli asimetri kayda geçti.** Plan kuralı "ileri-faz tabloları koda
+da eklenir" idi; **backend bunu uygulamadı.** Room'da bedel sıfırdı (destructive migration,
+gerçek veri yok); Postgres'te her tablo bir migration + geri alma yolu demek — kullanılmayan
+tablo için ödenecek gerçek bedel. Alembic sıralı tuttuğu için gerektiği gün eklemek ucuz.
+
+**4) [architecture-pos.md](architecture-pos.md) §8:** FAZ 4 ve FAZ 5 "YAPILDI" olarak işlendi,
+sıraya app-mobile mirror eklendi.
+
+**Öğrenilenler:**
+- **Doküman güncellemek "bitti" işaretlemek değil.** Asıl iş A.6/A.7 gibi maddelerin
+  **anlamının** değiştiğini yakalamaktı: ikisi de hâlâ açık, ama biri artık daha riskli,
+  diğeri daha az. Sadece kapananları çizseydim bu iki kayma görünmez olurdu.
+- **Kapsam dışı bırakılan da kaydedilmeli.** `future` uçların backend'de yazılmaması bir
+  unutma değil karar; gerekçesi yazılmazsa altı ay sonra "eksik" gibi okunur.
+
+**Doğrulama:** Kod değişmedi. Docs bağlantıları ve §0 referansları elle kontrol edildi.
+
+**FAZ 5 KAPANDI.** Kalan tek iş cihaz testi (deferred.md §E).
+
+**Sıradaki:** app-mobile mirror turu — sıra [deferred.md B.2](deferred.md)'de:
+(1) ISO timestamp + `substr()` hack'ini sil, (2) `:core-network` kopyala (**Tur 34 hâliyle** —
+`requestOtp`/`signIn`, eski `Boolean login()` DEĞİL), (3) Hilt, (4) outbox + WorkManager,
+(5) buyer/approval uçlarını gerçek backend'e bağla. Backend seed'i app-mobile'ınkinden
+türetildiği için ekranlar bugünküyle aynı veriyi görecek.
+
+### 2026-08-12 — Tur 36: app-mobile mirror 1/4 — ISO timestamp + DB v2  [FAZ 4 (mobile) başladı]
+
+Mirror turunun ilk adımı, ve **kasten ağdan ÖNCE**: app-mobile `"dd.MM.yyyy HH:mm"` yazıyordu,
+backend ise ISO-8601 UTC yayınlıyor ve bekliyor. Ağ önce bağlanırsa hata **sessiz** olurdu —
+`SimpleDateFormat` literal parse ettiği için kullanıcı tarih yerine ham ISO damgası görür
+([deferred.md B.1](deferred.md)).
+
+**1) Üretici formatı (`RoomRepository.nowStamp`):** `("dd.MM.yyyy HH:mm", tr-TR)` →
+`("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT)` + `timeZone = UTC`. app-pos'un
+`RoomLocalDataSource`'undaki `isoFormat()` deseni birebir alındı (çağrı başına yeni formatter —
+`SimpleDateFormat` thread-safe değil ve yazımlar hangi dispatcher'dan gelirse gelir).
+
+**2) `substr()` sıralama hack'i SİLİNDİ (`Daos.kt`):** `CREATED_AT_SORT` sabiti ve 3 kullanımı
+düz `ORDER BY createdAt DESC` oldu. ISO metin olarak kronolojik sıralanıyor (en anlamlı alan
+başta); eski format günü yıldan önce karşılaştırdığı için rebuild gerekiyordu. Üretilen SQL'de
+`substr(createdAt` **0 sonuç** ile doğrulandı.
+
+**3) `ApprovalDao.observePendingFor`'a `ORDER BY requestedAt DESC` eklendi.** Bugün ORDER BY
+**yoktu** → kartlar rowid sırasında geliyordu. Tur 39'un poll'u tabloyu yeniden yazacağı için
+bu, sıralamanın kullanıcının altından kayması demekti — şimdi `GET /approvals` ile aynı sıra.
+
+**4) DB v2** (`version = 1` → `2`). İki format metin olarak karşılaştırılamaz → destructive
+rebuild; app-pos aynı sıçramayı aynı gerekçeyle yapmıştı. Şema `2.json` olarak export edildi.
+
+**5) `SeedCallback` 21 damga ISO UTC'ye çevrildi** — ve `backend/app/seed.py` ile **birebir aynı
+instant'lar**. Backend seed'i zaten bu seed'den türetilmişti (Istanbul UTC+3 → UTC dönüşümü
+orada yazılıydı); o dönüşümün sonucu buraya geri yazıldı. Paylaşılan 13 transaction'ın
+damgaları programla diff'lendi: **fark yok** (t14/t15 sadece sunucuda — app-pos'un c2 kaydı,
+beklenen).
+
+**6) `util/TimeFormat.kt` (YENİ, app-pos'tan kopya):** ISO → cihazın kendi saat diliminde
+`dd.MM.yyyy HH:mm`. Parse edilemeyen değer **ham hâliyle** gösterilir (satır çökmesin,
+tarih sessizce boşalmasın). `TransactionAdapter` artık `createdAt.toDisplayDateTime()` çağırıyor —
+tek render noktası (onay kartları tarih göstermiyor).
+
+**Öğrenilenler:**
+- **Depolama formatı ile gösterim formatı ayrı işler.** app-mobile ikisini birleştirmişti
+  (ekranın istediği metni DB'ye yazıyordu); bedeli DAO'daki `substr()` hack'iydi. Depolamayı
+  sıralanabilir/karşılaştırılabilir seçince hack kendiliğinden düştü.
+- **Sıralaması olmayan sorgu, kaynağı değişene kadar sorun göstermiyor.** `observePendingFor`
+  bugün "çalışıyor" gibiydi çünkü satırları hep aynı cihaz ekliyordu. Poll gelince bozulacaktı.
+- **Damgaları programla diff'le, gözle değil.** 21 literal elle çevrilse birinde saat kayması
+  fark edilmezdi; iki seed'i script'le karşılaştırmak kesinlik verdi.
+
+**Doğrulama:** `:core-domain:build` ✓, `:app:assembleDebug` ✓ **uyarısız**. Şema v2 export
+edildi, üretilen DAO SQL'i temiz. **CİHAZ TESTİ BEKLİYOR** (test sırasında cihaz bağlı değildi):
+şema değiştiği için `adb uninstall com.example.app_mobile` ŞART (MIUI'de `pm clear` çalışmaz) →
+Borçlarım/geçmiş listelerinde tarihler **doğru sırada ve okunabilir**, Onaylar sekmesi p1/p2'yi
+gösteriyor.
+
+### 2026-08-12 — Tur 37: app-mobile mirror 2/4 — `:core-network` + Hilt
+
+Altyapı turu: **davranış hiç değişmedi**, ağ yığını ve DI geldi. app-mobile artık app-pos ile
+aynı 4 modüle sahip (`:app`, `:core-domain`, `:core-data`, `:core-network`).
+
+**1) `:core-network` bütün olarak kopyalandı** (35 dosya): 7 Retrofit arayüzü, DTO'lar,
+mapper'lar, `ApiResult`/`SafeCall`, `TokenStore`/`DataStoreTokenStore`/`AuthInterceptor`/
+`TokenAuthenticator`, `NetworkModule` (`@AuthClient`/`@ApiClient` ayrımı — refresh döngüsünü
+yapıca imkânsız kılar). Paket adı `com.example.app_pos.network` **korundu** (mock-pos deseni:
+ayrı Gradle projeleri kod paylaşmaz, sabitler kopyalanır).
+
+**`OrderBody`/`OrderItem` de `:core-domain`'e kopyalandı** — app-mobile'ın PGW handoff'u YOK,
+ama `TransactionDto`/`TransactionMapper` bu tipleri istiyor. `:core-data`'nın `baskets`/
+`basket_items` tablolarını zaten aynı gerekçeyle taşıması ("şema app-pos'la aynı kalsın, iki
+taraf tek tasarım") emsal oldu.
+
+**2) Sürüm kataloğu**: retrofit 2.11.0, okhttp **4.12.0** (5.x DEĞİL — Retrofit 2.11'in test
+edildiği hat), moshi 1.15.2 (+ KSP codegen, `moshi-kotlin` değil → `kotlin-reflect` gelmesin),
+datastore 1.1.1, hilt **2.60.1** (2.59 = AGP 9 uyumlu ilk sürüm), androidxHilt 1.4.0,
+work 2.11.2. Gerekçe yorumları app-pos'tan taşındı (sürüm numarası tek başına neden'i anlatmaz).
+
+**3) Base URL wiring — üç yer, ayrışırsa hata "sunucu ölü" gibi görünür:**
+`core-network/build.gradle.kts` `buildConfigField` → `app/build.gradle.kts` `resValue`
+(`resValues = true` gerekti, AGP 9'da kapalı) → `src/debug/res/xml/network_security_config.xml`
+`@string/debug_api_host`. Property adı **`mobileApiHost`** (app-pos'un `posApiHost`'unun
+kardeşi, ayrı: iki ayrı Gradle build, ve iki-cihazlı testte biri emülatör biri telefon olabilir).
+Üretilen dosyalardan teyit edildi: `API_BASE_URL = http://127.0.0.1:4010/` ve
+`debug_api_host = 127.0.0.1` **aynı host**.
+
+**4) Hilt'e geçiş — `RepositoryProvider` SİLİNDİ:**
+- `di/DataModule.kt` (YENİ): `AppDatabase` + `Repository` binding'i, ikisi de `@Singleton`
+  (aynı dosya üzerine ikinci bir AppDatabase = iki yazma kuyruğu, iki cache).
+  Şimdilik `RoomRepository`'yi bağlıyor; Tur 38'de offline-first besteye **tek satır** değişecek,
+  hiçbir çağıran etkilenmeyecek.
+- `di/AppScope.kt` app-pos'tan kopyalandı (`@ApplicationScope` + `@IoDispatcher`) — Tur 38'de
+  outbox push'u için gerekecek.
+- `App` → `@HiltAndroidApp` (eski `RepositoryProvider.get(this)` çağrısı gitti: grafik artık ilk
+  enjeksiyonda kuruluyor, `onCreate` main thread'de DB açmıyor).
+- `MainActivity` + **10 fragment** → `@AndroidEntryPoint`. **8 ViewModel** → `@HiltViewModel` +
+  `@Inject constructor(repo: Repository)`.
+- **İki elle yazılmış factory silindi.** `SellerDetailViewModel`/`CustomerDetailViewModel`
+  nav-arg alıyordu; `SavedStateHandle` argümanı graf'taki adıyla zaten tutuyor →
+  `by viewModels()` yeterli. **Bonus:** eski factory'nin aksine process death'i de atlatıyor
+  (Tur 26'nın dersi, aynen tekrarlandı).
+- `DashboardFragment` ViewModel'i yok (bottom-nav menüsünü değiştirmek için user'ı kendi
+  izliyor) → repo'yu doğrudan `@Inject lateinit var` ile alıyor.
+
+**Öğrenilenler:**
+- **`api(project(":core-network"))` şart, `implementation` değil.** `:app` `TokenStore`
+  enjekte edecek ve `NetworkConfig` okuyacak; ayrıca Hilt daha katı — `@Inject`
+  constructor'da geçen HER tip, bileşeni üreten modülün compile classpath'inde olmalı
+  (app-pos'ta bu ders `Moshi` ile alınmıştı, burada baştan uygulandı).
+- **Mekanik dönüşümü script'le yap, ama tek biçimliliği ÖNCE doğrula.** 6 ViewModel'in
+  `repo` satırı birebir aynıydı (grep ile teyit edildi) → tek python geçişi. Kalan 2'si
+  farklıydı (constructor arg) ve elle yazıldı. Karışık olanı script'lemek sessiz hata üretirdi.
+- **Ölü import derlemeyi kırmaz, kod okumasını kırar.** Factory'ler silinince
+  `ViewModel`/`ViewModelProvider` import'ları öksüz kaldı; build yine yeşildi. Aynı şekilde
+  factory'yi anlatan KDoc'lar da güncellendi (yorum, koddan daha uzun yaşayan yalan).
+
+**Doğrulama:** `:core-domain:build` ✓, `:app:assembleDebug` ✓, `:app:assembleRelease` ✓,
+hepsi **uyarısız**. **23 unit test / 0 fail** (22 core-network + 1 örnek) — kopyalanan ağ yığını
+app-mobile'ın domain'ine karşı koşuyor. Hilt'in ViewModel modüllerini ürettiği generated
+dosyalardan teyit edildi (Dagger grafiği uçtan uca doğrulanmış demek).
+
+**Release güvenliği ayrıca kontrol edildi:** release `BuildConfig` `https://api.veresiye.example/`,
+release'de `debug_api_host` **yok**, release APK'da `127.0.0.1`/`10.0.2.2` grep'i **0 sonuç**,
+release'e giden `network_security_config.xml` `main/`in sıkı sürümü (debug override'ı görmüyor).
+
+**CİHAZ TESTİ BEKLİYOR** — bu tur davranışı değiştirmedi, yani Tur 36'nın listesi + "hiçbir şey
+bozulmadı" kontrolü: giriş (hâlâ mock), Borçlarım, satıcı detayı, Onaylar (Onayla/Reddet),
+Profil, "Satıcı ol", Müşterilerim, müşteri detayı, POS eşleştirme, iç-nav geri oku.
+
+**Sıradaki:** Tur 38 — gerçek login (`requestOtp`/`signIn` + `SignInResult`), session diske
+(`DataStoreTokenStore`, `prime()` **bloklayıcı**), `upsertUser` tuzağı ([deferred.md B.3](deferred.md)),
+outbox + `SyncEngine` + WorkManager, buyer/approval uçlarını gerçek backend'e bağlama.
+
+### 2026-08-13 — Tur 38: app-mobile mirror 3/4 — offline-first beste + gerçek login + outbox
+
+app-mobile'ın ağ katmanı **ilk kez çağrılıyor**. Tur 37 yığını kurmuştu ama hiçbir yerden
+kullanılmıyordu; bu tur onu bağladı, mock login'i sildi ve yazma yolunu kuyruğa aldı.
+
+**1) `:core-data` üç parçaya ayrıldı (app-pos'un yapısı):**
+- `RoomRepository` → **`local/RoomLocalDataSource`**, ve artık `Repository` değil
+  **`LocalSource`** uyguluyor (yeni arayüz: `Repository` + `observeAllUsers` + `upsertUser`
+  + outbox metotları). Arayüz olmasının tek somut sebebi test edilebilirlik: oturum
+  mantığı Room ayağa kaldırmadan saf JVM'de doğrulanabiliyor ([deferred.md B.5](deferred.md)'in kapanışı).
+- `remote/RemoteDataSource` + `sync/SyncEngine` app-pos'tan kopyalandı. SyncEngine'e
+  **hiç dokunulmadı** — sadece `LocalSource`/`RemoteDataSource`'a bağlı olduğu için
+  app-mobile'da olduğu gibi çalıştı.
+- **`OfflineFirstRepository` (YENİ)** — turun kalbi. `DataModule` artık bunu bağlıyor;
+  Tur 37'de yazdığım "tek satır değişecek" sözü aynen böyle kapandı, **hiçbir çağıran
+  değişmedi**.
+
+**2) Gerçek login — mock silindi:**
+- `Repository.login(phone): Boolean` → **`requestOtp(phone)` + `signIn(phone, code)`**,
+  dönüş `SignInResult` (Success / NeedsRegister / InvalidCode / Unreachable / Failed).
+- **`findUserByPhone` ön-kontrolü KALDIRILDI** — app-pos'un Tur 34'te yediği tuzak:
+  temiz kurulumda Room boş olduğu için hesabı OLAN kullanıcıyı bile kayıt ekranına
+  düşürüyordu. Kararı artık sunucu veriyor (`404 user_not_found` → NeedsRegister).
+- **`upsertUser` tuzağı** ([deferred.md B.3](deferred.md)) baştan doğru yapıldı:
+  `mirrorUser` sunucunun user id'sini **aynen** yazıyor. `registerUser` yeni UUID üretirdi,
+  session sunucunun id'sini taşıdığı için `observeCurrentUser` eşleşmez ve kullanıcı
+  **boş profil** görürdü.
+- Login ekranı **tek ekran, iki adım** oldu: telefon → kod. Ayrı destination değil, çünkü
+  gate back-stack'e girer ve sistem geri tuşu iki adımın ARASINA düşerdi.
+  `LoginState`'e `CODE_SENT` eklendi; `codeRejected` ayrı bir bayrak, yoksa "kod gönderildi"
+  ile "kod yanlış" ekranda **birebir aynı** görünüyordu.
+
+**3) Outbox + WorkManager:**
+- `addTransactionQueued(transaction, sendPayload)` — ledger yazımı + kuyruk **tek
+  `db.withTransaction`**. Ayrı yazılsa araya giren process ölümü ya sunucunun hiç duymayacağı
+  bir kayıt ya da hiç yazılmamış bir kayda ait gönderim bırakırdı; ikisi de sonradan tespit
+  edilemez.
+- **`OutboxDao.insert` `IGNORE` yapıldı** (varsayılan `ABORT`'tu). Satır id'si = transaction
+  id olduğu için tekrar kuyruğa alma no-op olmalı; ABORT ile kuyruk **tam iş yaparken**
+  patlardı. `observeCount()` + `recordFailure()` de eklendi (DAO'da yoktu).
+- `UserDao.upsert` eklendi (`@Upsert`) — `insert` IGNORE olduğu için sunucu profili
+  güncelleyemezdi.
+- `SyncWorker` + `SyncScheduler` kopyalandı, App.kt `Configuration.Provider` oldu,
+  manifest'e WorkManager initializer **kaldırma** node'u eklendi (bu node **wiring'in
+  kendisi**, optimizasyon değil — olmadan @HiltWorker runtime'da kurulamıyor).
+- `tokenStore.prime()` **runBlocking** — app-pos'un dersi aynen: MainActivity
+  startDestination'ı `isSessionValid()` ile onCreate'te seçiyor, arka planda primelamak
+  yarış yaratır ve giriş yapmış kullanıcı **aralıklı olarak** login ekranı görür.
+
+**4) Approval'lar gerçek backend'e bağlandı (kısmen):**
+- `approvePending`/`rejectPending` artık **sunucuya gidiyor**, ve bilinçli olarak
+  offline-toleranslı DEĞİL: onay karşı tarafın beklediği bir karar, sadece bu cihaza
+  yazmak "onaylandı" gösterirken karşı tarafa hâlâ bekleyen kart gösterirdi. Ulaşılamazsa
+  lokal satır **duruyor**, kullanıcı tekrar deneyebiliyor.
+- Onay sonrası gelen Transaction **kuyruğa alınmadan** yazılıyor (`addTransaction`,
+  `addTransactionQueued` değil) — sunucu zaten yazdı, kuyruğa alsak ikinci kopya giderdi.
+- `requestApproval` sunucuya gönderiyor ama **yanıta bakmadan** lokali de yazıyor;
+  ikisinin ayrışabildiği yer burası ve [deferred.md](deferred.md)'de dürüstçe duruyor.
+
+**Öğrenilenler:**
+- **Bir arayüzün arkasındaki tek binding, turu ucuzlatan şeydir.** Tur 37'de `DataModule`
+  `RoomLocalDataSource` bağlıyordu; bu turda `OfflineFirstRepository`'ye çevirmek **tek
+  fonksiyon** oldu ve 8 ViewModel'in hiçbiri değişmedi.
+- **Kopyalanan kod, bağlı olduğu soyutlama kadar taşınır.** `SyncEngine` sıfır değişiklikle
+  çalıştı çünkü sadece iki arayüze bakıyor; `FakeSyncRepository` ise app-mobile'ın daha
+  geniş `Repository`'sine göre elle genişletilmek zorunda kaldı.
+- **`@Insert` varsayılanı `ABORT`'tur** ve bu kuyruk tablolarında sessiz bir bomba: hata
+  ancak yeniden deneme anında, yani en kötü anda patlar.
+
+**Doğrulama:** `:app:assembleDebug` ✓ `:app:assembleRelease` ✓ (tek uyarı: `@ApplicationContext`
+anotasyon hedefi — app-pos'ta da var, davranışa etkisi yok). **30 unit test / 0 fail**
+(22 core-network + 8 app: SyncWorker karar tablosu dahil). Release güvenliği: APK'da
+loopback IP grep'i **0**, `API_BASE_URL = https://api.veresiye.example/`.
+
+**CİHAZ TESTİ BEKLİYOR** (Tur 36-37-38 birikti). Şema v2 + login değişikliği yüzünden
+**`adb uninstall com.example.app_mobile` ŞART**. Sunucu gerekli: `docker compose up` +
+`adb reverse tcp:4010 tcp:4010`. Sıra: giriş (telefon → kod `123456`) → Borçlarım →
+Onaylar (Onayla/Reddet artık sunucuya gidiyor) → Profil → çıkış → tekrar giriş
+(**session diskte kalmalı, tekrar kod sormamalı**).
+
+**Sıradaki:** Tur 39 — pull ekseni ([deferred.md §F](deferred.md)): backend'e
+`approvals.updated_at` (migration 0003) + `GET /approvals` filtreleri, client'a `PullEngine`,
+ön planda 15 sn poll. Bu olmadan POS, app-mobile'dan gelen onayı **göremiyor**.
+
+### 2026-08-13 — Tur 38b: cihaz testinde bulunan yazma-yolu hataları  [ilk gerçek cihaz testi]
+
+Tur 36/37/38 **cihazda test edildi**. Tarih formatı ve giriş akışı doğru çalıştı; yazma
+yolunda dört kullanıcı-görünür hata çıktı. Kod incelemesi bunların **altı kök nedene**
+indiğini gösterdi — üçü Tur 38'de yazdığım kodda.
+
+**1) ÇİFT YAZIM — 75 TL onayı ledger'a iki kez düştü (veri bozan)**
+`OfflineFirstRepository.approvePending` sunucudan dönen transaction'ı yazıyor, sonra
+`local.approvePending` çağırıyordu — ve o metot **kendi içinde ikinci bir `addTransaction`**
+yapıyor, üstelik yeni bir `UUID` ile. Farklı id'ler `insert`'ün `IGNORE`'unu atlatıyor →
+iki satır da kalıyor, bakiye şişiyor.
+→ `LocalSource.markApprovalDecided(approvalId, status)` eklendi: sadece durumu değiştirir,
+ledger'a dokunmaz. Ledger'a yazan tek yer artık sunucunun döndürdüğü kayıt.
+
+**2) TELEFON NORMALİZASYONU üç yerde üç farklı (diğer hataların besleyicisi)**
+Kotlin `digits()` → `05554443322`; SQL `REPLACE` → `905554443322`. `UserDao` **substring**
+(`LIKE '%..%'`) karşılaştırdığı için **login çalışıyordu**, ama `CustomerDao.claimByPhoneDigits`
+**tam eşitlik** kullandığı için **claim sessizce hiçbir satırı bulmuyordu** (dönen `Int` de
+atılıyordu). Müşteri UNCLAIMED kalıyor → onaysız-yazma dalına düşüyordu.
+→ `PhoneFormat` **`:core-domain`'e taşındı** (veri katmanı erişebilsin diye), SQL'den
+`REPLACE`/`LIKE` **tamamen kalktı**, sorgular düz `WHERE phone = :stored`. Tek kanonik form:
+E.164 — backend'in de formatı, ve artık index kullanılabiliyor.
+
+**3) UNCLAIMED kararını CLIENT veriyordu**
+`claimedByUserId == null` ise onaya gitmeden, üstelik **kuyruksuz** `addTransaction`.
+→ Karar **sunucuya bırakıldı**. `POST /approvals` iki şekil döndürüyor (201 Approval /
+200 Transaction) ama `ApprovalApi.send` tek tip (`ApprovalDto`) yazılmıştı — 200 dalını
+temsil **edemiyordu**. Yeni `ApprovalSendResultDto` iki şekli de taşıyor, `approvalId` /
+`transactionId` alanıyla ayırıyor (status code `apiCall` içinde kayboluyor).
+
+**4) `initiatePayment` sunucuya HİÇ gitmiyordu** — düz `local.initiatePayment` delegasyonu.
+→ Artık `requestApproval` üzerinden geçiyor; customerId çözümü lokal kalıyor.
+
+**5) SESSİZ BAŞARISIZLIKLAR** — `requestApproval` `Unit`, `initiatePayment` **koşulsuz
+`true`** dönüyordu; `CustomerDetailFragment` Toast'ı sonucu beklemeden `isClaimed.value`'dan
+seçiyordu (`WhileSubscribed` initial `false` → claimed müşteride bile yanlış mesaj).
+→ `ApprovalOutcome` sealed tipi (`SentForApproval` / `WrittenImmediately` /
+`NoCustomerRecord` / `QueuedOffline` / `Failed`) + tek mesaj eşlemesi
+(`util/ApprovalMessage.kt`). `Failed` sunucunun kendi açıklamasını taşıyor.
+
+**6) `shopPhone` ekranda yanıltıcıydı** — satıcı detayında **etiketsiz** numara duruyordu;
+test sırasında "ödeme buraya gider" sanılıp başka ekrana girildi ve "kullanıcı bulunamadı"
+alındı. `+902123334455` Ayşe Market'in **dükkan telefonu**, hesabın numarası `+905553334455`.
+Veri hatası değil, **etiket hatası**.
+→ "Dükkan telefonu: %s" etiketi + **tıklayınca arama** (`ACTION_DIAL`). `UserDao`'ya
+shopPhone araması eklemek reddedildi: hesap kişiye aittir, dükkana değil.
+
+**Öğrenilenler:**
+- **İki metot aynı işi yapıyorsa, biri "de" yapıyordur.** `approvePending` iki katmanda da
+  vardı ve ikisi de ledger'a yazıyordu; besteleyen sınıf ikisini de çağırınca hata çıktı.
+  Kural: composing katman, alt katmanın **yan etkisiz** varyantını çağırmalı.
+- **Aynı veriyi iki farklı şekilde karşılaştıran iki sorgu = zaman bombası.** Biri gevşek
+  (`LIKE`), biri katı (`=`) olunca gevşek olan "çalışıyor" görüntüsü verip katı olanın
+  sessiz başarısızlığını gizledi. Normalizasyon **tek yerde**, sorgu **düz eşitlik**.
+- **Sunucu iki şekil dönüyorsa, client tipi de iki şekil taşımalı.** `ApprovalDto` 200
+  dalını temsil edemediği için client kendi kararını vermek zorunda kaldı — asıl hata buydu.
+- **`Boolean` dönüş "ne oldu"yu anlatamaz.** `true` hem "onaya gitti" hem "deftere yazıldı"
+  demekti; ekran ikisini ayırt edemeyince kullanıcıya yanlış şey söyledi.
+
+**Doğrulama:** `:app:assembleDebug` ✓ `:app:assembleRelease` ✓ uyarısız.
+**42 unit test / 0 fail** (30 → 42; yeni 12'si bu turun düzeltmelerini kilitliyor):
+6 `ApprovalWritePathTest` (MockWebServer ile **gerçek** 201/200 ayrımı) + 6 `PhoneFormatTest`.
+
+**Mutasyon kontrolü yapıldı:** çift yazım kasten geri konuldu → `approving books the entry
+exactly once` **kırmızıya döndü**; düzeltme geri alınınca yeşil. Yani test gerçekten koruyor,
+yanlışlıkla yeşil kalan bir test değil.
+
+**CİHAZ TESTİ BEKLİYOR** (şema değişmedi → `adb uninstall` GEREKMİYOR):
+1. Onaylar → 75 TL'yi onayla → ledger'a **bir kez** düşmeli
+2. Borçlarım → Ayşe Market → Öde → "Onaya gönderildi" (sunucuya gitmeli)
+3. Müşterilerim → CLAIMED müşteri → Ödeme Al → onaya gider, ledger'a hemen yazmaz
+4. UNCLAIMED müşteri (Fatma/Hasan) → sunucu 200 → "Deftere yazıldı"
+5. Geçmişi olmayan satıcıya ödeme → "kaydınız yok", sahte başarı YOK
+6. Uçak modu → "İnternet yok — cihaza kaydedildi"
+7. Ayşe detayında numara → "Dükkan telefonu: …", tıklayınca arama açılır
+
+Sunucu tarafı teyidi (çift yazım için kesin kanıt):
+`docker exec backend-db-1 psql -U postgres -d veresiye -c "SELECT transaction_id, amount_minor FROM transactions ORDER BY created_at DESC LIMIT 5;"`
+
+**Sıradaki:** Tur 39 — pull ekseni ([deferred.md §F](deferred.md)).
+
+### 2026-08-13 — Tur 38c: cihaz testi 2. tur — takılan onay, OTP UI, müşteri listesi
+
+Tur 38b'nin düzeltmeleri cihazda **doğrulandı**: sunucu verisiyle bakıldı, p2 (75 TL)
+`APPROVED` ve ledger'da mükerrer kayıt **yok** — çift yazım gitti. İkinci turda üç iş çıktı.
+
+**1) `p1` onayı takılı kalıyordu — sistem aslında DOĞRU davranıyordu**
+
+Teşhis sunucu verisinden geldi: `p1.target_user_id = u1`, giriş ise `u_owner` ile yapılmıştı.
+Sunucu `_decide` ([`approvals.py:189`](../backend/app/routers/approvals.py)) **403 forbidden**
+döndürüyor. Yani onaylanamaması doğru — **hata o kartın ekranda olması**.
+
+Kök neden: cihaz seed'i **her iki onayı da** yazıyor, kim giriş yaparsa yapsın; Room tablosu
+sunucudan bağımsız. `ApprovalDao.observePendingFor` doğru filtreliyor ama filtrelediği veri
+yanlış.
+
+- `DecisionOutcome` (YENİ, `:core-domain`): `Applied` / `NotYours` / `AlreadyDecided` /
+  `Unreachable` / `Failed`. `approvePending`/`rejectPending` artık bunu döndürüyor.
+- **403 ve 409 → kart DÜŞÜRÜLÜYOR** (`ApprovalDao.delete`). Bu iki cevap tekrar denemekle
+  değişmez; satırı bekletmek onu ekranda sonsuza dek bırakır.
+- **Silmek, durum yazmak değil** — cihaz gerçek kararı BİLMİYOR. `APPROVED`/`REJECTED`
+  yazmak olmayan bir kararı uydurmak olurdu; o iz zaten sunucuda duruyor.
+- **Ağ hatası kartı KORUYOR** — orada tekrar denemek doğru hamle. Bu ayrım, "403'te sil"
+  kuralının kurtarılabilir hataları yutmasını engelliyor.
+- `ApprovalsViewModel.approve/reject` **fire-and-forget'ti**, Toast sonucu beklemeden
+  gösteriliyordu (38b'de düzelttiğim hatanın aynısı, başka ekranda) → sonuç bağlandı.
+
+**2) OTP girişi "yeni sayfa" gibi hissettiriyordu**
+
+İkisi de tek fragment; fark tek satırdaydı:
+
+| | app-pos | app-mobile (öncesi) |
+|---|---|---|
+| Telefon alanı | ekranda **kalır**, `isEnabled = false` | **`GONE`** olurdu |
+| Kod alanı | telefonun **altına** eklenir | **yerine** geçerdi |
+
+Kullanıcının az önce yazdığı numara kaybolunca adım, "aynı formun devamı" değil "sayfa
+değişti" gibi okunuyordu. `LoginFragment.kt` + `fragment_login.xml` app-pos desenine
+çevrildi (`codeLayout` artık `phoneLayout`'un altında).
+
+**3) Müşteri seçmede liste boştu — BİLİNÇLİ bir karar tersine çevrildi**
+
+Liste ve adapter zaten vardı (`CustomerSelectFragment` dashboard'ın `CustomerAdapter`'ını
+kullanıyor); boşluk tek satırdan geliyordu: `if (q.isEmpty()) emptyList()`.
+
+Bu **kasıtlıydı** ve kodda gerekçesi yazılıydı: *"tam liste göstermek, bu ekranın önlemek
+için yazıldığı karışıklığın ta kendisi"* — kasada yanlış satıra dokunma riski.
+
+**Kullanıcı bilerek tersine çevirdi**, ve gerekçesi sağlam: mock-pos handoff'undan gelince
+ekran boş kalıyor, esnaf ismi **ezberden** yazmak zorunda kalıyordu — yazımını doğrulama
+imkânı olmadan. İsimleri görmek yanlış kişiyi seçmeyi asıl **engelleyen** şey.
+→ `if (q.isEmpty()) all`, ve **eski gerekçe yorumları güncellendi** (ViewModel KDoc,
+Fragment KDoc). `search_prompt` string'i ölü kaldı → `no_customers_yet` ile değiştirildi
+("henüz müşteriniz yok"), çünkü boş liste artık "arama yapmadın" değil "defter boş" demek.
+
+**Öğrenilenler:**
+- **Her başarısızlık "tekrar dene" değildir.** 403/409 ile ağ hatasını aynı kefeye koymak,
+  hiç düzelmeyecek bir kartı sonsuza dek ekranda tutuyordu. Ayrımı yapan tip
+  (`DecisionOutcome`) davranışı da belgeliyor.
+- **Bilmediğin bir kararı uydurma.** Stale kartı `REJECTED` işaretlemek kolay olurdu ama
+  cihaz gerçekte ne olduğunu bilmiyor; silmek dürüst olan.
+- **Bir tasarım kararını tersine çevirirken yorumları da çevir.** `q.isEmpty()` dalının
+  gerekçesi kodda yazılıydı; sadece kodu değiştirmek, altı ay sonra "yorum niye kodla
+  çelişiyor?" sorusunu üretirdi.
+- **`stateIn(WhileSubscribed)` testte `first()` ile okunmaz** — başlangıç değerini alır ve
+  test HER durumda yeşil kalır. Toplayıcı + `advanceUntilIdle` gerekiyor; bu tuzağa düşüp
+  mutasyon kontrolüyle yakaladım.
+
+**Doğrulama:** her iki projede `assembleDebug` ✓ `assembleRelease` ✓ uyarısız.
+**56 unit test / 0 fail** (app-mobile 45 + app-pos 11; 42+11'den 45+11'e).
+Yeni: 3 `ApprovalWritePathTest` (403/409/ağ) + 3 `CustomerSelectViewModelTest`.
+
+**Mutasyon kontrolü (iki ayrı):** (a) `if (q.isEmpty()) all` → `emptyList()` yapıldı, test
+**kırmızıya döndü**; (b) 38b'nin çift yazım testi hâlâ koruyor. Testler gerçekten kilitliyor.
+
+**CİHAZ TESTİ BEKLİYOR** (şema değişmedi → `adb uninstall` GEREKMİYOR):
+1. Onaylar → p1 (50 TL) → Onayla/Reddet → kart **düşer**, "bu onay size ait değil" der
+2. Çıkış → giriş: numara gir → "Kod gönder" → telefon **ekranda kalır** (soluk), kod altına açılır
+3. "Numarayı değiştir" → telefon tekrar aktif
+4. mock-pos → tutar → VERESİYE → app-pos müşteri seç → **liste dolu gelir**, arama daraltır
+5. Listeden seç → onay → OTP → akış bozulmadan tamamlanır
+
+**Sıradaki:** Tur 39 — pull ekseni + "sunucu tek gerçeklik" ([deferred.md §F](deferred.md)).

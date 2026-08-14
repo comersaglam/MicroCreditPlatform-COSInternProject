@@ -20,19 +20,28 @@
         tools:text="Ahmet Bakkal" />
 
     <!-- Hidden when the shop has not set a phone (mirrors the customer screen, where
-         the phone is mandatory and always shown). -->
+         the phone is mandatory and always shown).
+
+         LABELLED, and tappable to call. An unlabelled number next to a "Pay" button reads
+         as "send the payment here" — a tester did exactly that, entered it elsewhere and
+         got "user not found", because this is the SHOP's line, not the owner's account
+         number. Naming it and giving it the obvious action removes the ambiguity. -->
     <TextView
         android:id="@+id/detailShopPhone"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="16dp"
         android:layout_marginTop="2dp"
+        android:background="?attr/selectableItemBackground"
+        android:drawablePadding="6dp"
+        android:paddingVertical="4dp"
         android:textColor="?attr/colorOnSurfaceVariant"
         android:textSize="14sp"
+        app:drawableStartCompat="@android:drawable/ic_menu_call"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/detailShopName"
-        tools:text="+902121112233" />
+        tools:text="Dükkan telefonu: +902121112233" />
 
     <TextView
         android:id="@+id/detailBalanceLabel"

@@ -2,7 +2,11 @@ package com.example.app_mobile.ui.sellerdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.app_pos.data.RepositoryProvider
+import androidx.lifecycle.SavedStateHandle
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,9 +32,16 @@ enum class TransactionFilter { ALL, DEBT, PAYMENT }
  * a payment updates the balance here live. Balance is recomputed, never stored.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class SellerDetailViewModel(private val sellerId: String) : ViewModel() {
+@HiltViewModel
+class SellerDetailViewModel @Inject constructor(
+    private val repo: Repository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val repo = RepositoryProvider.instance
+    // Hilt cannot pass a nav argument to a constructor, but SavedStateHandle already holds
+    // it under the name declared in the graph — so the hand-written factory is unnecessary.
+    // It also survives process death, which the old factory did not.
+    private val sellerId: String = checkNotNull(savedStateHandle["sellerId"])
 
     private val allTransactions =
         repo.observeCurrentUser().flatMapLatest { user ->
@@ -80,12 +91,13 @@ class SellerDetailViewModel(private val sellerId: String) : ViewModel() {
      * [onResult] reports whether the request actually went out, so the screen only
      * claims success when something was sent.
      */
-    fun pay(amountMinor: Long, onResult: (Boolean) -> Unit) {
-        if (amountMinor <= 0) return onResult(false)
-        val userId = repo.currentUserId() ?: return onResult(false)
+    fun pay(amountMinor: Long, onResult: (ApprovalOutcome) -> Unit) {
+        if (amountMinor <= 0) return onResult(ApprovalOutcome.Failed())
+        val userId = repo.currentUserId() ?: return onResult(ApprovalOutcome.Failed())
         viewModelScope.launch {
-            // false = no shared record with this seller, so nothing was sent; the screen
-            // reports that rather than claiming success.
+            // Reports WHAT happened, not just whether something did. A payment waiting on
+            // the shop and one already in the book are both successes but mean different
+            // things to the payer, and "nothing was sent" must never read as either.
             onResult(repo.initiatePayment(userId, sellerId, amountMinor))
         }
     }

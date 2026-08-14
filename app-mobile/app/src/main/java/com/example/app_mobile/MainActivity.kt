@@ -7,9 +7,11 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
-import com.example.app_pos.data.RepositoryProvider
 import com.example.app_mobile.databinding.ActivityMainBinding
 import com.example.app_mobile.ui.dashboard.DashboardFragment
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 /**
  * The app's only Activity. Every screen is a Fragment inside the nav host.
@@ -19,12 +21,14 @@ import com.example.app_mobile.ui.dashboard.DashboardFragment
  * here. What is kept is the session gate (start on login vs dashboard) and the
  * inner-nav up routing for the dashboard's bottom-nav sub-screens.
  */
+@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var appBarConfiguration: AppBarConfiguration
 
-    private val repo = RepositoryProvider.instance
+    // Field injection because Hilt constructs Activities itself; ready by super.onCreate().
+    @Inject lateinit var repo: Repository
 
     private val navController: NavController
         get() = (supportFragmentManager

@@ -20,6 +20,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * (Mehmet 0 / Fatma 25,50 / Hasan 210,00) — identical to the fake.
  *
  * Insert order matters: customers.claimedByUserId is a FK to users.
+ *
+ * TIMESTAMPS are ISO-8601 UTC, byte-identical to `backend/app/seed.py` — that seed was
+ * derived from THIS one, converting the old Istanbul (UTC+3) literals it used to carry
+ * ("20.07.2026 09:15" -> "2026-07-20T06:15:00Z"). Keeping both sides on the same instants
+ * means a device seeded offline shows the same history the server would send.
  */
 internal class SeedCallback(private val context: Context) : RoomDatabase.Callback() {
 
@@ -51,14 +56,14 @@ internal class SeedCallback(private val context: Context) : RoomDatabase.Callbac
         // the shop, seller-facing screens show the person, and identical names would
         // hide a screen pulling the wrong one.
         user(db, "u_owner", "+905554443322", "Ahmet Demirtaş", isSeller = true,
-            shopName = "Ahmet Bakkal", shopPhone = "+902121112233", createdAt = "01.07.2026 09:00")
+            shopName = "Ahmet Bakkal", shopPhone = "+902121112233", createdAt = "2026-07-01T06:00:00Z")
         user(db, "u_market", "+905553334455", "Ayşe Korkmaz", isSeller = true,
-            shopName = "Ayşe Market", shopPhone = "+902123334455", createdAt = "02.07.2026 09:00")
+            shopName = "Ayşe Market", shopPhone = "+902123334455", createdAt = "2026-07-02T06:00:00Z")
         // … and two plain buyers.
         user(db, "u1", "+905551112233", "Ahmet Yılmaz", isSeller = false,
-            shopName = null, shopPhone = null, createdAt = "05.07.2026 12:30")
+            shopName = null, shopPhone = null, createdAt = "2026-07-05T09:30:00Z")
         user(db, "u3", "+905554445566", "Mehmet Kaya", isSeller = false,
-            shopName = null, shopPhone = null, createdAt = "08.07.2026 15:45")
+            shopName = null, shopPhone = null, createdAt = "2026-07-08T12:45:00Z")
 
         // u1 is one person with a record in each shop's book (c1 and m1).
         customer(db, "c1", "Ahmet Yılmaz", "+905551112233", "CLAIMED", "u1")
@@ -71,28 +76,28 @@ internal class SeedCallback(private val context: Context) : RoomDatabase.Callbac
         customer(db, "c5", "Hasan Öztürk", "+905558889900", "UNCLAIMED", null)
 
         // u1 @ Ahmet Bakkal (c1): 50 + 30 - 40 = 40,00
-        tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ekmek, süt", "20.07.2026 09:15")
-        tx(db, "t2", "u_owner", "c1", 3000, "DEBT", "Peynir", "21.07.2026 10:40")
-        tx(db, "t3", "u_owner", "c1", 4000, "PAYMENT", "Nakit ödeme", "22.07.2026 18:00")
+        tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ekmek, süt", "2026-07-20T06:15:00Z")
+        tx(db, "t2", "u_owner", "c1", 3000, "DEBT", "Peynir", "2026-07-21T07:40:00Z")
+        tx(db, "t3", "u_owner", "c1", 4000, "PAYMENT", "Nakit ödeme", "2026-07-22T15:00:00Z")
         // u1 @ Ayşe Market (m1): 120 + 45 - 65 = 100,00
-        tx(db, "t4", "u_market", "m1", 12000, "DEBT", "Market alışverişi", "18.07.2026 11:20")
-        tx(db, "t5", "u_market", "m1", 4500, "DEBT", "Deterjan", "22.07.2026 16:05")
-        tx(db, "t6", "u_market", "m1", 6500, "PAYMENT", "Kısmi ödeme", "24.07.2026 13:00")
+        tx(db, "t4", "u_market", "m1", 12000, "DEBT", "Market alışverişi", "2026-07-18T08:20:00Z")
+        tx(db, "t5", "u_market", "m1", 4500, "DEBT", "Deterjan", "2026-07-22T13:05:00Z")
+        tx(db, "t6", "u_market", "m1", 6500, "PAYMENT", "Kısmi ödeme", "2026-07-24T10:00:00Z")
         // u_owner @ Ayşe Market (o1): 90 - 30 = 60,00
-        tx(db, "t7", "u_market", "o1", 9000, "DEBT", "Kırtasiye", "16.07.2026 10:00")
-        tx(db, "t8", "u_market", "o1", 3000, "PAYMENT", "Nakit ödeme", "23.07.2026 15:30")
-        // u_owner's OWN book: c3 = 0, c4 = 25,50, c5 = 210,00
-        tx(db, "t9", "u_owner", "c3", 8000, "DEBT", "Kahvaltılık", "15.07.2026 08:30")
-        tx(db, "t10", "u_owner", "c3", 8000, "PAYMENT", "Kart ile ödeme", "19.07.2026 12:00")
-        tx(db, "t11", "u_owner", "c4", 2550, "DEBT", "Çay, şeker", "23.07.2026 08:45")
-        tx(db, "t12", "u_owner", "c5", 31000, "DEBT", "Toplu alışveriş", "10.07.2026 17:30")
-        tx(db, "t13", "u_owner", "c5", 10000, "PAYMENT", "Kısmi ödeme", "20.07.2026 14:10")
+        tx(db, "t7", "u_market", "o1", 9000, "DEBT", "Kırtasiye", "2026-07-16T07:00:00Z")
+        tx(db, "t8", "u_market", "o1", 3000, "PAYMENT", "Nakit ödeme", "2026-07-23T12:30:00Z")
+        // u_owner's OWN book:1 c3 = 0, c4 = 25,50, c5 = 210,00
+        tx(db, "t9", "u_owner", "c3", 8000, "DEBT", "Kahvaltılık", "2026-07-15T05:30:00Z")
+        tx(db, "t10", "u_owner", "c3", 8000, "PAYMENT", "Kart ile ödeme", "2026-07-19T09:00:00Z")
+        tx(db, "t11", "u_owner", "c4", 2550, "DEBT", "Çay, şeker", "2026-07-23T05:45:00Z")
+        tx(db, "t12", "u_owner", "c5", 31000, "DEBT", "Toplu alışveriş", "2026-07-10T14:30:00Z")
+        tx(db, "t13", "u_owner", "c5", 10000, "PAYMENT", "Kısmi ödeme", "2026-07-20T11:10:00Z")
 
         // One pending approval per demo account, so the Onaylar tab is never empty.
         approval(db, "p1", "u_owner", "Ahmet Bakkal", "u1", "c1", 5000, "DEBT",
-            "Ekmek, süt", "25.07.2026 10:05")
+            "Ekmek, süt", "2026-07-25T07:05:00Z")
         approval(db, "p2", "u_market", "Ayşe Market", "u_owner", "o1", 7500, "DEBT",
-            "Temizlik malzemesi", "25.07.2026 11:20")
+            "Temizlik malzemesi", "2026-07-25T08:20:00Z")
     }
 
     private fun user(
@@ -114,7 +119,7 @@ internal class SeedCallback(private val context: Context) : RoomDatabase.Callbac
         put("customerId", id); put("displayName", name); put("phone", phone)
         put("claimStatus", claim)
         if (claimedBy == null) putNull("claimedByUserId") else put("claimedByUserId", claimedBy)
-        put("createdAt", "01.07.2026 09:00")
+        put("createdAt", "2026-07-01T06:00:00Z")
     })
 
     private fun tx(

@@ -1,0 +1,447 @@
+package com.example.app_pos.data.local
+
+import androidx.room.withTransaction
+import com.example.app_pos.data.ApprovalService
+import com.example.app_pos.data.db.AppDatabase
+import com.example.app_pos.data.db.entity.CustomerEntity
+import com.example.app_pos.data.db.entity.OutboxEntity
+import com.example.app_pos.data.db.toDomain
+import com.example.app_pos.data.db.toEntity
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.ClaimStatus
+import com.example.app_pos.model.Customer
+import com.example.app_pos.model.CustomerLookup
+import com.example.app_pos.model.DecisionOutcome
+import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PAYMENT_DESCRIPTION
+import com.example.app_pos.model.PhoneFormat
+import com.example.app_pos.model.Repository
+import com.example.app_pos.model.SellerDebt
+import com.example.app_pos.model.SignInResult
+import com.example.app_pos.model.SyncOutcome
+import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionType
+import com.example.app_pos.model.User
+import com.example.app_pos.model.balanceOf
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import java.util.UUID
+
+/**
+ * Room-backed storage: everything the app keeps on the device.
+ *
+ * What persists: users, customers, the append-only ledger, approvals, and the outbox.
+ * Balances are never stored; they are summed from the ledger (DAO SUM or the pure balanceOf).
+ *
+ * The session members here are a RAM-only stub that [com.example.app_pos.data.OfflineFirstRepository]
+ * OVERRIDES with the persisted TokenStore. They stay because this type implements the whole
+ * [Repository] surface — which is what lets a JVM test swap it in without Room — but nothing
+ * in the running app reads them.
+ */
+class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
+
+    private val users = db.userDao()
+    private val customers = db.customerDao()
+    private val transactions = db.transactionDao()
+    private val approvals = db.approvalDao()
+    private val outbox = db.outboxDao()
+
+    // --- session + pairing (RAM stub — the composing repository overrides these) ----
+
+    private data class Session(val userId: String, val token: String, val expiresAt: Long)
+    private val session = MutableStateFlow<Session?>(null)
+    private val _isPairedWithApp = MutableStateFlow(false)
+    override val isPairedWithApp: Flow<Boolean> = _isPairedWithApp.asStateFlow()
+
+    override fun isSessionValid(): Boolean =
+        session.value?.let { it.expiresAt > System.currentTimeMillis() } == true
+
+    override fun currentUserId(): String? =
+        session.value?.takeIf { it.expiresAt > System.currentTimeMillis() }?.userId
+
+    /** No local OTP: only the server can send one. Always false here. */
+    override suspend fun requestOtp(phone: String): Boolean = false
+
+    /**
+     * Storage cannot verify a code — that is the server's job. Reports the number as
+     * unregistered so a caller that reached this stub fails loudly rather than appearing
+     * to sign someone in.
+     */
+    override suspend fun signIn(phone: String, code: String): SignInResult =
+        SignInResult.NeedsRegister
+
+    override suspend fun logout() {
+        session.value = null
+        _isPairedWithApp.value = false
+    }
+
+    override suspend fun pairWithApp() {
+        _isPairedWithApp.value = true
+    }
+
+    override fun observeCurrentUser(): Flow<User?> =
+        // Re-query whenever the user table or the session changes, so a profile edit or
+        // a login/logout is reflected live (mirrors FakeRepository's combine).
+        combine(users.observeAll(), session) { list, s ->
+            val valid = s != null && s.expiresAt > System.currentTimeMillis()
+            if (!valid) null else list.firstOrNull { it.userId == s!!.userId }?.toDomain()
+        }
+
+    // --- users / profile -----------------------------------------------------
+
+    override fun observeAllUsers(): Flow<List<User>> =
+        users.observeAll().map { list -> list.map { it.toDomain() } }
+
+    override suspend fun upsertUser(user: User) = users.upsert(user.toEntity())
+
+    override suspend fun findUserByPhone(phone: String): User? =
+        users.findByPhone(storedPhone(phone))?.toDomain()
+
+    override suspend fun registerUser(phone: String, displayName: String, isSeller: Boolean): User {
+        findUserByPhone(phone)?.let { return it }
+        val user = User(
+            userId = UUID.randomUUID().toString(),
+            phone = storedPhone(phone),
+            displayName = displayName.trim(),
+            isBuyer = true,
+            isSeller = isSeller,
+            email = null,
+            sellerInfo = null,
+            createdAt = nowStamp()
+        )
+        users.insert(user.toEntity())
+        return user
+    }
+
+    override suspend fun setSeller(userId: String, shopName: String, shopPhone: String?) {
+        val existing = users.findById(userId) ?: return
+        users.update(existing.copy(isSeller = true, shopName = shopName.trim(), shopPhone = shopPhone))
+    }
+
+    override suspend fun updateShopName(userId: String, shopName: String) {
+        // Keeps any existing shopPhone (unlike setSeller, which replaces the whole info).
+        val existing = users.findById(userId) ?: return
+        users.update(existing.copy(isSeller = true, shopName = shopName.trim()))
+    }
+
+    override suspend fun updateDisplayName(userId: String, displayName: String) {
+        val existing = users.findById(userId) ?: return
+        users.update(existing.copy(displayName = displayName.trim()))
+    }
+
+    override suspend fun updateEmail(userId: String, email: String) {
+        val existing = users.findById(userId) ?: return
+        users.update(existing.copy(email = email.trim().ifBlank { null }))
+    }
+
+    override suspend fun shopNameOf(sellerId: String): String =
+        users.findById(sellerId)?.shopName ?: sellerId
+
+    override suspend fun shopPhoneOf(sellerId: String): String? =
+        users.findById(sellerId)?.shopPhone
+
+    // --- claim ---------------------------------------------------------------
+
+    override suspend fun claimCustomerForUser(userId: String, phone: String): List<Customer> {
+        // Both sides canonical: the stored column is E.164 and so is this argument, so the
+        // comparison is a plain equality. Comparing loosely-normalised digits here is what
+        // used to make the claim miss every row without saying so.
+        customers.claimByPhone(userId, storedPhone(phone))
+        // The claimed records carry no balance here: the claim is seller-independent
+        // (it links an identity), and every screen derives balances per seller anyway.
+        return customers.claimedBy(userId).map { it.toDomain(0L) }
+    }
+
+    // --- customers (seller-scoped) -------------------------------------------
+
+    override fun observeCustomers(sellerId: String): Flow<List<Customer>> =
+        // Balance each listed customer against this seller's ledger. Kept reactive by
+        // combining the seller's customer rows with the whole ledger.
+        combine(customers.observeForSeller(sellerId), transactions.observeAll()) { rows, ledgerRaw ->
+            val ledger = ledgerRaw.map { it.toDomain() }
+            rows.map { it.toDomain(balanceOf(sellerId, it.customerId, ledger)) }
+        }
+
+    override suspend fun addCustomer(displayName: String, phone: String): String {
+        val id = UUID.randomUUID().toString()
+        customers.insert(
+            CustomerEntity(
+                customerId = id,
+                displayName = displayName.trim(),
+                phone = storedPhone(phone),
+                claimStatus = ClaimStatus.UNCLAIMED.name,
+                claimedByUserId = null,
+                createdAt = nowStamp()
+            )
+        )
+        return id
+    }
+
+    override suspend fun findCustomerById(sellerId: String, customerId: String): Customer? {
+        val row = customers.findById(customerId) ?: return null
+        return row.toDomain(balanceOfCustomer(sellerId, customerId))
+    }
+
+    override suspend fun findCustomerByPhone(sellerId: String, phone: String): Customer? {
+        val row = customers.findByPhone(storedPhone(phone)) ?: return null
+        return row.toDomain(balanceOfCustomer(sellerId, row.customerId))
+    }
+
+    override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup {
+        val stored = storedPhone(phone)
+        val row = customers.findByPhone(stored) ?: return CustomerLookup.New
+        val existing = row.toDomain(balanceOfCustomer(sellerId, row.customerId))
+        // Mine = we already share at least one ledger entry. Otherwise the person is
+        // simply known to another shop, and this seller may add them to their own book.
+        return if (customers.countForSellerByPhone(sellerId, stored) > 0) {
+            CustomerLookup.AlreadyMine(existing)
+        } else {
+            CustomerLookup.KnownToOtherSeller(existing)
+        }
+    }
+
+    // --- ledger (seller-scoped) ----------------------------------------------
+
+    override fun observeTransactions(sellerId: String, customerId: String): Flow<List<Transaction>> =
+        transactions.observeForSellerCustomer(sellerId, customerId).map { list -> list.map { it.toDomain() } }
+
+    override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> =
+        transactions.observeTotalReceivable(sellerId)
+
+    // --- ledger (buyer-scoped) -----------------------------------------------
+
+    override fun observeMyDebtsBySeller(userId: String): Flow<List<SellerDebt>> =
+        transactions.observeDebtsBySeller(userId).map { rows ->
+            // Sorted here rather than in SQL so the shop-name fallback and the ordering
+            // stay in one place (mirrors the fake's sortedByDescending).
+            rows.map { it.toDomain() }.sortedByDescending { it.balanceMinor }
+        }
+
+    override fun observeMyTotalDebtMinor(userId: String): Flow<Long> =
+        transactions.observeBuyerTotalDebt(userId)
+
+    override fun observeMyTransactions(userId: String, sellerId: String): Flow<List<Transaction>> =
+        transactions.observeForBuyerSeller(userId, sellerId).map { list -> list.map { it.toDomain() } }
+
+    override fun observeMyBalanceWithSeller(userId: String, sellerId: String): Flow<Long> =
+        transactions.observeBuyerBalanceWithSeller(userId, sellerId)
+
+    // --- approvals -----------------------------------------------------------
+
+    override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> =
+        approvals.observePendingFor(userId).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun approvePending(approvalId: String): DecisionOutcome {
+        val approval = approvals.findById(approvalId) ?: return DecisionOutcome.AlreadyDecided
+        addTransaction(
+            Transaction(
+                transactionId = UUID.randomUUID().toString(),
+                sellerId = approval.sellerId,
+                // The record the request was raised against — not re-resolved here, so
+                // the entry always lands in the same book the requester intended.
+                customerId = approval.customerId,
+                amountMinor = approval.amountMinor,
+                type = TransactionType.valueOf(approval.type),
+                description = approval.description.orEmpty(),
+                createdAt = nowStamp()
+            )
+        )
+        // Decided rows are kept (status change, not delete) so the trail survives; the
+        // pending query filters on status, so the buyer's list looks the same as before.
+        approvals.setStatus(approvalId, "APPROVED")
+        return DecisionOutcome.Applied
+    }
+
+    override suspend fun markApprovalDecided(approvalId: String, status: String) {
+        approvals.setStatus(approvalId, status)
+    }
+
+    override suspend fun deleteApproval(approvalId: String) {
+        approvals.delete(approvalId)
+    }
+
+    override suspend fun insertPendingApproval(approval: PendingApproval, initiatorUserId: String) {
+        approvals.insert(approval.toEntity(initiatorUserId))
+    }
+
+    override suspend fun customerIdForBuyerSeller(userId: String, sellerId: String): String? =
+        transactions.customerIdForBuyerSeller(userId, sellerId)
+
+    override suspend fun rejectPending(approvalId: String): DecisionOutcome {
+        approvals.setStatus(approvalId, "REJECTED")
+        return DecisionOutcome.Applied
+    }
+
+    override suspend fun requestApproval(
+        fromUserId: String,
+        sellerId: String,
+        customerId: String,
+        amountMinor: Long,
+        type: TransactionType,
+        description: String
+    ): ApprovalOutcome {
+        // Reports the miss instead of returning silently: a caller that got Unit here could
+        // not tell "written" from "nothing happened", and the payment screen said success
+        // either way.
+        val row = customers.findById(customerId) ?: return ApprovalOutcome.NoCustomerRecord
+        ApprovalService.requestApproval(fromUserId, row.phone, amountMinor, type.name)
+
+        // The COUNTERPARTY approves, never the initiator — that is the whole point of the
+        // gate. Which side that is depends on who started it: a seller writing to their
+        // book needs the customer's approval; a buyer paying needs the seller's (they
+        // confirm receipt). Deriving it from the customer record alone would send a
+        // buyer-initiated payment back to the buyer.
+        val approverUserId =
+            if (fromUserId == sellerId) row.claimedByUserId   // seller → the customer
+            else sellerId                                     // buyer  → the shop
+        if (approverUserId != null) {
+            // Has the app: raise a pending approval; nothing reaches the ledger yet.
+            // The card names the OTHER side, so it reads right whichever way it points.
+            val counterpartyName =
+                if (fromUserId == sellerId) shopNameOf(sellerId) else row.displayName
+            approvals.insert(
+                PendingApproval(
+                    approvalId = UUID.randomUUID().toString(),
+                    sellerId = sellerId,
+                    counterpartyName = counterpartyName,
+                    approverUserId = approverUserId,
+                    customerId = customerId,
+                    amountMinor = amountMinor,
+                    type = type,
+                    description = description,
+                    requestedAt = nowStamp()
+                ).toEntity(initiatorUserId = fromUserId)
+            )
+            return ApprovalOutcome.SentForApproval
+        }
+
+        // No app (UNCLAIMED): SMS-OTP case, mocked true → write immediately.
+        //
+        // Only reached OFFLINE now. When the server is reachable the composing repository
+        // applies ITS branch instead, because this one reads a local claimedByUserId that
+        // can be stale — and a stale null wrote entries straight to the ledger with no
+        // approval at all.
+        addTransaction(
+            Transaction(
+                transactionId = UUID.randomUUID().toString(),
+                sellerId = sellerId,
+                customerId = customerId,
+                amountMinor = amountMinor,
+                type = type,
+                description = description,
+                createdAt = nowStamp()
+            )
+        )
+        return ApprovalOutcome.WrittenImmediately
+    }
+
+    override suspend fun initiatePayment(
+        userId: String,
+        sellerId: String,
+        amountMinor: Long
+    ): ApprovalOutcome {
+        // No shared record with this seller means there is nothing to pay against; the
+        // caller reports that rather than guessing at another shop's record.
+        val customerId = transactions.customerIdForBuyerSeller(userId, sellerId)
+            ?: return ApprovalOutcome.NoCustomerRecord
+        // Returns what the approval actually did, instead of the unconditional `true` that
+        // let the screen announce a payment nothing had recorded.
+        return requestApproval(
+            fromUserId = userId,
+            sellerId = sellerId,
+            customerId = customerId,
+            amountMinor = amountMinor,
+            type = TransactionType.PAYMENT,
+            description = PAYMENT_DESCRIPTION
+        )
+    }
+
+    /**
+     * Books a ledger entry WITHOUT queueing it — the plain contract method.
+     *
+     * Used by the approval path, which reaches the server through /approvals rather than
+     * through the outbox: by the time an approval is granted the server has already written
+     * its own copy, so queueing a second send would book the entry twice.
+     */
+    override suspend fun addTransaction(transaction: Transaction) {
+        transactions.insert(transaction.toEntity())
+    }
+
+    // --- the offline outbox --------------------------------------------------
+
+    override suspend fun addTransactionQueued(transaction: Transaction, sendPayload: String) {
+        // ONE transaction for both writes. Written separately, a process death in between
+        // would leave either an entry the server never hears about, or a queued send for an
+        // entry that was never booked — and neither is detectable afterwards.
+        db.withTransaction {
+            transactions.insert(transaction.toEntity())
+            outbox.insert(
+                OutboxEntity(
+                    // The transaction id IS the queue id, which is what makes enqueueing
+                    // idempotent (see OutboxDao.insert) and matches the Idempotency-Key the
+                    // send will carry.
+                    id = transaction.transactionId,
+                    transactionId = transaction.transactionId,
+                    payload = sendPayload,
+                    createdAt = transaction.createdAt,
+                    retryCount = 0
+                )
+            )
+        }
+    }
+
+    override suspend fun pendingOutbox(): List<OutboxEntity> = outbox.all()
+
+    override suspend fun deleteOutbox(id: String) = outbox.delete(id)
+
+    override suspend fun recordOutboxFailure(id: String) = outbox.recordFailure(id)
+
+    /** How many writes are unsent; drives a sync indicator later. */
+    override fun observeUnsentCount(): Flow<Int> = outbox.observeCount()
+
+    /**
+     * Storage does not reach the network, so there is nothing to drain here. The composing
+     * repository delegates to SyncEngine instead.
+     */
+    override suspend fun syncNow(): SyncOutcome = SyncOutcome()
+
+    // --- helpers -------------------------------------------------------------
+
+    private suspend fun balanceOfCustomer(sellerId: String, customerId: String): Long {
+        // A one-shot balance for a point read (find*). Reactive reads use the DAO SUM Flow.
+        val ledger = transactions.allOnce().map { it.toDomain() }
+        return balanceOf(sellerId, customerId, ledger)
+    }
+
+    /**
+     * The one conversion used for BOTH storing and querying, delegated to [PhoneFormat] so
+     * this layer cannot drift from it.
+     *
+     * A number the canonical form rejects (not a valid TR number) falls back to its bare
+     * digits. That keeps an odd entry storable and findable — but only by an identical odd
+     * entry, since the fallback is applied on both sides too.
+     */
+    private fun storedPhone(input: String): String =
+        PhoneFormat.toStored(input) ?: input.filter { it.isDigit() }
+
+    // SimpleDateFormat rather than java.time because minSdk is 24 and core library
+    // desugaring is deliberately not enabled (see the module build file).
+    private fun nowStamp(): String = isoFormat().format(java.util.Date())
+
+    private companion object {
+        const val SESSION_TTL_MILLIS = 7L * 24 * 60 * 60 * 1000
+
+        /**
+         * A new formatter per call: SimpleDateFormat is not thread-safe and writes here
+         * arrive on whichever coroutine dispatcher the caller used. Locale.ROOT keeps the
+         * digits ASCII regardless of the device locale.
+         */
+        fun isoFormat(): java.text.SimpleDateFormat =
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.ROOT).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }
+    }
+}

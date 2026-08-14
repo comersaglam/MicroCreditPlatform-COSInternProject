@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".App"
         android:allowBackup="true"
@@ -9,6 +11,7 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Appmobile">
@@ -24,6 +27,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          Removes WorkManager's own on-startup initializer.
+
+          WorkManager initialises itself through androidx.startup unless told otherwise, and
+          that default instance is built BEFORE App.onCreate — with the stock worker factory,
+          which cannot construct an @HiltWorker (it has injected constructor parameters).
+          The result is a runtime "could not instantiate SyncWorker", not a build error.
+
+          With the initializer removed, WorkManager instead reads App's Configuration.Provider
+          on first use, which supplies Hilt's factory. This node="remove" IS the wiring — it is
+          not an optimisation.
+        -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
     </application>
 
 </manifest>

@@ -23,9 +23,8 @@ import kotlinx.coroutines.flow.stateIn
  * overview belongs to the dashboard.
  *
  * Customers come from the repository as a Flow, so balances shown at selection
- * are current. The "type before anything shows" rule lives here rather than in
- * the fragment, so it can be unit tested and the fragment only renders what it
- * is given.
+ * are current. The filtering rule lives here rather than in the fragment, so it
+ * can be unit tested and the fragment only renders what it is given.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -43,16 +42,18 @@ class CustomerSelectViewModel @Inject constructor(
             if (user == null) flowOf(emptyList()) else repo.observeCustomers(user.userId)
         }
 
-    /** Customers matching the current query; empty until the merchant types. */
+    /** The seller's customers, narrowed by whatever has been typed. */
     val matches: StateFlow<List<Customer>> =
         combine(sellerCustomers, _query) { all, q ->
-            // A blank query means "no search yet", not "match everything" — showing
-            // the full list here is exactly the mix-up this screen was built to fix.
-            if (q.isEmpty()) {
-                emptyList()
-            } else {
-                all.filter { it.displayName.contains(q, ignoreCase = true) }
-            }
+            // A blank query shows the WHOLE book, and typing narrows it.
+            //
+            // This used to return an empty list until the merchant typed, on the reasoning
+            // that a full list invites tapping the wrong row. In practice it did the
+            // opposite: arriving from a mock-pos handoff, the merchant faced a blank screen
+            // and had to type a name from memory — guessing, with no way to check a
+            // spelling. Seeing the names is what actually prevents picking the wrong one.
+            if (q.isEmpty()) all
+            else all.filter { it.displayName.contains(q, ignoreCase = true) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // "Add '<name>' as a new customer" is offered whenever something is typed;

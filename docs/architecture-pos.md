@@ -4,7 +4,7 @@
 > - [architecture-pos.svg](architecture-pos.svg) — katmanlı mimari (sistem + app-pos içi)
 > - [flow-pos.svg](flow-pos.svg) — veresiye ödeme akışı (Flow A: POS, Flow B: müşteri)
 >
-> Kaynak tasarım: [../veresiye-platform-tasarim.txt](../veresiye-platform-tasarim.txt)
+> Kaynak tasarım: [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md)
 
 ---
 
@@ -411,6 +411,18 @@ için app-mobile backend'den ÖNCE):**
    app-mobile'da ek olarak: **approvals AKTİF** (Onaylar sekmesi), buyer-scoped okumalar (JOIN'li
    `observeDebtsBySeller`), `CustomerLookup` 3-dallı müşteri ekleme (FAB → dialog → detay).
    Tarih sıralama bug'ı iki projede de düzeltildi (`createdAt` metni gün-önce sıralıyordu).
-4. **Backend:** `:core-network` (Retrofit) + Sync + mock server (Prism, openapi'dan hazır) →
-   gerçek backend (Docker DB + endpoint'ler) + OTP'yi gerçeğe bağlama. Üç-hat onay UI dikeyi de burada/ayrı tur.
-5. Regülasyon (KVKK/PCI) — canlı öncesi gate.
+4. **FAZ 4 — ağ + sync:** ✓ **YAPILDI (Tur 25–28)** — `:core-network` (Retrofit + DTO + mapper),
+   Hilt, diske yazılan session (`TokenStore`), outbox + `SyncEngine`, WorkManager ile arka plan
+   drain. Yazma yolu uçtan uca: veresiye Room'a düşer, kuyruğa girer, sunucuya gider.
+5. **FAZ 5 — backend:** ✓ **YAPILDI (Tur 29–34)** — Python 3.12 + FastAPI + PostgreSQL 16 +
+   Docker Compose. Contract'ın **Bölüm A'sının tamamı canlı (22 uç)**, `future` etiketliler
+   bilinçli olarak yazılmadı. **137 pytest.** Dört taşıyıcı kural sunucuda da geçerli: bakiye
+   `SUM` ile **türetilir** (`balanceOf` ile birebir), `transactions` **append-only** (DB
+   trigger'ı), idempotency **üç yollu** (201 / 200 replay / **409** çakışma), `seller_id`
+   **token'dan**. app-pos bağlandı: `login()` mock'u silindi, giriş telefon+OTP iki adımı,
+   oturum gerçek JWT. Plan ve §0 kararları: [faz5-backend-plan.md](faz5-backend-plan.md);
+   çalıştırma: [`backend/README.md`](../backend/README.md).
+   **Cihaz testi bekliyor** ([deferred.md §E](deferred.md)).
+6. **app-mobile mirror:** `:core-network` + outbox + WorkManager kopyası + ISO timestamp geçişi;
+   buyer/approval uçları gerçek backend'e bağlanır (sunucu tarafı hazır).
+7. Regülasyon (KVKK/PCI) — canlı öncesi gate.

@@ -9,6 +9,7 @@ import com.example.app_mobile.R
 import com.example.app_mobile.databinding.ItemTransactionBinding
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
+import com.example.app_mobile.util.toDisplayDateTime
 import com.example.app_mobile.util.toTlString
 
 /** Renders the buyer's ledger entries with one seller, newest first. Copied from
@@ -20,7 +21,8 @@ class TransactionAdapter :
 
         fun bind(transaction: Transaction) = with(binding) {
             txDescription.text = transaction.description
-            txDate.text = transaction.createdAt
+            // Stored as ISO-8601 UTC; shown in the device's own time zone.
+            txDate.text = transaction.createdAt.toDisplayDateTime()
 
             // Stored amount is always positive; the sign comes from the entry type.
             val isDebt = transaction.type == TransactionType.DEBT

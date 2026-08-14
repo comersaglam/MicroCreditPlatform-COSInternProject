@@ -2,9 +2,11 @@ package com.example.app_mobile.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.app_pos.data.RepositoryProvider
-import com.example.app_mobile.data.OtpService
-import com.example.app_mobile.util.PhoneFormat
+import com.example.app_pos.model.Repository
+import com.example.app_pos.model.SignInResult
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import com.example.app_pos.model.PhoneFormat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,79 +14,146 @@ import kotlinx.coroutines.launch
 
 /**
  * Where the sign-in is in its lifecycle.
- * NEEDS_REGISTER: a valid but unregistered number — the screen asks to confirm
- * registration, then register() creates the account and signs in.
+ *
+ * CODE_SENT: the server accepted the number and sent a code — the screen swaps the phone
+ * field for the code field. NEEDS_REGISTER: the SERVER reported the number has no account,
+ * so the screen offers to create one.
  */
-enum class LoginState { IDLE, SUBMITTING, SUCCESS, ERROR, NEEDS_REGISTER }
+enum class LoginState { IDLE, SUBMITTING, CODE_SENT, SUCCESS, ERROR, NEEDS_REGISTER }
 
 /**
- * The customer sign-in — telefon + OTP (mock).
+ * The customer sign-in — phone, then the code the server sent.
  *
- * A registered phone signs in; an unknown but valid number offers registration
- * (as a BUYER — the whole difference from app-pos, which registers a seller). The
- * OTP request/verify is mocked (OtpService) but the calls are real, so the backend
- * slots in later without changing this screen. On success the account CLAIMS any
- * merchant records for its number (inherits old debt).
+ * One screen, two steps, mirroring app-pos's Turn 34 login. The account it creates is a
+ * BUYER (isSeller = false) — the whole difference from app-pos, which registers a seller.
+ * On success the account CLAIMS any merchant records holding its number, which is how a
+ * customer inherits debt a shop wrote before they had the app.
+ *
+ * Every decision here is the SERVER's: whether the code is right, and whether the number
+ * has an account at all. There is deliberately no local findUserByPhone check first — on a
+ * fresh install Room is empty, so asking it would send even an existing customer to the
+ * sign-up prompt (the exact bug app-pos hit in Turn 34).
  */
-class LoginViewModel : ViewModel() {
-
-    private val repo = RepositoryProvider.instance
+@HiltViewModel
+class LoginViewModel @Inject constructor(
+    private val repo: Repository
+) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginState.IDLE)
     val state: StateFlow<LoginState> = _state.asStateFlow()
 
+    /** Set once the code is on its way, and needed by every step after. */
     private var pendingPhone: String? = null
     val pendingPhoneDisplay: String? get() = pendingPhone
 
-    /** Registered phone → sign in; valid-but-unknown → register; invalid → error. */
-    fun login(phone: String?) {
+    /** A message for the ERROR state, when the server explained itself. */
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    /** True once a code has come back wrong, so the code step can say so. */
+    private val _codeRejected = MutableStateFlow(false)
+    val codeRejected: StateFlow<Boolean> = _codeRejected.asStateFlow()
+
+    /** Step 1: ask the server to text a code to this number. */
+    fun requestCode(phone: String?) {
         val stored = phone?.let { PhoneFormat.toStored(it) }
         if (stored == null) {
+            _errorMessage.value = null   // a malformed number needs no server explanation
             _state.value = LoginState.ERROR
             return
         }
         _state.value = LoginState.SUBMITTING
         viewModelScope.launch {
-            // Mock OTP round trip (backend-ready). Real flow adds a code-entry screen.
-            OtpService.requestOtp(stored)
-            OtpService.verifyOtp(stored, code = "000000")
-            if (repo.findUserByPhone(stored) != null) {
-                _state.value = if (signIn(stored)) LoginState.SUCCESS else LoginState.ERROR
-            } else {
+            if (repo.requestOtp(stored)) {
                 pendingPhone = stored
-                _state.value = LoginState.NEEDS_REGISTER
+                _codeRejected.value = false
+                _state.value = LoginState.CODE_SENT
+            } else {
+                // Unreachable, or the server refused the number outright.
+                _errorMessage.value = null
+                _state.value = LoginState.ERROR
             }
         }
     }
 
-    /** Confirms registration of the pending number: create a BUYER, then sign in. */
-    fun register() {
+    /**
+     * Step 2: verify the code.
+     *
+     * The four outcomes are kept apart because they need different things from the user: a
+     * wrong code is retyped on this screen, an unknown number becomes an offer to register,
+     * and an unreachable server is nobody's mistake and should say so rather than reading
+     * as "wrong code".
+     */
+    fun submitCode(code: String) {
+        val phone = pendingPhone ?: return
+        _state.value = LoginState.SUBMITTING
+        viewModelScope.launch {
+            _state.value = when (val result = repo.signIn(phone, code)) {
+                is SignInResult.Success -> {
+                    claimRecords(phone)
+                    LoginState.SUCCESS
+                }
+                is SignInResult.NeedsRegister -> LoginState.NEEDS_REGISTER
+                is SignInResult.InvalidCode -> {
+                    // Stay on the code step so the user can simply retype it, but say WHY —
+                    // otherwise the screen looks identical to the code having just been sent.
+                    _codeRejected.value = true
+                    LoginState.CODE_SENT
+                }
+                is SignInResult.Unreachable -> {
+                    _errorMessage.value = null
+                    LoginState.ERROR
+                }
+                is SignInResult.Failed -> {
+                    _errorMessage.value = result.message
+                    LoginState.ERROR
+                }
+            }
+        }
+    }
+
+    /**
+     * Confirms registration of the pending number: create a BUYER, then sign in.
+     *
+     * Signs in with the same code the user already entered — the server keeps it valid for
+     * the whole exchange, so making them wait for a second SMS would be friction with no
+     * security gain.
+     */
+    fun register(code: String) {
         val phone = pendingPhone ?: return
         _state.value = LoginState.SUBMITTING
         viewModelScope.launch {
             // app-mobile registers a buyer (isSeller = false); name fills in from profile.
             repo.registerUser(phone, displayName = "", isSeller = false)
-            signIn(phone)
-            pendingPhone = null
-            _state.value = LoginState.SUCCESS
+            _state.value = if (repo.signIn(phone, code) is SignInResult.Success) {
+                claimRecords(phone)
+                LoginState.SUCCESS
+            } else {
+                LoginState.ERROR
+            }
         }
     }
 
     fun cancelRegister() {
         pendingPhone = null
+        _errorMessage.value = null
+        _codeRejected.value = false
         _state.value = LoginState.IDLE
     }
 
-    /** Opens the session and claims this number's merchant records (old debt).
-     *  Suspend because both calls hit the database; both callers already run in
-     *  viewModelScope. */
-    private suspend fun signIn(phone: String): Boolean {
-        val ok = repo.login(phone)
-        if (ok) {
-            repo.currentUserId()?.let { userId ->
-                repo.claimCustomerForUser(userId, phone)
-            }
-        }
-        return ok
+    /** Back to the phone step, e.g. the number was mistyped. */
+    fun editPhone() {
+        pendingPhone = null
+        _errorMessage.value = null
+        _codeRejected.value = false
+        _state.value = LoginState.IDLE
+    }
+
+    /**
+     * Links every UNCLAIMED customer record holding this number to the new session, which
+     * is how a customer inherits debt written before they had the app.
+     */
+    private suspend fun claimRecords(phone: String) {
+        repo.currentUserId()?.let { userId -> repo.claimCustomerForUser(userId, phone) }
     }
 }

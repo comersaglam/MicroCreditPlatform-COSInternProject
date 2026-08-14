@@ -14,7 +14,9 @@ import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.example.app_mobile.R
-import com.example.app_pos.data.RepositoryProvider
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import com.example.app_mobile.databinding.FragmentDashboardBinding
 import kotlinx.coroutines.launch
 
@@ -27,12 +29,15 @@ import kotlinx.coroutines.launch
  * seller detail). Switching tabs never touches the outer back stack. Mirrors
  * app-pos's DashboardFragment.
  */
+@AndroidEntryPoint
 class DashboardFragment : Fragment() {
 
     private var _binding: FragmentDashboardBinding? = null
     private val binding get() = _binding!!
 
-    private val repo = RepositoryProvider.instance
+    // This fragment watches the user itself (to swap the bottom-nav menu when the seller
+    // role appears) rather than owning a ViewModel, so the repository is injected directly.
+    @Inject lateinit var repo: Repository
 
     override fun onCreateView(
         inflater: LayoutInflater,

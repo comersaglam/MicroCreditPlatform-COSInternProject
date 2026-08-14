@@ -6,7 +6,10 @@
     <string name="amount_to_charge">Yazılacak Tutar</string>
     <string name="connect_with_app">Uygulama ile bağlan</string>
     <string name="search_customer_hint">Müşteri adı yazın</string>
-    <string name="search_prompt">Müşteriyi aramak için isim yazın</string>
+    <!-- Shown when the list is empty with no search active: the book has nobody in it.
+         Replaces search_prompt ("type a name to search"), which stopped being true once a
+         blank query started showing the whole list. -->
+    <string name="no_customers_yet">Henüz müşteriniz yok. Ad yazıp yeni müşteri ekleyebilirsiniz.</string>
     <string name="msg_connect_mocked">QR/NFC ile bağlanma henüz eklenmedi</string>
     <string name="create_customer_label">“%1$s” adıyla yeni müşteri ekle</string>
 

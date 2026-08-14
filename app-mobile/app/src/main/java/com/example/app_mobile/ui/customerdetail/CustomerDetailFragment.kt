@@ -10,29 +10,29 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_mobile.R
-import com.example.app_pos.data.RepositoryProvider
+import com.example.app_mobile.util.message
 import com.example.app_mobile.databinding.FragmentCustomerDetailBinding
 import com.example.app_mobile.ui.sellerdetail.TransactionAdapter
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.TransactionType
 import com.example.app_mobile.util.toTlString
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
 
 /**
  * The seller's view of one customer: ledger history + balance, and two write actions
  * ([Veresiye Yaz] / [Ödeme Al]) that each open an amount popup and go through the
- * approval gate. Mirrors app-pos's CustomerDetailFragment (the factory pattern), but
+ * approval gate. Mirrors app-pos's CustomerDetailFragment, but
  * the write is a popup instead of the keypad sale flow.
  */
+@AndroidEntryPoint
 class CustomerDetailFragment : Fragment() {
 
     private var _binding: FragmentCustomerDetailBinding? = null
@@ -40,13 +40,9 @@ class CustomerDetailFragment : Fragment() {
 
     private val args: CustomerDetailFragmentArgs by navArgs()
 
-    private val viewModel: CustomerDetailViewModel by viewModels {
-        object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                CustomerDetailViewModel(args.customerId) as T
-        }
-    }
+    // No factory: Hilt builds the ViewModel and its SavedStateHandle carries `customerId`
+    // straight from the nav arguments.
+    private val viewModel: CustomerDetailViewModel by viewModels()
 
     private val adapter = TransactionAdapter()
 
@@ -101,12 +97,13 @@ class CustomerDetailFragment : Fragment() {
                 val amountMinor = (lira * 100).roundToLong()
                 if (amountMinor <= 0) return@setPositiveButton
                 val description = if (type == TransactionType.DEBT) "Veresiye" else "Ödeme"
-                viewModel.submit(type, amountMinor, description)
-                // Feedback matches the approval routing: app customer waits for approval,
-                // app-less customer is written immediately.
-                val msg = if (viewModel.isClaimed.value)
-                    R.string.detail_approval_sent else R.string.detail_written
-                Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
+                // Wait for the actual result instead of guessing from isClaimed: that flag
+                // starts false while its lookup is in flight, so a claimed customer was
+                // being told the entry had been written when it was awaiting approval.
+                viewModel.submit(type, amountMinor, description) { outcome ->
+                    val ctx = context ?: return@submit
+                    Toast.makeText(ctx, outcome.message(ctx), Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton(R.string.pay_dialog_negative, null)
             .show()

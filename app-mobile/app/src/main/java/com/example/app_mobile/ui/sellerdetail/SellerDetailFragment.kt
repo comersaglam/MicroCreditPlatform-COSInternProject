@@ -1,5 +1,6 @@
 package com.example.app_mobile.ui.sellerdetail
 
+import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
 import android.view.LayoutInflater
@@ -7,27 +8,29 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.Toast
+import androidx.core.net.toUri
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_mobile.R
+import com.example.app_mobile.util.message
 import com.example.app_mobile.databinding.FragmentSellerDetailBinding
 import com.example.app_mobile.util.toTlString
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
 
 /**
  * The buyer's history with one seller + a [Ödeme Yap] button that starts a payment.
- * Mirrors app-pos's CustomerDetailFragment (the ViewModelProvider.Factory pattern
- * for a constructor arg).
+ * Mirrors app-pos's CustomerDetailFragment; like it, the nav argument reaches the
+ * ViewModel through SavedStateHandle rather than a hand-written factory.
  */
+@AndroidEntryPoint
 class SellerDetailFragment : Fragment() {
 
     private var _binding: FragmentSellerDetailBinding? = null
@@ -35,13 +38,9 @@ class SellerDetailFragment : Fragment() {
 
     private val args: SellerDetailFragmentArgs by navArgs()
 
-    private val viewModel: SellerDetailViewModel by viewModels {
-        object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                SellerDetailViewModel(args.sellerId) as T
-        }
-    }
+    // No factory: Hilt builds the ViewModel and its SavedStateHandle carries `sellerId`
+    // straight from the nav arguments.
+    private val viewModel: SellerDetailViewModel by viewModels()
 
     private val adapter = TransactionAdapter()
 
@@ -72,11 +71,19 @@ class SellerDetailFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.shopPhone.collect { phone ->
-                    binding.detailShopPhone.text = phone
+                    // Labelled, so it cannot be mistaken for "where the payment goes".
+                    binding.detailShopPhone.text =
+                        getString(R.string.detail_shop_phone, phone)
                     // A shop may not have set a number; hide the row rather than
                     // leaving an empty line under the name.
                     binding.detailShopPhone.visibility =
                         if (phone.isBlank()) View.GONE else View.VISIBLE
+                    // Tapping calls the shop — the one useful thing to do with a number
+                    // on this screen. ACTION_DIAL only opens the dialer (no permission,
+                    // and the user still confirms).
+                    binding.detailShopPhone.setOnClickListener {
+                        startActivity(Intent(Intent.ACTION_DIAL, "tel:$phone".toUri()))
+                    }
                 }
             }
         }
@@ -106,12 +113,11 @@ class SellerDetailFragment : Fragment() {
                 val lira = input.text.toString().replace(',', '.').toDoubleOrNull() ?: return@setPositiveButton
                 val amountMinor = (lira * 100).roundToLong()
                 if (amountMinor > 0) {
-                    // Only report success once the request actually went out. The callback
-                    // arrives from viewModelScope, so guard against the view being gone.
-                    viewModel.pay(amountMinor) { sent ->
+                    // Say what actually happened. The callback arrives from viewModelScope,
+                    // so guard against the view being gone.
+                    viewModel.pay(amountMinor) { outcome ->
                         val ctx = context ?: return@pay
-                        val msg = if (sent) R.string.pay_done else R.string.pay_no_record
-                        Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(ctx, outcome.message(ctx), Toast.LENGTH_SHORT).show()
                     }
                 }
             }

@@ -15,15 +15,17 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_mobile.R
 import com.example.app_mobile.databinding.FragmentCustomersBinding
-import com.example.app_mobile.util.PhoneFormat
+import com.example.app_pos.model.PhoneFormat
 import com.example.app_mobile.util.toTlString
 import com.example.app_pos.model.Customer
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 /** Müşterilerim — the seller's customer list (only reachable once isSeller). */
+@AndroidEntryPoint
 class CustomersFragment : Fragment() {
 
     private var _binding: FragmentCustomersBinding? = null

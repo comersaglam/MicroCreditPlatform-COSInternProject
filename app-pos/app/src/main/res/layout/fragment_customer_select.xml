@@ -111,7 +111,7 @@
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="32dp"
         android:gravity="center"
-        android:text="@string/search_prompt"
+        android:text="@string/no_customers_yet"
         android:textColor="?attr/colorOnSurfaceVariant"
         app:layout_constraintBottom_toBottomOf="@id/matchList"
         app:layout_constraintEnd_toEndOf="parent"

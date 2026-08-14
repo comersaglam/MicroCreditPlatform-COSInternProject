@@ -13,7 +13,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_mobile.R
 import com.example.app_pos.model.PendingApproval
+import com.example.app_mobile.util.message
 import com.example.app_mobile.databinding.FragmentApprovalsBinding
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 /**
@@ -21,6 +23,7 @@ import kotlinx.coroutines.launch
  * into "as a seller" and "as a customer" sections, each row an Approve/Reject card
  * (no OTP code: an app-holding counterparty approves in-app).
  */
+@AndroidEntryPoint
 class ApprovalsFragment : Fragment() {
 
     private var _binding: FragmentApprovalsBinding? = null
@@ -55,14 +58,22 @@ class ApprovalsFragment : Fragment() {
         }
     }
 
+    // Both report what the server actually answered. Showing "approved" the moment the
+    // button is tapped is a guess, and it was wrong for any card the server refuses.
     private fun approve(approval: PendingApproval) {
-        viewModel.approve(approval.approvalId)
-        Toast.makeText(requireContext(), R.string.approval_approved, Toast.LENGTH_SHORT).show()
+        viewModel.approve(approval.approvalId) { outcome ->
+            val ctx = context ?: return@approve
+            Toast.makeText(ctx, outcome.message(ctx, R.string.approval_approved), Toast.LENGTH_SHORT)
+                .show()
+        }
     }
 
     private fun reject(approval: PendingApproval) {
-        viewModel.reject(approval.approvalId)
-        Toast.makeText(requireContext(), R.string.approval_rejected, Toast.LENGTH_SHORT).show()
+        viewModel.reject(approval.approvalId) { outcome ->
+            val ctx = context ?: return@reject
+            Toast.makeText(ctx, outcome.message(ctx, R.string.approval_rejected), Toast.LENGTH_SHORT)
+                .show()
+        }
     }
 
     override fun onDestroyView() {

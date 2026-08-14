@@ -3,7 +3,10 @@ package com.example.app_mobile.ui.approvals
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app_mobile.R
-import com.example.app_pos.data.RepositoryProvider
+import com.example.app_pos.model.DecisionOutcome
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.TransactionType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -25,9 +28,10 @@ import kotlinx.coroutines.launch
  * TODO(FAZ 4): a WorkManager background poll refreshes this while the app is closed.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class ApprovalsViewModel : ViewModel() {
-
-    private val repo = RepositoryProvider.instance
+@HiltViewModel
+class ApprovalsViewModel @Inject constructor(
+    private val repo: Repository
+) : ViewModel() {
 
     val items: StateFlow<List<ApprovalListItem>> =
         repo.observeCurrentUser().flatMapLatest { user ->
@@ -87,15 +91,20 @@ class ApprovalsViewModel : ViewModel() {
         if (isSeller) repo.findCustomerById(userId, customerId)?.phone.orEmpty()
         else repo.shopPhoneOf(sellerId).orEmpty()
 
-    /** Approve → the entry is written to the ledger (single write point). The repo call
-     *  is suspend now (it hits the database), so it runs in viewModelScope; the list is
-     *  a Flow, so the card disappears on its own once the row is decided. */
-    fun approve(approvalId: String) {
-        viewModelScope.launch { repo.approvePending(approvalId) }
+    /**
+     * Approve → the entry is written to the ledger (single write point).
+     *
+     * [onResult] carries what the SERVER said, because not every answer is a success and
+     * the differences matter: a card addressed to someone else can never be approved, and
+     * telling the user "approved" for it would be a lie. The list is a Flow, so the card
+     * disappears on its own once the row is decided or dropped.
+     */
+    fun approve(approvalId: String, onResult: (DecisionOutcome) -> Unit) {
+        viewModelScope.launch { onResult(repo.approvePending(approvalId)) }
     }
 
     /** Reject → the request is closed, nothing written. */
-    fun reject(approvalId: String) {
-        viewModelScope.launch { repo.rejectPending(approvalId) }
+    fun reject(approvalId: String, onResult: (DecisionOutcome) -> Unit) {
+        viewModelScope.launch { onResult(repo.rejectPending(approvalId)) }
     }
 }

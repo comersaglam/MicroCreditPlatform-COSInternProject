@@ -2,7 +2,9 @@ package com.example.app_mobile.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.app_pos.data.RepositoryProvider
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,9 +22,10 @@ data class ProfileUiState(
     val isPaired: Boolean
 )
 
-class ProfileViewModel : ViewModel() {
-
-    private val repo = RepositoryProvider.instance
+@HiltViewModel
+class ProfileViewModel @Inject constructor(
+    private val repo: Repository
+) : ViewModel() {
 
     val uiState: StateFlow<ProfileUiState?> =
         combine(

@@ -2,7 +2,11 @@ package com.example.app_mobile.ui.customerdetail
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.app_pos.data.RepositoryProvider
+import androidx.lifecycle.SavedStateHandle
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.Repository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.Transaction
@@ -28,9 +32,15 @@ enum class TransactionFilter { ALL, DEBT, PAYMENT }
  * the difference is the write is a popup → requestApproval, not a keypad sale flow.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class CustomerDetailViewModel(private val customerId: String) : ViewModel() {
+@HiltViewModel
+class CustomerDetailViewModel @Inject constructor(
+    private val repo: Repository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
 
-    private val repo = RepositoryProvider.instance
+    // See SellerDetailViewModel: the nav argument arrives through SavedStateHandle, which
+    // both removes the factory and carries the id across process death.
+    private val customerId: String = checkNotNull(savedStateHandle["customerId"])
 
     private val allTransactions =
         repo.observeCurrentUser().flatMapLatest { user ->
@@ -84,17 +94,27 @@ class CustomerDetailViewModel(private val customerId: String) : ViewModel() {
      * the approval gate: an app-holding customer gets a pending approval; an app-less
      * one is written immediately (mock SMS-OTP). Suspend call runs in viewModelScope.
      */
-    fun submit(type: TransactionType, amountMinor: Long, description: String) {
-        if (amountMinor <= 0) return
-        val sellerId = repo.currentUserId() ?: return
+    fun submit(
+        type: TransactionType,
+        amountMinor: Long,
+        description: String,
+        onResult: (ApprovalOutcome) -> Unit
+    ) {
+        if (amountMinor <= 0) return onResult(ApprovalOutcome.Failed())
+        val sellerId = repo.currentUserId() ?: return onResult(ApprovalOutcome.Failed())
         viewModelScope.launch {
-            repo.requestApproval(
-                fromUserId = sellerId,
-                sellerId = sellerId,
-                customerId = customerId,
-                amountMinor = amountMinor,
-                type = type,
-                description = description
+            // The SERVER decides whether this waits for approval or is booked now, so the
+            // screen has to be told rather than predicting from the local claim flag —
+            // that flag is stale on a fresh install and was reporting the wrong branch.
+            onResult(
+                repo.requestApproval(
+                    fromUserId = sellerId,
+                    sellerId = sellerId,
+                    customerId = customerId,
+                    amountMinor = amountMinor,
+                    type = type,
+                    description = description
+                )
             )
         }
     }

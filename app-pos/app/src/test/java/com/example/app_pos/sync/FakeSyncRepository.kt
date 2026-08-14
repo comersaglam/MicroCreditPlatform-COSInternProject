@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.flowOf
  * visible here. This one is deliberately smaller — the Worker is a decision table over two
  * inputs, and simulating a ledger would only obscure that.
  */
-class FakeSyncRepository(
+open class FakeSyncRepository(
     private val sessionValid: Boolean = true,
     private val outcome: SyncOutcome = SyncOutcome(),
     /** When set, syncNow throws it — the "something went unexpectedly wrong" branch. */
@@ -41,7 +41,7 @@ class FakeSyncRepository(
     // --- not exercised by the Worker ------------------------------------------
 
     override fun currentSellerId(): String? = null
-    override fun observeCurrentUser(): Flow<User?> = flowOf(null)
+    open override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
     override suspend fun requestOtp(phone: String): Boolean = false
 
@@ -55,7 +55,7 @@ class FakeSyncRepository(
     override suspend fun setSeller(userId: String, shopName: String, shopPhone: String?) = Unit
     override suspend fun updateDisplayName(userId: String, displayName: String) = Unit
     override suspend fun updateShopName(userId: String, shopName: String) = Unit
-    override fun observeCustomers(sellerId: String): Flow<List<Customer>> = flowOf(emptyList())
+    open override fun observeCustomers(sellerId: String): Flow<List<Customer>> = flowOf(emptyList())
     override suspend fun addCustomer(displayName: String, phone: String): String = ""
     override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup =
         CustomerLookup.New

@@ -14,9 +14,11 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_pos.model.SellerDebt
 import com.example.app_mobile.databinding.FragmentDebtsBinding
 import com.example.app_mobile.util.toTlString
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
 /** Borçlarım — the buyer's home: the shops they owe and the grand total. */
+@AndroidEntryPoint
 class DebtsFragment : Fragment() {
 
     private var _binding: FragmentDebtsBinding? = null
