@@ -141,4 +141,6 @@ def _approval(db, approval_id, seller_id, shop_name, target_user_id,
         shop_name=shop_name, customer_id=customer_id,
         amount_minor=amount, type=tx_type, description=desc,
         channel="APP_PUSH", status="PENDING", requested_at=_at(requested_at),
+        # Never decided, so the row genuinely last changed when it was raised.
+        updated_at=_at(requested_at),
     ))

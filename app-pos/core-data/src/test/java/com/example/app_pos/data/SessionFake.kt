@@ -1,10 +1,15 @@
 package com.example.app_pos.data
 
+import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.OtpRequestResult
+import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.SignInResult
@@ -93,13 +98,52 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
     // Draining needs a remote source; the composing repository overrides this.
     override suspend fun syncNow(): SyncOutcome = SyncOutcome()
 
+    // --- approvals: out of scope for the session tests, but part of the contract ---
+
+    /** The rows the last sync stored, or null when storage was never touched. */
+    var syncedApprovals: List<ApprovalEntity>? = null
+        private set
+
+    override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> =
+        flowOf(emptyList())
+
+    override suspend fun approvePending(approvalId: String): DecisionOutcome =
+        DecisionOutcome.Unreachable
+
+    override suspend fun rejectPending(approvalId: String): DecisionOutcome =
+        DecisionOutcome.Unreachable
+
+    override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
+
+    /** The rows the last storeCustomers stored, or null when it was never called. */
+    var storedCustomers: List<Customer>? = null
+        private set
+
+    /** Entries the last storeLedger stored, or null when it was never called. */
+    var storedLedger: List<Transaction>? = null
+        private set
+
+    override suspend fun refreshBook(): PullOutcome = PullOutcome.Unreachable
+
+    override suspend fun storeCustomers(rows: List<Customer>) { storedCustomers = rows }
+
+    override suspend fun storeLedger(entries: List<Transaction>) { storedLedger = entries }
+
+    override suspend fun syncApprovals(rows: List<ApprovalEntity>, targetUserId: String) {
+        syncedApprovals = rows
+    }
+
+    override suspend fun markApprovalDecided(approvalId: String, status: String) = Unit
+
+    override suspend fun deleteApproval(approvalId: String) = Unit
+
     // --- the rest is out of scope for the session tests -----------------------
 
     override fun isSessionValid(): Boolean = false
     override fun currentSellerId(): String? = null
     override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
-    override suspend fun requestOtp(phone: String): Boolean = false
+    override suspend fun requestOtp(phone: String): OtpRequestResult = OtpRequestResult.Unreachable
 
     override suspend fun signIn(phone: String, code: String): SignInResult =
         SignInResult.Unreachable

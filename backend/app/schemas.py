@@ -185,6 +185,9 @@ class Balance(BaseModel):
 class SellerDebt(BaseModel):
     seller_id: str
     shop_name: str
+    # How to reach the shop. Denormalised for the same reason shop_name is: a buyer cannot
+    # read another account, so without this the card can name the shop but not call it.
+    shop_phone: str | None = None
     balance_minor: int
 
 
@@ -207,6 +210,10 @@ class Approval(BaseModel):
     channel: str
     status: str
     requested_at: IsoUtc
+    # Moves on every status change, unlike requested_at. IsoUtc like every other timestamp
+    # on the wire -- the client parses with a literal format and a bare datetime would not
+    # match it.
+    updated_at: IsoUtc
 
 
 class ApprovalCreate(BaseModel):

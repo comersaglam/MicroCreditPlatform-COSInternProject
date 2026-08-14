@@ -120,6 +120,13 @@ class LoginFragment : Fragment() {
                 else binding.statusText.setText(R.string.msg_login_wrong_number)
                 binding.statusText.visibility = View.VISIBLE
             }
+            LoginState.UNREACHABLE -> {
+                // Says the connection failed rather than blaming the number, which is what
+                // the old shared ERROR branch did to anyone whose signal dropped.
+                binding.btnLogin.isEnabled = true
+                binding.statusText.setText(R.string.msg_login_unreachable)
+                binding.statusText.visibility = View.VISIBLE
+            }
         }
     }
 

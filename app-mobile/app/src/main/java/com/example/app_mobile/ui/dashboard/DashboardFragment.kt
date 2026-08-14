@@ -59,8 +59,36 @@ class DashboardFragment : Fragment() {
         // id match is the whole contract, no click listeners needed.
         binding.bottomNav.setupWithNavController(innerNav)
 
+        keepTabSelectedOnSubScreens(innerNav)
         setupInnerBack(innerNav)
         observeSellerTabs(innerNav)
+    }
+
+    /**
+     * Keeps a tab highlighted while the user is on one of its sub-screens.
+     *
+     * setupWithNavController only highlights a destination that IS a tab, so opening a
+     * detail screen left the whole bar unselected — and it stayed that way after coming
+     * back, because returning to a tab it had already "left" produced no selection change.
+     * The user saw a bar where nothing looked current.
+     *
+     * Mapping each sub-screen to its parent tab restores the ordinary expectation: the tab
+     * you came in through stays lit until you pick another one.
+     */
+    private fun keepTabSelectedOnSubScreens(innerNav: NavController) {
+        innerNav.addOnDestinationChangedListener { _, destination, _ ->
+            val tabId = when (destination.id) {
+                R.id.sellerDetailFragment -> R.id.debtsFragment
+                R.id.customerDetailFragment -> R.id.customersFragment
+                R.id.pairingFragment -> R.id.profileFragment
+                else -> destination.id
+            }
+            val item = binding.bottomNav.menu.findItem(tabId) ?: return@addOnDestinationChangedListener
+            // isChecked, NOT selectedItemId: assigning the id makes the view act as though
+            // the tab were tapped, which navigates away from the detail screen the user just
+            // opened. This only repaints the highlight.
+            item.isChecked = true
+        }
     }
 
     /**

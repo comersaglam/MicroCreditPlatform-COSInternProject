@@ -59,19 +59,33 @@ interface UserDao {
     @Query("SELECT * FROM users WHERE userId = :userId")
     suspend fun findById(userId: String): UserEntity?
 
-    // Phone compared by digits only (strip non-digits both sides), so any format matches.
-    @Query(
-        "SELECT * FROM users WHERE " +
-            "REPLACE(REPLACE(REPLACE(REPLACE(phone,'+',''),' ',''),'-',''),'(','') " +
-            "LIKE '%' || :digits || '%' LIMIT 1"
-    )
-    suspend fun findByPhoneDigits(digits: String): UserEntity?
+    /**
+     * Exact match on the canonical E.164 form, which callers produce with
+     * `PhoneFormat.toStored` BEFORE querying.
+     *
+     * Was a REPLACE + `LIKE '%..%'` scan, which quietly disagreed with CustomerDao's exact
+     * comparison below: sign-in "worked" because a substring matched, while the claim found
+     * nothing and left customers UNCLAIMED. Normalising in ONE place and comparing plainly
+     * removes that whole class of mismatch — and lets the column's index be used.
+     */
+    @Query("SELECT * FROM users WHERE phone = :stored LIMIT 1")
+    suspend fun findByPhone(stored: String): UserEntity?
 }
 
 @Dao
 interface CustomerDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(customer: CustomerEntity)
+
+    /**
+     * Writes a record the SERVER owns, overwriting any local copy.
+     *
+     * [insert] above is IGNORE, which is right when this terminal is inventing a record and
+     * wrong for a pull: a name corrected elsewhere, or a claim that has since happened,
+     * would be silently discarded and the stale local row kept.
+     */
+    @Upsert
+    suspend fun upsert(customer: CustomerEntity)
 
     @Query("SELECT * FROM customers WHERE customerId = :id")
     suspend fun findById(id: String): CustomerEntity?
@@ -93,24 +107,22 @@ interface CustomerDao {
      * this seller's book and can be added to it.
      */
     @Query(
-        "SELECT COUNT(*) FROM customers c WHERE " +
-            "REPLACE(REPLACE(REPLACE(c.phone,'+',''),' ',''),'-','') = :digits AND " +
+        "SELECT COUNT(*) FROM customers c WHERE c.phone = :stored AND " +
             "EXISTS (SELECT 1 FROM transactions t WHERE t.customerId = c.customerId " +
             "AND t.sellerId = :sellerId)"
     )
-    suspend fun countForSellerByPhoneDigits(sellerId: String, digits: String): Int
+    suspend fun countForSellerByPhone(sellerId: String, stored: String): Int
 
-    @Query("SELECT * FROM customers WHERE " +
-        "REPLACE(REPLACE(REPLACE(phone,'+',''),' ',''),'-','') = :digits LIMIT 1")
-    suspend fun findByPhoneDigits(digits: String): CustomerEntity?
+    /** Exact match on the canonical form — see UserDao.findByPhone. */
+    @Query("SELECT * FROM customers WHERE phone = :stored LIMIT 1")
+    suspend fun findByPhone(stored: String): CustomerEntity?
 
     /** The claim bridge: link every UNCLAIMED record with this phone to a user. */
     @Query(
         "UPDATE customers SET claimStatus = 'CLAIMED', claimedByUserId = :userId " +
-            "WHERE claimStatus = 'UNCLAIMED' AND " +
-            "REPLACE(REPLACE(REPLACE(phone,'+',''),' ',''),'-','') = :digits"
+            "WHERE claimStatus = 'UNCLAIMED' AND phone = :stored"
     )
-    suspend fun claimByPhoneDigits(userId: String, digits: String): Int
+    suspend fun claimByPhone(userId: String, stored: String): Int
 }
 
 @Dao
@@ -166,7 +178,13 @@ interface ApprovalDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(approval: ApprovalEntity)
 
-    @Query("SELECT * FROM approvals WHERE targetUserId = :userId AND status = 'PENDING'")
+    // Newest first, matching GET /approvals. Without the ORDER BY the cards came back in
+    // rowid order, which was invisible while one device wrote every row — and would start
+    // reshuffling the list under the user the moment a poll rewrote the table.
+    @Query(
+        "SELECT * FROM approvals WHERE targetUserId = :userId AND status = 'PENDING' " +
+            "ORDER BY requestedAt DESC"
+    )
     fun observePendingFor(userId: String): Flow<List<ApprovalEntity>>
 
     @Query("SELECT * FROM approvals WHERE approvalId = :id")
@@ -174,6 +192,37 @@ interface ApprovalDao {
 
     @Query("UPDATE approvals SET status = :status WHERE approvalId = :id")
     suspend fun setStatus(id: String, status: String)
+
+    /**
+     * Removes a card the server will not let this user answer — it is addressed to somebody
+     * else (403) or was already decided elsewhere (409).
+     *
+     * Deleted rather than given a status, because this device does not KNOW the real one:
+     * writing APPROVED or REJECTED here would invent a decision, and the trail those
+     * statuses exist for lives on the server anyway.
+     */
+    @Query("DELETE FROM approvals WHERE approvalId = :id")
+    suspend fun delete(id: String)
+
+    /**
+     * Drops the pending cards addressed to this user that the server did NOT return.
+     *
+     * The other half of a pull: inserting what came back only adds, and a card answered on
+     * the counterparty's device would otherwise sit here forever. The server's list is
+     * authoritative, so absence from it is itself the news.
+     *
+     * Scoped to `targetUserId` on purpose — rows this shop RAISED are pending on somebody
+     * else's device and are none of this query's business.
+     */
+    @Query(
+        "DELETE FROM approvals WHERE targetUserId = :userId AND status = 'PENDING' " +
+            "AND approvalId NOT IN (:keepIds)"
+    )
+    suspend fun deletePendingNotIn(userId: String, keepIds: List<String>)
+
+    /** Same, for the case where the server returned nothing at all. */
+    @Query("DELETE FROM approvals WHERE targetUserId = :userId AND status = 'PENDING'")
+    suspend fun deleteAllPendingFor(userId: String)
 }
 
 // ---------------------------------------------------------------------------

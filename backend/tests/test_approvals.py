@@ -168,6 +168,97 @@ def test_pending_requires_a_token(client):
     assert client.get("/approvals").status_code == 401
 
 
+# --- filtering the list (clients POLL this endpoint) ---
+
+
+def test_default_still_hides_decided_rows(client, buyer_auth):
+    # The inbox's contract: answering p1 empties the list without a status argument.
+    client.post("/approvals/p1/approve", headers=buyer_auth)
+
+    assert client.get("/approvals", headers=buyer_auth).json() == []
+
+
+def test_status_all_returns_the_decided_history(client, buyer_auth):
+    # Previously unreachable: an answered approval could not be queried back at all.
+    client.post("/approvals/p1/approve", headers=buyer_auth)
+
+    rows = client.get(
+        "/approvals", headers=buyer_auth, params={"status": "ALL"}
+    ).json()
+    assert [(r["approval_id"], r["status"]) for r in rows] == [("p1", "APPROVED")]
+
+
+def test_status_can_select_one_state(client, buyer_auth):
+    client.post("/approvals/p1/approve", headers=buyer_auth)
+
+    assert client.get(
+        "/approvals", headers=buyer_auth, params={"status": "REJECTED"}
+    ).json() == []
+    assert len(client.get(
+        "/approvals", headers=buyer_auth, params={"status": "APPROVED"}
+    ).json()) == 1
+
+
+def test_status_scoping_survives_the_filter(client, owner_auth):
+    # A wider status must not widen WHOSE rows come back: p1 is addressed to u1.
+    rows = client.get(
+        "/approvals", headers=owner_auth, params={"status": "ALL"}
+    ).json()
+    assert [r["approval_id"] for r in rows] == ["p2"]
+
+
+def test_an_unknown_status_is_refused(client, buyer_auth):
+    response = client.get(
+        "/approvals", headers=buyer_auth, params={"status": "MAYBE"}
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_status"
+
+
+def test_limit_caps_the_list(client, owner_auth, buyer_auth):
+    for _ in range(3):
+        client.post("/approvals", headers=owner_auth, json=_seller_request())
+
+    rows = client.get("/approvals", headers=buyer_auth, params={"limit": 2}).json()
+    assert len(rows) == 2
+
+
+# --- updated_at: the stamp that tells a decided row from a pending one ---
+
+
+def test_a_raised_approval_has_not_changed_since_it_was_raised(client, owner_auth):
+    raised = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()
+
+    assert raised["updated_at"] == raised["requested_at"]
+
+
+def test_approving_moves_updated_at_but_not_requested_at(client, buyer_auth):
+    before = client.get("/approvals", headers=buyer_auth).json()[0]
+
+    client.post("/approvals/p1/approve", headers=buyer_auth)
+    after = client.get(
+        "/approvals", headers=buyer_auth, params={"status": "ALL"}
+    ).json()[0]
+
+    # requested_at records when it was ASKED and must not drift; updated_at records the
+    # decision, which is the whole reason the column exists.
+    assert after["requested_at"] == before["requested_at"]
+    assert after["updated_at"] > before["updated_at"]
+
+
+def test_rejecting_moves_updated_at_too(client, buyer_auth):
+    before = client.get("/approvals", headers=buyer_auth).json()[0]
+
+    client.post("/approvals/p1/reject", headers=buyer_auth)
+    after = client.get(
+        "/approvals", headers=buyer_auth, params={"status": "ALL"}
+    ).json()[0]
+
+    assert after["updated_at"] > before["updated_at"]
+
+
 # --- deciding ---
 
 

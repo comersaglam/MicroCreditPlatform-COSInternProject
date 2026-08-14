@@ -55,6 +55,7 @@ class DashboardFragment : Fragment() {
         // no click listeners, no manual navigate() calls.
         binding.bottomNav.setupWithNavController(innerNavHost.navController)
 
+        keepTabSelectedOnSubScreens(innerNavHost.navController)
         setupInnerBack(innerNavHost.navController)
     }
 
@@ -70,6 +71,27 @@ class DashboardFragment : Fragment() {
      *  - up arrow: shown/hidden here, routed through MainActivity.onSupportNavigateUp
      *    (which already tries the inner controller first).
      */
+    /**
+     * Keeps a tab highlighted while the merchant is on one of its sub-screens.
+     *
+     * setupWithNavController only highlights a destination that IS a tab, so opening a
+     * detail screen left the whole bar unselected — and it stayed that way after coming
+     * back, because returning to a tab it had already "left" produced no selection change.
+     */
+    private fun keepTabSelectedOnSubScreens(innerNav: NavController) {
+        innerNav.addOnDestinationChangedListener { _, destination, _ ->
+            val tabId = when (destination.id) {
+                R.id.customerDetailFragment -> R.id.customersFragment
+                R.id.pairingFragment -> R.id.profileFragment
+                else -> destination.id
+            }
+            val item = binding.bottomNav.menu.findItem(tabId) ?: return@addOnDestinationChangedListener
+            // isChecked, NOT selectedItemId: assigning the id makes the view act as though
+            // the tab were tapped, which navigates away from the screen just opened.
+            item.isChecked = true
+        }
+    }
+
     private fun setupInnerBack(inner: NavController) {
         val callback = object : OnBackPressedCallback(false) {
             override fun handleOnBackPressed() {

@@ -74,6 +74,26 @@ class SyncScheduler @Inject constructor(
         )
     }
 
+    /**
+     * The background half of the approvals pull: ask the server every so often, even while
+     * app-pos is closed, so a request raised overnight is on screen at opening time.
+     *
+     * Same fifteen-minute floor and the same KEEP reasoning as the drain above. The screen's
+     * own fifteen-SECOND poll is what makes a card arrive while the customer is still at the
+     * counter; this only catches what happened while nobody was looking.
+     *
+     * app-mobile has no equivalent, and that asymmetry is deliberate — see PullWorker.
+     */
+    fun schedulePeriodicPull() {
+        workManager.enqueueUniquePeriodicWork(
+            PullWorker.PERIODIC_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<PullWorker>(PERIOD_MINUTES, TimeUnit.MINUTES)
+                .setConstraints(networkConstraint)
+                .build()
+        )
+    }
+
     private val networkConstraint: Constraints
         get() = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)

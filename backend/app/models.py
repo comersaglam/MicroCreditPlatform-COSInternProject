@@ -163,4 +163,12 @@ class Approval(Base):
         DateTime(timezone=True), nullable=False
     )
 
+    # When the row last CHANGED, which `requested_at` cannot say: that one is stamped at
+    # creation and never touched, so it cannot tell a decided approval from a pending one.
+    # Set by hand at every write site, matching how every other timestamp here works --
+    # there is no onupdate/server_default convention in this codebase.
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
     __table_args__ = (Index("idx_approvals_target", "target_user_id", "status"),)

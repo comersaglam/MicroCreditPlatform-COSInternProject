@@ -56,6 +56,16 @@ class ApprovalsFragment : Fragment() {
                 }
             }
         }
+
+        // The screen is the poll's lifetime. repeatOnLifecycle CANCELS this when the
+        // fragment stops and starts it again on return, so the app never asks the server
+        // for an inbox nobody is looking at — and a returning user gets a fresh answer
+        // immediately rather than after the next interval.
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.poll()
+            }
+        }
     }
 
     // Both report what the server actually answered. Showing "approved" the moment the

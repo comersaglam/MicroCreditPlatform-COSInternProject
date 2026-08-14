@@ -1,5 +1,6 @@
 package com.example.app_pos.data.local
 
+import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.Repository
@@ -54,6 +55,47 @@ interface LocalSource : Repository {
      * a card or write the entry. Here the decision is already made and this only records it.
      */
     suspend fun insertPendingApproval(approval: PendingApproval, initiatorUserId: String)
+
+    /**
+     * Makes the local pending inbox match what the server just returned, in ONE database
+     * transaction.
+     *
+     * Both halves are needed and neither is sufficient alone: [rows] adds the cards raised
+     * on other devices, and the delete removes the ones answered on other devices. Doing
+     * only the first is how a card outlives its own decision.
+     *
+     * One transaction because the two halves must not be observed apart — a Flow that
+     * emitted after the delete but before the insert would blank the screen and then
+     * repopulate it, which reads as a glitch on a poll that runs every fifteen seconds.
+     *
+     * Scoped to [targetUserId]: only rows awaiting THIS user are the server list's to
+     * govern. Requests this user raised are pending elsewhere and must survive untouched.
+     */
+    suspend fun syncApprovals(rows: List<ApprovalEntity>, targetUserId: String)
+
+    /**
+     * Stores the ledger entries the server holds for this buyer, plus the customer records
+     * they imply, in ONE transaction.
+     *
+     * The customer rows are DERIVED from the entries rather than fetched: `GET /customers`
+     * is seller-scoped and a buyer may not call it, but an entry appearing in this buyer's
+     * own history names a record that is theirs by definition. Without those rows every
+     * buyer query returns nothing — they all filter through `claimedByUserId`.
+     *
+     * ADDITIVE on purpose: nothing is deleted. The ledger is append-only, so an entry
+     * missing from a response was never withdrawn — the response was partial. (Approvals
+     * are the opposite; see [syncApprovals].)
+     */
+    suspend fun storeBuyerLedger(entries: List<Transaction>, userId: String)
+
+    /**
+     * Records the shop name and phone carried on the debts response, so the Borçlarım list
+     * can both label its rows and offer a way to call the shop.
+     *
+     * A buyer cannot read another account (`GET /users/{id}` does not exist), which is why
+     * `/me/debts` denormalises `shop_name` — this stores it against a minimal seller row.
+     */
+    suspend fun storeShopNames(shopsBySellerId: Map<String, Pair<String, String?>>)
 
     /**
      * Which customer record this buyer holds in that seller's book, or null when they have

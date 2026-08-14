@@ -13,6 +13,7 @@ import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
+import com.example.app_pos.network.dto.ApprovalDto
 
 /**
  * Entity <-> domain mappers. The storage shape (Room entity) and the domain model
@@ -99,6 +100,41 @@ fun ApprovalEntity.toDomain(): PendingApproval = PendingApproval(
     description = description.orEmpty(),
     requestedAt = requestedAt
 )
+
+/**
+ * Wire → entity, for a row the SERVER owns.
+ *
+ * Deliberately NOT routed through [PendingApproval] and [toEntity] below. That pair is
+ * built for a row this device is inventing, so it fills the direction fields in by
+ * guessing: it derives `initiatorRole` from whether the initiator happens to be the
+ * seller, hardcodes `channel` to APP_PUSH, and defaults `status` to PENDING. Every one of
+ * those is a fact the server has already stated, and the entire point of a pull is to
+ * store what the server said rather than a local re-derivation of it.
+ *
+ * Returns null for a type this build cannot read — the same rule the rest of the mapping
+ * layer follows, and for the sharpest reason here: the type carries the sign, so a card
+ * nobody can read correctly must not be approvable.
+ */
+fun ApprovalDto.toEntityOrNull(): ApprovalEntity? {
+    // Parsed only to validate; the entity stores the wire string as-is.
+    if (runCatching { TransactionType.valueOf(type) }.getOrNull() == null) return null
+
+    return ApprovalEntity(
+        approvalId = approvalId,
+        initiatorUserId = initiatorUserId,
+        initiatorRole = initiatorRole,
+        targetUserId = targetUserId,
+        sellerId = sellerId,
+        shopName = shopName,
+        customerId = customerId,
+        amountMinor = amountMinor,
+        type = type,
+        description = description,
+        channel = channel,
+        status = status,
+        requestedAt = requestedAt
+    )
+}
 
 /**
  * Domain → entity, filling the three-line direction fields.

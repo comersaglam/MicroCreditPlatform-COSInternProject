@@ -6,6 +6,7 @@ import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.PhoneFormat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +20,18 @@ import kotlinx.coroutines.launch
  * field for the code field. NEEDS_REGISTER: the SERVER reported the number has no account,
  * so the screen offers to create one.
  */
-enum class LoginState { IDLE, SUBMITTING, CODE_SENT, SUCCESS, ERROR, NEEDS_REGISTER }
+enum class LoginState {
+    IDLE, SUBMITTING, CODE_SENT, SUCCESS, NEEDS_REGISTER,
+    /** The number itself was refused — the user has to change what they typed. */
+    ERROR,
+    /**
+     * The server was never reached. Kept apart from ERROR because the two ask for opposite
+     * things: ERROR means "fix the number", this means "the number is fine, try again".
+     * Collapsing them told a user with a dropped connection that their valid number was
+     * invalid.
+     */
+    UNREACHABLE
+}
 
 /**
  * The customer sign-in — phone, then the code the server sent.
@@ -64,14 +76,23 @@ class LoginViewModel @Inject constructor(
         }
         _state.value = LoginState.SUBMITTING
         viewModelScope.launch {
-            if (repo.requestOtp(stored)) {
-                pendingPhone = stored
-                _codeRejected.value = false
-                _state.value = LoginState.CODE_SENT
-            } else {
-                // Unreachable, or the server refused the number outright.
-                _errorMessage.value = null
-                _state.value = LoginState.ERROR
+            when (repo.requestOtp(stored)) {
+                is OtpRequestResult.Sent -> {
+                    pendingPhone = stored
+                    _codeRejected.value = false
+                    _state.value = LoginState.CODE_SENT
+                }
+                // The server answered and declined the number itself.
+                is OtpRequestResult.Refused -> {
+                    _errorMessage.value = null
+                    _state.value = LoginState.ERROR
+                }
+                // Never reached. Says so, instead of blaming a number that is fine —
+                // a pulled cable used to read as "Geçersiz numara".
+                is OtpRequestResult.Unreachable -> {
+                    _errorMessage.value = null
+                    _state.value = LoginState.UNREACHABLE
+                }
             }
         }
     }
@@ -102,7 +123,7 @@ class LoginViewModel @Inject constructor(
                 }
                 is SignInResult.Unreachable -> {
                     _errorMessage.value = null
-                    LoginState.ERROR
+                    LoginState.UNREACHABLE
                 }
                 is SignInResult.Failed -> {
                     _errorMessage.value = result.message

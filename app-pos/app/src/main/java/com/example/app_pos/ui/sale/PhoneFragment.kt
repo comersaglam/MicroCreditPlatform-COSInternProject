@@ -14,7 +14,7 @@ import com.example.app_pos.model.Repository
 import com.example.app_pos.databinding.FragmentPhoneBinding
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
-import com.example.app_pos.util.PhoneFormat
+import com.example.app_pos.model.PhoneFormat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint

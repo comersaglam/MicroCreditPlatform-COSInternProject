@@ -81,6 +81,7 @@
     <string name="dashboard_title">Dashboard</string>
     <string name="nav_customers">Müşteriler</string>
     <string name="nav_reports">Detaylı Bilgiler</string>
+    <string name="nav_approvals">Onaylar</string>
     <string name="nav_profile">Profil</string>
     <string name="reports_placeholder">Detaylı bilgiler yakında:\ntarih aralığı, toplam borç, toplam tahsilat</string>
 
@@ -146,4 +147,17 @@
     <string name="filter_debts">Borçlar</string>
     <string name="filter_payments">Ödemeler</string>
 
+
+    <!-- Onaylar: requests waiting on this shop's answer (Turn 39). -->
+    <string name="approvals_empty">Bekleyen onay yok.</string>
+    <string name="approval_debt_label">Veresiye onayı</string>
+    <string name="approval_payment_label">Ödeme onayı</string>
+    <string name="approval_approve">Onayla</string>
+    <string name="approval_reject">Reddet</string>
+    <string name="approval_approved">Onaylandı</string>
+    <string name="approval_rejected">Reddedildi</string>
+    <string name="approval_failed">İşlem tamamlanamadı, tekrar deneyin</string>
+    <string name="decision_not_yours">Bu onay size ait değil, listeden kaldırıldı</string>
+    <string name="decision_already_decided">Bu onay zaten yanıtlanmış, listeden kaldırıldı</string>
+    <string name="decision_unreachable">Sunucuya ulaşılamadı, tekrar deneyin</string>
 </resources>

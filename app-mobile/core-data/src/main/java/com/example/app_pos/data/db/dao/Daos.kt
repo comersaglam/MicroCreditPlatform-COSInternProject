@@ -82,16 +82,38 @@ interface CustomerDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(customer: CustomerEntity)
 
+    /**
+     * Writes a record the SERVER owns, overwriting any local copy.
+     *
+     * [insert] above is IGNORE, which is right when this device is inventing a record and
+     * wrong for a pull: a name corrected on the shop's terminal, or a claim that has since
+     * happened, would be silently discarded and the stale local row kept.
+     */
+    @Upsert
+    suspend fun upsert(customer: CustomerEntity)
+
     @Query("SELECT * FROM customers WHERE customerId = :id")
     suspend fun findById(id: String): CustomerEntity?
 
     @Query("SELECT * FROM customers")
     fun observeAll(): Flow<List<CustomerEntity>>
 
-    /** The seller's customers: everyone they have at least one ledger entry with. */
+    /**
+     * The seller's customers: everyone they have at least one ledger entry with.
+     *
+     * The `claimedByUserId <> :sellerId` clause keeps the BUYER side out. This app is one
+     * account in two roles and both write to this table: the buyer pull stores a stub row
+     * for every record this user holds in somebody else's book (id and owner only — the
+     * server never tells a buyer the name on a shop's copy). Without the exclusion those
+     * stubs surfaced on Müşterilerim as a customer with no name and no number.
+     *
+     * A shopkeeper is never their own customer, so excluding their own records costs
+     * nothing and removes the whole class of confusion.
+     */
     @Query(
         "SELECT * FROM customers WHERE customerId IN " +
-            "(SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId)"
+            "(SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId) " +
+            "AND (claimedByUserId IS NULL OR claimedByUserId <> :sellerId)"
     )
     fun observeForSeller(sellerId: String): Flow<List<CustomerEntity>>
 
@@ -260,6 +282,27 @@ interface ApprovalDao {
      */
     @Query("DELETE FROM approvals WHERE approvalId = :id")
     suspend fun delete(id: String)
+
+    /**
+     * Drops the pending cards addressed to this user that the server did NOT return.
+     *
+     * The other half of a pull: inserting what came back only adds, and a card answered on
+     * the counterparty's device would otherwise sit here forever. The server's list is
+     * authoritative, so absence from it is itself the news.
+     *
+     * Scoped to `targetUserId` on purpose — rows this user RAISED are pending on somebody
+     * else's device and are none of this query's business. Scoped to PENDING for the same
+     * reason: a decided row is history and history does not come back in the default list.
+     */
+    @Query(
+        "DELETE FROM approvals WHERE targetUserId = :userId AND status = 'PENDING' " +
+            "AND approvalId NOT IN (:keepIds)"
+    )
+    suspend fun deletePendingNotIn(userId: String, keepIds: List<String>)
+
+    /** Same, for the case where the server returned nothing at all. */
+    @Query("DELETE FROM approvals WHERE targetUserId = :userId AND status = 'PENDING'")
+    suspend fun deleteAllPendingFor(userId: String)
 }
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,15 @@
 package com.example.app_pos.data
 
+import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.DecisionOutcome
+import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
@@ -49,6 +52,47 @@ class FakeLocalSource(
     /** Set when the local (offline) approval branch ran — it must not on the online path. */
     var localRequestApprovalCalls = 0
         private set
+
+    /**
+     * The rows the last [syncApprovals] stored, or null when it was never called.
+     *
+     * Null and empty-list mean opposite things here and the pull tests turn on the
+     * difference: empty is "the server says nothing is pending, clear the inbox", null is
+     * "storage was never touched", which is the only correct behaviour when the server
+     * could not be reached.
+     */
+    var syncedApprovals: List<ApprovalEntity>? = null
+        private set
+
+    /** Who the last sync was scoped to — rows awaiting anyone else must survive it. */
+    var syncedForUserId: String? = null
+        private set
+
+    override suspend fun syncApprovals(rows: List<ApprovalEntity>, targetUserId: String) {
+        syncedApprovals = rows
+        syncedForUserId = targetUserId
+    }
+
+    /** Storage has no network; the composing repository is what actually pulls. */
+    override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
+
+    override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
+
+    /** Entries the last storeBuyerLedger stored, or null when it was never called. */
+    var storedBuyerLedger: List<Transaction>? = null
+        private set
+
+    /** Shop names the last storeShopNames stored, or null when it was never called. */
+    var storedShopNames: Map<String, Pair<String, String?>>? = null
+        private set
+
+    override suspend fun storeBuyerLedger(entries: List<Transaction>, userId: String) {
+        storedBuyerLedger = entries
+    }
+
+    override suspend fun storeShopNames(shopsBySellerId: Map<String, Pair<String, String?>>) {
+        storedShopNames = shopsBySellerId
+    }
 
     override suspend fun addTransaction(transaction: Transaction) {
         ledger += transaction
@@ -124,7 +168,7 @@ class FakeLocalSource(
     override fun currentUserId(): String? = "u1"
     override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
-    override suspend fun requestOtp(phone: String): Boolean = false
+    override suspend fun requestOtp(phone: String): OtpRequestResult = OtpRequestResult.Unreachable
     override suspend fun signIn(phone: String, code: String): SignInResult = SignInResult.NeedsRegister
     override suspend fun logout() = Unit
     override suspend fun pairWithApp() = Unit

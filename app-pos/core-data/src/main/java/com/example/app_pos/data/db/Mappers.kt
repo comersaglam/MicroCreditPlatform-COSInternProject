@@ -1,5 +1,6 @@
 package com.example.app_pos.data.db
 
+import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.BasketEntity
 import com.example.app_pos.data.db.entity.BasketItemEntity
 import com.example.app_pos.data.db.entity.CustomerEntity
@@ -8,10 +9,12 @@ import com.example.app_pos.data.db.entity.UserEntity
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
+import com.example.app_pos.network.dto.ApprovalDto
 import java.util.UUID
 
 /**
@@ -106,5 +109,51 @@ fun OrderBody.toItemEntities(): List<BasketItemEntity> = items.map { item ->
         status = item.status,
         type = item.type,
         itemLimit = item.limit
+    )
+}
+
+// --- Approval (the incoming inbox; app-pos grew this side in Turn 39) ---
+
+fun ApprovalEntity.toDomain(): PendingApproval = PendingApproval(
+    approvalId = approvalId,
+    sellerId = sellerId,
+    counterpartyName = shopName,
+    // targetUserId IS the approver — the counterparty of whoever started the request.
+    approverUserId = targetUserId,
+    customerId = customerId,
+    amountMinor = amountMinor,
+    type = TransactionType.valueOf(type),
+    description = description.orEmpty(),
+    requestedAt = requestedAt
+)
+
+/**
+ * Wire → entity, for a row the SERVER owns.
+ *
+ * Stores what the server SAID rather than a local re-derivation of it: the direction fields
+ * (initiatorRole, channel, status) are facts it has already stated, and guessing them again
+ * here would quietly contradict the very answer the pull went to fetch.
+ *
+ * Returns null for a type this build cannot read — the type carries the sign of the amount,
+ * so a card nobody can read correctly must never become approvable.
+ */
+fun ApprovalDto.toEntityOrNull(): ApprovalEntity? {
+    // Parsed only to validate; the entity stores the wire string as-is.
+    if (runCatching { TransactionType.valueOf(type) }.getOrNull() == null) return null
+
+    return ApprovalEntity(
+        approvalId = approvalId,
+        initiatorUserId = initiatorUserId,
+        initiatorRole = initiatorRole,
+        targetUserId = targetUserId,
+        sellerId = sellerId,
+        shopName = shopName,
+        customerId = customerId,
+        amountMinor = amountMinor,
+        type = type,
+        description = description,
+        channel = channel,
+        status = status,
+        requestedAt = requestedAt
     )
 }

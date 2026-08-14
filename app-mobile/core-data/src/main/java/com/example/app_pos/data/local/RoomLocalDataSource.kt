@@ -3,8 +3,10 @@ package com.example.app_pos.data.local
 import androidx.room.withTransaction
 import com.example.app_pos.data.ApprovalService
 import com.example.app_pos.data.db.AppDatabase
+import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.CustomerEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
+import com.example.app_pos.data.db.entity.UserEntity
 import com.example.app_pos.data.db.toDomain
 import com.example.app_pos.data.db.toEntity
 import com.example.app_pos.model.ApprovalOutcome
@@ -15,6 +17,8 @@ import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.PAYMENT_DESCRIPTION
 import com.example.app_pos.model.PhoneFormat
+import com.example.app_pos.model.OtpRequestResult
+import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
@@ -63,7 +67,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         session.value?.takeIf { it.expiresAt > System.currentTimeMillis() }?.userId
 
     /** No local OTP: only the server can send one. Always false here. */
-    override suspend fun requestOtp(phone: String): Boolean = false
+    override suspend fun requestOtp(phone: String): OtpRequestResult = OtpRequestResult.Unreachable
 
     /**
      * Storage cannot verify a code — that is the server's job. Reports the number as
@@ -265,6 +269,106 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
 
     override suspend fun insertPendingApproval(approval: PendingApproval, initiatorUserId: String) {
         approvals.insert(approval.toEntity(initiatorUserId))
+    }
+
+    /**
+     * Storage cannot pull — there is no network down here. The composing repository
+     * overrides this with the real thing, exactly as it does for the session members.
+     * Reported as unreachable rather than a success so a caller wired only to storage never
+     * concludes the inbox is empty.
+     */
+    override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
+
+    /** Same as above: storage has no network. */
+    override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
+
+    override suspend fun syncApprovals(rows: List<ApprovalEntity>, targetUserId: String) {
+        db.withTransaction {
+            // Delete first, then insert: the reverse order would briefly hold rows the
+            // server just returned AND rows it dropped, and a NOT IN over the incoming ids
+            // is cheaper to reason about before anything is added.
+            if (rows.isEmpty()) {
+                approvals.deleteAllPendingFor(targetUserId)
+            } else {
+                approvals.deletePendingNotIn(targetUserId, rows.map { it.approvalId })
+            }
+            // REPLACE, so a row whose status changed server-side overwrites the stale copy
+            // instead of being ignored.
+            rows.forEach { approvals.insert(it) }
+        }
+    }
+
+    override suspend fun storeBuyerLedger(entries: List<Transaction>, userId: String) {
+        db.withTransaction {
+            // The customer rows FIRST: the ledger queries filter through them, so entries
+            // written without them would be stored and still invisible on every screen.
+            //
+            // These rows carry only an id and an owner — the buyer cannot read a seller's
+            // book, so the server never tells them the name or phone on the shop's copy.
+            //
+            // insert-IGNORE, and that is load-bearing: this app is ALSO a seller, and its
+            // Müşterilerim screen reads the same table. An upsert here would overwrite a
+            // real customer record — name, phone and all — with these blanks whenever the
+            // same person appears on both sides. (Seen on a device: a customer rendered
+            // with an empty name and no number.) Existing rows are left exactly as they are.
+            entries.map { it.customerId }.distinct().forEach { customerId ->
+                customers.insert(
+                    CustomerEntity(
+                        customerId = customerId,
+                        // A placeholder the UI can recognise, rather than a blank line.
+                        displayName = "",
+                        phone = "",
+                        claimStatus = ClaimStatus.CLAIMED.name,
+                        claimedByUserId = userId,
+                        createdAt = nowStamp()
+                    )
+                )
+            }
+
+            // insert-IGNORE, keyed by the server's transaction id: re-pulling the same
+            // history is a no-op rather than a duplicate, which is what makes polling this
+            // safe. The ledger is append-only, so a row already here is already correct.
+            entries.forEach { transactions.insert(it.toEntity()) }
+        }
+    }
+
+    override suspend fun storeShopNames(shopsBySellerId: Map<String, Pair<String, String?>>) {
+        db.withTransaction {
+            shopsBySellerId.forEach { (sellerId, shop) ->
+                val (shopName, shopPhone) = shop
+                val existing = users.findById(sellerId)
+                if (existing == null) {
+                    // A shop this device has never seen. Only the name and number are
+                    // known — a buyer cannot read another account — and only those render.
+                    users.insert(
+                        UserEntity(
+                            userId = sellerId,
+                            phone = shopPhone.orEmpty(),
+                            displayName = shopName,
+                            isBuyer = false,
+                            isSeller = true,
+                            email = null,
+                            shopName = shopName,
+                            shopPhone = shopPhone,
+                            createdAt = nowStamp()
+                        )
+                    )
+                } else {
+                    // Update ONLY the shop fields. A blanket upsert would overwrite the
+                    // signed-in user's own row with these values when they are also a
+                    // seller — wiping their profile.
+                    users.update(
+                        existing.copy(
+                            shopName = shopName,
+                            // Keep a number already known locally: the seller's own copy of
+                            // their profile is better than this denormalised fallback.
+                            shopPhone = existing.shopPhone ?: shopPhone,
+                            isSeller = true
+                        )
+                    )
+                }
+            }
+        }
     }
 
     override suspend fun customerIdForBuyerSeller(userId: String, sellerId: String): String? =

@@ -54,6 +54,9 @@ class DebtsFragment : Fragment() {
                         binding.totalAmount.text = total.toTlString()
                     }
                 }
+                // Keeps the list fed from the server while the screen is open. Cancelled
+                // with the lifecycle, so a backgrounded app stops asking.
+                launch { viewModel.poll() }
             }
         }
     }

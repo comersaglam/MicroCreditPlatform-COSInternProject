@@ -11,6 +11,11 @@
         android:title="@string/nav_customers" />
 
     <item
+        android:id="@+id/approvalsFragment"
+        android:icon="@drawable/ic_approvals"
+        android:title="@string/nav_approvals" />
+
+    <item
         android:id="@+id/reportsFragment"
         android:icon="@drawable/ic_reports"
         android:title="@string/nav_reports" />

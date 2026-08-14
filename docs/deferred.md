@@ -4,7 +4,7 @@
 > değil. Ama altı ay sonra koda bakan (sen dahil) "burası neden yarım?" diye soracak. Cevaplar
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
-> Son güncelleme: 2026-08-13, Tur 38c (ikinci cihaz testi turu) sonrası.
+> Son güncelleme: 2026-08-14, Tur 39 (pull ekseni) sonrası.
 > Kalıcı adım günlüğü: [progress.md](progress.md). Uygulama planı ve §0 kararları:
 > [faz5-backend-plan.md](faz5-backend-plan.md). Kararların gerekçesi:
 > [architecture-pos.md](architecture-pos.md), [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md).
@@ -19,17 +19,24 @@ Bakiye sunucuda `SUM` ile türetiliyor, `transactions` DB seviyesinde append-onl
 idempotency üç yollu (201/200/409). **137 pytest.** app-pos'un `login()` mock'u silindi:
 oturum artık sunucunun ürettiği gerçek JWT, giriş telefon+OTP iki adımı üzerinden.
 
-**app-mobile mirror turu 3/4:** ISO timestamp + DB v2 (Tur 36), `:core-network` + Hilt
-(Tur 37), offline-first beste + gerçek login + outbox + WorkManager (Tur 38). app-mobile
-artık app-pos ile **yazma tarafında simetrik**: aynı 4 modül, aynı Hilt grafiği, aynı
-outbox/SyncEngine/WorkManager, aynı iki-adımlı gerçek login. **Tur 38b** ilk cihaz testinde
-çıkan dört hatayı düzeltti (çift yazım, telefon normalizasyonu, onaysız yazma, sahte başarı),
-**Tur 38c** ikinci turu (takılan onay, OTP UI, müşteri listesi) — 56 test, iki ayrı mutasyon
-kontrolüyle doğrulandı. Kalan tek iş **Tur 39: pull ekseni + sunucu tek gerçeklik**.
+**app-mobile mirror turu 4/4 (Tur 36→38c):** ISO timestamp + DB v2, `:core-network` + Hilt,
+offline-first beste + gerçek login + outbox + WorkManager. İki cihaz-testi turu (38b: çift
+yazım / telefon normalizasyonu / onaysız yazma / sahte başarı; 38c: takılan onay / OTP UI /
+müşteri listesi) cihazda doğrulandı.
 
-**Ve yeni keşfedilen yapısal boşluk (§F):** sistemde **hiçbir okuma yolu yok**. İki client da
-sunucuya sadece YAZIYOR; `GET /approvals`, `GET /customers`, `GET /transactions` kodda sarmalı
-ama **sıfır çağıranı** var. Yani POS, app-mobile'dan gelen bir veresiye onayını **asla göremez**.
+**Tur 39: okuma yolu AÇILDI (Onaylar hattı).** §F'nin yapısal boşluğu kapandı: `PullEngine` +
+`Repository.refreshApprovals()` iki app'te de var, app-pos **Onaylar ekranını kazandı** (§A.4),
+cihaz seed'leri kalktı (§C.4), app-pos'un telefon bug'ı düzeltildi (§A.9). Backend'e
+`approvals.updated_at` (migration 0003) + `GET /approvals?status=&limit=` eklendi, ve
+`python -m app.reset` yazıldı (HTTP ucu YOK).
+
+**Pull deseni: tam liste senkronu, `since` YOK** — bilinçli sapma. Sunucunun wire formatı
+saniye hassasiyetinde olduğu için dışlayıcı bir `since` aynı saniyedeki satırları sessizce
+düşürürdü; ayrıca karara bağlanmış satır `since`'e hiç düşmediği için "hayalet kart" geri
+gelirdi. Tam liste otoriter → gelmeyen satır silinir. Gerekçe: [progress.md](progress.md) Tur 39.
+
+**Kalan büyük iş:** okuma yolunun **geri kalanı** (Borçlarım / Müşterilerim / geçmiş) — aynı
+desen, Tur 40. Ve **cihaz testi**: Tur 39 iki cihazda hiç koşulmadı.
 
 ---
 
@@ -56,7 +63,14 @@ app-pos henüz ona bağlanmadı → app-mobile mirror turunun işi.
 alınacak? Backend geldi ama bu soru cevaplanmadı — `/approvals`'ın UNCLAIMED dalı (anında yaz)
 kısmi bir cevap, CLAIMED dalı hâlâ ağ istiyor.
 
-### A.3 `RemoteDataSource`'ın ~25 metodundan **5'i** çağrılıyor
+### A.3 `RemoteDataSource`'ın okuma sarmalları — ⚠️ KISMEN (Tur 39)
+
+**Onaylar kapandı:** `pendingApprovals()` artık `PullEngine` tarafından çağrılıyor.
+**Kalan okuma uçları hâlâ çağrılmıyor** (`customers()`, `transactionHistory()`, `balance()`,
+`myDebts()`, `me()`) — müşteri listesi, bakiye ve geçmiş hâlâ Room'dan geliyor. Tur 40.
+Aşağıdaki teşhis Tur 39 öncesine ait:
+
+<details><summary>Orijinal teşhis</summary>
 **Nerede:** [`RemoteDataSource.kt`](../app-pos/core-data/src/main/java/com/example/app_pos/data/remote/RemoteDataSource.kt)
 
 Çağrılanlar: `createTransaction` ([`SyncEngine.kt:70`](../app-pos/core-data/src/main/java/com/example/app_pos/data/sync/SyncEngine.kt)) ve Tur 34'te eklenen
@@ -77,15 +91,19 @@ tek şey o.
 **Neden yine de yazıldı:** app-mobile bu modülü **düz kopyalayacak** — 7 API'nin hepsi sarmalı
 ki simetri korunsun.
 
-### A.4 Gelen onay (approvals) UI'si yok
-**Nerede:** `approvals` tablosu app-pos Room'unda **var ama hiç okunmuyor** (entity + DAO
-iskele; `approvalDao()` çağıran tek satır yok).
+</details>
 
-app-mobile'da bu **aktif** (Onaylar sekmesi). app-pos'ta esnaf sadece onay **gönderiyor**,
-gelen onay kutusu yok. Üç onay hattının ([db-schema.md A.6](db-schema.md)) app-pos ayağı eksik.
+### ~~A.4 Gelen onay (approvals) UI'si yok~~  ✅ KAPANDI (Tur 39)
+app-pos **Onaylar sekmesini kazandı**: `PendingApproval`/`DecisionOutcome` domain tipleri,
+`ApprovalDao` bağlandı (`RoomLocalDataSource` artık `approvalDao()` tutuyor), fragment + VM +
+adapter + nav girişi eklendi. Kutuyu dolduran okuma yolu da aynı turda geldi (§F).
 
-**Tur 39'un işi** — ama tek başına UI eklemek yetmez: kutuyu dolduracak bir **okuma yolu**
-da yok (bkz. §F). app-mobile'ın Onaylar ekranı bile sadece lokal tabloyu okuyor.
+app-mobile'ın ekranından tek farkı **rol bölümü olmaması** — POS her zaman dükkan tarafı,
+oysa app-mobile tek hesapta iki rol taşıdığı için listeyi role göre bölmek zorunda.
+
+**Bu turda bulunan iki tuzak:** `observePendingFor`'da **`ORDER BY` yoktu** (tek yazar varken
+görünmez, poll gelince sırayı kullanıcının altından kaydırırdı — app-mobile'da Tur 36'da
+düzeltilmişti) ve **`delete(id)` yoktu** (403/409'da kartı düşürmek imkânsızdı).
 
 ### A.5 `observeUnsentCount()` — yazıldı, hiçbir ekran kullanmıyor
 **Nerede:** [`Repository.kt`](../app-pos/core-domain/src/main/java/com/example/app_pos/model/Repository.kt) → `LocalSource` → `OutboxDao.observeCount()`
@@ -127,7 +145,15 @@ Yani bu madde artık "veri kaybı" değil, "kuyruk kaybı" riski.
 `customers.created_by_seller_id` eklendi (C.1), Room'da **yok**. Bugün zarar yok (cihaz
 müşteri listesini lokalden okuyor), ama okuma yolu sunucuya bağlanınca bu alan gelecek.
 
-### A.9 Telefon normalizasyonu bug'ı app-pos'ta HÂLÂ VAR  ⚠️ doğrulandı
+### ~~A.9 Telefon normalizasyonu bug'ı app-pos'ta HÂLÂ VAR~~  ✅ KAPANDI (Tur 39)
+`PhoneFormat` `:app` → **`:core-domain`** taşındı; `UserDao`'nun `LIKE '%..%'`'i ve
+`CustomerDao`'nun `REPLACE(...)`'i düz `WHERE phone = :stored` oldu; çağıranlar önce
+`toStored`'dan geçiyor. 6 `PhoneFormatTest` app-pos'ta da koşuyor.
+
+**Bu turda yapılmasının sebebi:** pull sunucudan **kanonik E.164** yazıyor — gevşek
+eşleştirme o veriyle çakışırdı. Aşağıdaki teşhis kayıt için duruyor:
+
+<details><summary>Orijinal teşhis</summary>
 **Nerede:** [`Daos.kt:65-66`](../app-pos/core-data/src/main/java/com/example/app_pos/data/db/dao/Daos.kt) (`LIKE '%..%'`) vs `:104`, `:111` (`=`);
 [`PhoneFormat.kt`](../app-pos/app/src/main/java/com/example/app_pos/util/PhoneFormat.kt) hâlâ `:app`'te (veri katmanı erişemiyor)
 
@@ -137,8 +163,8 @@ app-mobile'da Tur 38b ile düzeltilen hata **app-pos'ta aynen duruyor**: `UserDa
 hiçbir satırı bulmaz** → müşteri UNCLAIMED kalır → onaysız-yazma dalına düşer.
 
 **Cihazda doğrulanmadı** (app-pos hiç test edilmedi, §E), ama kod birebir aynı desen.
-Düzeltme app-mobile'dakinin kopyası: `PhoneFormat`'ı `:core-domain`'e taşı, sorguları düz
-`WHERE phone = :stored` yap, çağıranlar önce `toStored`'dan geçirsin.
+
+</details>
 
 ### A.8 `:app`'te `BuildConfig` kapalı
 `buildConfig` feature'ı sadece `:core-network`'te açık. `:app` debug/release ayrımını
@@ -148,7 +174,7 @@ yazamıyorum?" diye takılmasın.
 
 ---
 
-## B. app-mobile — mirror 3/4 (Tur 36-37-38 yapıldı)
+## B. app-mobile — mirror TAMAM (Tur 36→39)
 
 app-pos FAZ 4'ü bitirdi; app-mobile **yazma tarafında yetişti**. Güncel fark:
 
@@ -161,11 +187,13 @@ app-pos FAZ 4'ü bitirdi; app-mobile **yazma tarafında yetişti**. Güncel fark
 | Session | ✅ diskte (`TokenStore`) | ✅ **diskte (Tur 38)**, `prime()` runBlocking |
 | Login | ✅ gerçek JWT (`requestOtp`/`signIn`) | ✅ **gerçek JWT (Tur 38)**, tek ekran iki adım |
 | `LocalSource` arayüzü | ✅ var | ✅ **var (Tur 38)** |
-| Okuma yolu (pull) | ❌ **yok** | ❌ **yok** → **Tur 39** (bkz. §F) |
-| Approvals | iskele (gönderiyor, kutu yok) | ✅ kutu var; onay/ret **sunucuya gidiyor (Tur 38)** |
+| Okuma yolu (pull) | ✅ **Onaylar (Tur 39)**; kalanı Tur 40 | ✅ **Onaylar (Tur 39)**; kalanı Tur 40 |
+| Approvals | ✅ **kutu var (Tur 39)** — gönderiyor VE yanıtlıyor | ✅ kutu var; onay/ret sunucuya gidiyor (Tur 38) |
+| Arka plan pull | ✅ `PullWorker` 15 dk | ❌ **kasıtlı yok** (pil) — sadece ön plan 15 sn |
 
-**Kalan asimetri kasıtlı:** app-mobile arka planda **pull yapmaz** (pil), sadece outbox
-drain eder. Ön plan poll'u Tur 39'un işi — bkz. §F.3.
+**Kalan asimetri kasıtlı ve Tur 39'da uygulandı:** app-mobile arka planda **pull yapmaz**
+(pil), sadece outbox drain eder; ön planda 15 sn poll eder. app-pos ise tezgahta durduğu
+için ayrıca `PullWorker` ile 15 dakikada bir arka planda da okur. Bkz. §F.3.
 
 ### ~~B.1 Timestamp formatı ayrışması~~  ✅ KAPANDI (Tur 36)
 `nowStamp()` artık ISO-8601 UTC yazıyor, `substr()` sıralama hack'i **silindi** (düz
@@ -177,15 +205,15 @@ Yeni `app/util/TimeFormat.kt` gösterim için ISO'yu cihazın saat dilimine çev
 kartlar rowid sırasında geliyordu. Bugün görünmüyordu çünkü satırları hep aynı cihaz ekliyor;
 Tur 39'un poll'u tabloyu yeniden yazdığında sıra kullanıcının altından kayacaktı.
 
-### B.2 Mirror sırası — 3/4 tamam
+### B.2 Mirror sırası — ✅ 4/4 TAMAM
 1. ~~Timestamp ISO'ya geçir + `substr()` hack'ini sil~~ ✅ **Tur 36**
 2. ~~`:core-network` kopyala (app-pos'un Tur 34 hâliyle)~~ ✅ **Tur 37**
 3. ~~Hilt'e geç (`RepositoryProvider` silinir)~~ ✅ **Tur 37**
 4. ~~Gerçek login + session diske + outbox + WorkManager~~ ✅ **Tur 38**
-5. Buyer/approval uçlarını gerçek backend'e bağla → **KISMEN Tur 38**: approval
-   onay/ret/gönderim bağlandı; **buyer OKUMA uçları (`/me/debts`, `/me/transactions`,
-   `/me/balances`) hâlâ çağrılmıyor** — okuma yolunun tamamı Tur 39'a ait (§F).
-6. **Pull ekseni** → **Tur 39**, bkz. §F.
+5. Buyer/approval uçlarını gerçek backend'e bağla → **KISMEN**: approval yazma (Tur 38) ve
+   approval **okuma** (Tur 39) bağlandı; **buyer okuma uçları (`/me/debts`, `/me/transactions`,
+   `/me/balances`) hâlâ çağrılmıyor** — Tur 40 (§F).
+6. ~~**Pull ekseni**~~ ✅ **Tur 39** — Onaylar hattı; kalan okumalar Tur 40 (§F).
 
 **Ucuz olan taraf:** backend seed'i zaten app-mobile'ın seed'inden türetildi
 ([faz5-backend-plan.md §0.1](faz5-backend-plan.md)) — `u_market`, `m1`/`o1`, `p1`/`p2` sunucuda
@@ -262,11 +290,16 @@ JWT stateless olduğu için iptal edilecek bir şey yok; kısa access TTL + clie
 temizlemesi tezgâhtaki gerçek riski karşılıyor. Uç yine de var ve **token istiyor** ki ileride
 revocation list eklenirse **client değişmesin**.
 
-### C.4 Cihaz seed'i ile sunucu seed'i ayrı gerçeklikler  ⚠️ borç
-app-pos'un `SeedCallback`'i hâlâ cihazda çalışıyor: temiz kurulumdan sonra Room kendi demo
-verisini yazıyor, sunucununki ise ayrı. Gerçek veri sunucuda olduğu için cihaz seed'i artık
-**yanıltıcı** — mirror turunda ya kaldırılmalı ya da yalnızca sunucusuz geliştirmeye
-indirgenmeli.
+### ~~C.4 Cihaz seed'i ile sunucu seed'i ayrı gerçeklikler~~  ✅ KAPANDI (Tur 39)
+`SeedCallback` **iki app'ten de silindi**. Demo verisi artık tek yerde: `backend/app/seed.py`.
+Ekranlar sunucudan besleniyor, yani cihazdaki her satırın bir kaynağı var.
+
+Bunun somut bedeli 38c'de görülmüştü: cihaz seed'i `p1`'i kim giriş yaparsa yapsın yazıyordu,
+sahibi başka hesap olduğu için sunucu haklı olarak 403 veriyordu ve kart ekranda takılı
+kalıyordu. 38c kartın **düşmesini** sağladı (semptom); seed'in kalkması kartın oraya hiç
+gelmemesini sağlıyor (kök neden).
+
+**Sıfırlama:** `docker compose exec api python -m app.reset` (aşağıda §F.4/3).
 
 ---
 
@@ -299,17 +332,33 @@ gün eklemek ucuz.
 
 ---
 
-## E. Cihaz testi — app-mobile iki tur test edildi; 38c bekliyor
+## E. Cihaz testi — app-mobile doğrulandı; **Tur 39 hiç koşulmadı**
 
 **app-mobile 36/37/38 test edildi (2026-08-13)**, iki tur hata çıktı ve düzeltildi:
 **Tur 38b** (çift yazım, telefon normalizasyonu, onaysız yazma, sahte başarı) ve
 **Tur 38c** (takılan onay, OTP UI, müşteri listesi). Testin değeri iki kez kanıtlandı —
 38b'deki çift yazım ledger'ı bozuyordu ve hiçbir birim test onu yakalamamıştı.
 
+**Tur 38c cihazda doğrulandı (2026-08-13):** takılan onay kartı düşüyor, OTP adımı aynı
+ekranda açılıyor, müşteri listesi mock-pos handoff'unda dolu geliyor.
+
 **Hâlâ doğrulanmamış:**
-- **app-mobile + app-pos Tur 38c** — düzeltmelerin kendisi (5 adımlık liste progress.md'de).
-  Şema değişmedi → `adb uninstall` GEREKMİYOR.
-- **app-pos Tur 34 (5f)** — hiç cihazda çalıştırılmadı.
+- **Tur 39'un tamamı — turun asıl sınavı ve İKİ CİHAZ gerektiriyor.** Adım listesi
+  [progress.md](progress.md) Tur 39 sonunda. Kilit adım: app-mobile'da onaya gönder →
+  **app-pos'un Onaylar ekranında ~15 sn içinde görünmeli**. Şema değişti (app-pos'a approval
+  yüzeyi) → **`adb uninstall` ŞART**.
+- **Backend migration 0003 + `python -m app.reset` gerçek Postgres'te koşulmadı** (Docker
+  daemon kapalıydı). pytest **SQLite** üstünde ve şemayı `models.py`'den kuruyor, yani
+  **Alembic hiç çalıştırılmıyor**; `TRUNCATE ... CASCADE` de Postgres'e özgü. Reset'in tablo
+  listesi ve seed döngüsü SQLite'ta ayrıca sınandı, ama cihaz testinden **önce**
+  `docker compose up` + `alembic upgrade head` ile doğrulanmalı.
+- **app-pos Tur 34 (5f)** — hiç cihazda çalıştırılmadı. app-pos'un backend bağlantısı
+  (gerçek login, outbox drain) makinede test edilmiş ama cihazda hiç koşmadı. Tur 39 testi
+  bunu da kapsayacak — yani app-pos'un **ilk gerçek cihaz testi** olacak.
+
+⚠️ **Beklenti:** app-mobile'ın ilk cihaz testinden **iki düzeltme turu** (38b, 38c) çıkmıştı
+ve 38b'deki çift yazım ledger'ı bozuyordu. app-pos hiç test edilmediği için burada da bir
+**Tur 39b** beklemek gerçekçi.
 
 **Ortak koşullar:** sunucu ayakta (`docker compose up`) + `adb reverse tcp:4010 tcp:4010`
 (her USB bağlantısında yeniden). Host ayarı `gradle.properties` → `mobileApiHost` / `posApiHost`.
@@ -332,7 +381,19 @@ sunucu 404 döner, `SyncEngine` 4xx'i kalıcı ret sayıp satırı **siler**.
 
 ---
 
-## F. Okuma yolu (pull) — sistemde HİÇ YOK  ⚠️ yapısal boşluk, Tur 39'un konusu
+## F. Okuma yolu (pull) — ✅ AÇILDI (Tur 39, Onaylar hattı); kalanı Tur 40
+
+**Durum:** Onaylar ekseni **bitti**. `PullEngine` + `Repository.refreshApprovals()` iki app'te
+de var, ekran açıkken 15 sn poll ediyor (app-pos'ta ayrıca `PullWorker`, 15 dk arka plan).
+Artık **app-mobile'da açılan bir onay POS'ta görünüyor** — bu maddenin "imkânsız" dediği şey.
+
+**Kalan:** Borçlarım / Müşterilerim / geçmiş pull'u (`/me/debts`, `/customers`,
+`/transactions`) hâlâ **lokalden okunuyor**. Aynı desen, Tur 40. §F.2'deki customers-bakiye
+asimetrisi o turda çözülecek.
+
+Aşağıdaki teşhis, deseni neden böyle kurduğumuzu açıklamak için duruyor.
+
+<details><summary>Orijinal teşhis (Tur 39 öncesi)</summary>
 
 Bu madde bir "erteleme" değil, **kod okumasıyla yeni keşfedilen bir boşluk**. Mirror turu
 planlanırken app-pos'un ağ katmanı baştan sona tarandı ve şu çıktı:
@@ -372,11 +433,12 @@ gerekmiyordu.
   client'ın uçları çağırması değil; pull deseninin **tamamı** yok (cursor, merge, zamanlayıcı,
   çekilen varlık için domain tipi).
 
-### F.1 Sunucu tarafı da poll'a hazır değil
-- **`GET /approvals` filtresiz.** Ne `status`, ne `since`, ne `cursor`, ne `limit`. Status
-  `PENDING`'e, target token'ın user'ına sabitlenmiş → APPROVED/REJECTED geçmişi API'den
-  **hiç sorgulanamıyor**.
-- **`approvals` tablosunda `updated_at` YOK.** `requested_at` sadece *oluşturma* anını tutuyor,
+### F.1 Sunucu tarafı da poll'a hazır değil — ✅ ÇÖZÜLDÜ (Tur 39)
+- ~~**`GET /approvals` filtresiz.**~~ ✅ `status` (varsayılan PENDING, `ALL` geçmişi açar) +
+  `limit` (varsayılan 100) eklendi. `since` **bilinçli olarak eklenmedi** — bkz. §F.4/1.
+- ~~**`approvals` tablosunda `updated_at` YOK.**~~ ✅ migration 0003 ile eklendi (üç yazma
+  noktası damgalıyor). Not: pull tam-liste senkronu yaptığı için **bunu kullanmıyor**; kolon
+  denetim izi ve ileride FCM/cursor için duruyor. Orijinal teşhis: `requested_at` sadece *oluşturma* anını tutuyor,
   `PENDING→APPROVED` geçişi damga bırakmıyor. Yani `?since=` eklenmiş olsa bile **karar verilmiş
   onay poll'a hiç düşmez** → karşı taraf reddettiğinde kart ekranda sonsuza dek kalır
   ("hayalet kart"). Bu yüzden Tur 39'da **migration 0003 ile `updated_at` ekleniyor**
@@ -411,26 +473,39 @@ tetikleyici değişir.
 **app-mobile'da asimetri kasıtlı:** pil kısıtı nedeniyle arka planda **pull YOK**, sadece
 ekran açıkken 15 sn. Arka plan işi yalnızca outbox drain yapar.
 
-### F.4 Tur 39'un kapsamı — "sunucu tek gerçeklik" (kararlar kesinleşti)
+</details>
+
+### F.4 Tur 39'un kapsamı — "sunucu tek gerçeklik" (✅ UYGULANDI)
 
 Tur 38c'nin cihaz testinde çıkan `p1` sorunu bu maddenin **somut kanıtı** oldu: seed'lenmiş
 bir onay kartı, sahibi başka bir hesap olduğu halde ekranda duruyordu ve sunucu haklı olarak
 403 veriyordu. 38c kartın **düşmesini** sağladı (semptom), ama kartın oraya gelmemesi
 gerekiyordu (kök neden). Kök neden = okuma yolunun olmaması.
 
-**Kullanıcı kararları (2026-08-13):**
+**Kullanıcı kararları (2026-08-13) ve ne oldukları:**
 
-1. **Okuma yolu sırası:** önce **Onaylar → `GET /approvals`**. Bu uç zaten target'a göre
-   filtreli olduğu için `p1` sorununu kökten çözer ve pull deseninin ilk örneği olur.
-   Sonra Borçlarım / Müşterilerim / geçmiş. Tüm uçlar `RemoteDataSource`'ta **hazır**.
+1. ✅ **Okuma yolu sırası:** önce **Onaylar → `GET /approvals`**. Yapıldı. Sonrası
+   (Borçlarım / Müşterilerim / geçmiş) **Tur 40**; uçlar `RemoteDataSource`'ta hazır bekliyor.
 
-2. **Cihaz seed'leri kalkar** (`SeedCallback`, iki app'te de) — C.4'ün kapanışı. Ekranlar
-   sunucudan beslendiği için demo verisi de sunucuda tek yerde durur.
+   **Uygulamada plandan bir sapma oldu:** §F.1 `?since=` öneriyordu, **tam liste senkronu**
+   yapıldı. İki sebep: (a) sunucunun wire formatı **saniye hassasiyetinde**
+   (`%Y-%m-%dT%H:%M:%SZ`), dışlayıcı bir `since` aynı saniyedeki satırları sessizce
+   düşürürdü; (b) karara bağlanmış satır `since`'e hiç düşmediği için hayalet kart geri
+   gelirdi. Tam liste **otoriter** → gelmeyen satır silinir, sorun yapısal olarak yok.
+   `updated_at` yine de eklendi (migration 0003) ama **pull kullanmıyor** — denetim izi ve
+   ileride FCM/cursor için.
 
-3. **Reset: HTTP ucu YOK.** ⚠️ Kullanıcının açık kararı: *"bir kullanıcının es kaza veri
+2. ✅ **Cihaz seed'leri kalktı** (`SeedCallback`, iki app'ten de) — C.4 kapandı.
+
+3. ✅ **Reset: HTTP ucu YOK.** `backend/app/reset.py` yazıldı. ⚠️ Kullanıcının açık kararı: *"bir kullanıcının es kaza veri
    silebilmesi ihtimal olarak bile sıkıntı."* Sadece sunucu tarafından komutla:
-   `docker compose exec api python -m app.reset`. `seed.py`'de `is_empty()` + `seed()`
-   zaten var, yeniden kullanılır. Token'lı/debug-gated bir uç bile **eklenmeyecek**.
+   `docker compose exec api python -m app.reset`. `seed.py`'nin `is_empty()` + `seed()`'i
+   yeniden kullanıldı. Token'lı/debug-gated bir uç **eklenmedi**.
+
+   **Teknik not:** `transactions` üstündeki append-only trigger (`BEFORE UPDATE OR DELETE`)
+   düz `DELETE`'i patlatıyor → `TRUNCATE ... RESTART IDENTITY CASCADE` kullanıldı. TRUNCATE
+   tablo-seviyesi bir işlem, satır trigger'ı tetiklenmiyor; append-only garantisi bozulmuyor.
+   ⚠️ **Gerçek Postgres'te henüz koşulmadı** (Docker kapalıydı) — bkz. §E.
 
 4. **Boş isimli hesap** (`u_0e8a790ce5d9`, telefon = bir dükkanın shopPhone'u): bug DEĞİL.
    İsim opsiyonel, profilden doldurulur — tasarım tercihi. Reset ile temizlenecek.

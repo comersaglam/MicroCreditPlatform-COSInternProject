@@ -2,14 +2,21 @@ package com.example.app_pos.data.local
 
 import androidx.room.withTransaction
 import com.example.app_pos.data.db.AppDatabase
+import com.example.app_pos.data.db.entity.ApprovalEntity
+import com.example.app_pos.data.db.entity.CustomerEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.db.toBasketEntity
 import com.example.app_pos.data.db.toDomain
 import com.example.app_pos.data.db.toEntity
 import com.example.app_pos.data.db.toItemEntities
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PhoneFormat
+import com.example.app_pos.model.OtpRequestResult
+import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
@@ -43,6 +50,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     private val customers = db.customerDao()
     private val transactions = db.transactionDao()
     private val baskets = db.basketDao()
+    private val approvals = db.approvalDao()
     private val outbox = db.outboxDao()
 
     // --- session + pairing (RAM, mock — see class doc) -----------------------
@@ -62,7 +70,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
      * it here. Kept because LocalSource extends Repository, and answering false is the
      * honest response — this class cannot verify a code, only the server can.
      */
-    override suspend fun requestOtp(phone: String): Boolean = false
+    override suspend fun requestOtp(phone: String): OtpRequestResult = OtpRequestResult.Unreachable
 
     override suspend fun signIn(phone: String, code: String): SignInResult =
         SignInResult.Unreachable
@@ -99,7 +107,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     // --- users ---------------------------------------------------------------
 
     override suspend fun findUserByPhone(phone: String): User? =
-        users.findByPhoneDigits(phone.digits())?.toDomain()
+        users.findByPhone(storedPhone(phone))?.toDomain()
 
     override suspend fun registerUser(phone: String, displayName: String, isSeller: Boolean): User {
         findUserByPhone(phone)?.let { return it }
@@ -158,12 +166,12 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     }
 
     override suspend fun lookupCustomerForSeller(sellerId: String, phone: String): CustomerLookup {
-        val digits = phone.digits()
-        val row = customers.findByPhoneDigits(digits) ?: return CustomerLookup.New
+        val stored = storedPhone(phone)
+        val row = customers.findByPhone(stored) ?: return CustomerLookup.New
         val existing = row.toDomain(balanceOfCustomer(sellerId, row.customerId))
         // Mine = we already share at least one ledger entry. Otherwise the person is
         // simply known to another shop, and this seller may add them to their own book.
-        return if (customers.countForSellerByPhoneDigits(sellerId, digits) > 0) {
+        return if (customers.countForSellerByPhone(sellerId, stored) > 0) {
             CustomerLookup.AlreadyMine(existing)
         } else {
             CustomerLookup.KnownToOtherSeller(existing)
@@ -176,7 +184,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     }
 
     override suspend fun findCustomerByPhone(sellerId: String, phone: String): Customer? {
-        val row = customers.findByPhoneDigits(phone.digits()) ?: return null
+        val row = customers.findByPhone(storedPhone(phone)) ?: return null
         return row.toDomain(balanceOfCustomer(sellerId, row.customerId))
     }
 
@@ -255,6 +263,80 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         }
     }
 
+    // --- approvals (the incoming inbox) --------------------------------------
+
+    override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> =
+        approvals.observePendingFor(userId).map { list -> list.map { it.toDomain() } }
+
+    /**
+     * Local-only fallbacks. Answering an approval is a decision the COUNTERPARTY is waiting
+     * on, so the composing repository sends it to the server and overrides both of these;
+     * they exist because LocalSource carries the whole Repository surface.
+     */
+    override suspend fun approvePending(approvalId: String): DecisionOutcome =
+        DecisionOutcome.Unreachable
+
+    override suspend fun rejectPending(approvalId: String): DecisionOutcome =
+        DecisionOutcome.Unreachable
+
+    /** Storage cannot pull — there is no network here. See [syncNow] for the same shape. */
+    override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
+
+    /** Same as above: storage has no network. */
+    override suspend fun refreshBook(): PullOutcome = PullOutcome.Unreachable
+
+    override suspend fun syncApprovals(rows: List<ApprovalEntity>, targetUserId: String) {
+        db.withTransaction {
+            // Delete first, then insert: the reverse order would briefly hold rows the
+            // server just returned AND rows it dropped.
+            if (rows.isEmpty()) {
+                approvals.deleteAllPendingFor(targetUserId)
+            } else {
+                approvals.deletePendingNotIn(targetUserId, rows.map { it.approvalId })
+            }
+            // REPLACE, so a row whose status changed server-side overwrites the stale copy.
+            rows.forEach { approvals.insert(it) }
+        }
+    }
+
+    override suspend fun storeCustomers(rows: List<Customer>) {
+        db.withTransaction {
+            rows.forEach { customer ->
+                customers.upsert(
+                    CustomerEntity(
+                        customerId = customer.customerId,
+                        displayName = customer.displayName,
+                        phone = customer.phone.orEmpty(),
+                        claimStatus = customer.claimStatus.name,
+                        claimedByUserId = customer.claimedByUserId,
+                        // The server does not send a created-at for customers, and this
+                        // column only orders local lists. An existing row keeps whatever it
+                        // had; a new one is stamped now.
+                        createdAt = customers.findById(customer.customerId)?.createdAt ?: nowStamp()
+                    )
+                )
+            }
+        }
+        // The balance the server sent is intentionally dropped: every screen derives it from
+        // the ledger, and a stored second copy is how two numbers begin to disagree.
+    }
+
+    override suspend fun storeLedger(entries: List<Transaction>) {
+        db.withTransaction {
+            // insert-IGNORE keyed by the server's transaction id, so re-pulling the same
+            // history is a no-op rather than a duplicate.
+            entries.forEach { transactions.insert(it.toEntity(basketId = null)) }
+        }
+    }
+
+    override suspend fun markApprovalDecided(approvalId: String, status: String) {
+        approvals.setStatus(approvalId, status)
+    }
+
+    override suspend fun deleteApproval(approvalId: String) {
+        approvals.delete(approvalId)
+    }
+
     /**
      * No-op here: this class is the LOCAL half and owns no network. Draining the queue
      * needs a remote source, so it belongs to the composing repository — which overrides
@@ -280,18 +362,16 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         return balanceOf(sellerId, customerId, ledger)
     }
 
-    private fun String.digits(): String = filter { it.isDigit() }
-
-    // Store E.164 when the input is a valid TR local number, else keep the digits so a
-    // lookup by digits still matches (mirrors FakeRepository's fallback).
-    private fun storedPhone(input: String): String {
-        val d = input.digits()
-        return when {
-            d.length == 12 && d.startsWith("90") -> "+$d"
-            d.length == 11 && d.startsWith("0") -> "+90" + d.substring(1)
-            else -> d
-        }
-    }
+    /**
+     * The ONE canonical form, for storing AND for querying.
+     *
+     * Delegates to PhoneFormat so the data layer cannot drift from the rest of the system —
+     * a second implementation here is precisely what produced the bug this replaced. The
+     * digits-only fallback keeps a number PhoneFormat rejects (a landline, a foreign
+     * number) storable and findable, since both sides now go through this same function.
+     */
+    private fun storedPhone(input: String): String =
+        PhoneFormat.toStored(input) ?: input.filter { it.isDigit() }
 
     // ISO-8601 UTC, the format the wire contract uses and the one the DAOs sort on.
     // SimpleDateFormat rather than java.time because minSdk is 24 and core library

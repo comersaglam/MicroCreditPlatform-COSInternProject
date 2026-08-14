@@ -385,7 +385,23 @@ paths:
               schema: { $ref: '#/components/schemas/Transaction' }
     get:
       tags: [approvals]
-      summary: Pending approvals for the signed-in target
+      summary: Approvals addressed to the signed-in target
+      description: >
+        Defaults to PENDING (the inbox). Clients POLL this and sync their local table to
+        the answer, so the response is authoritative: a row that is absent has been decided
+        elsewhere and must be dropped locally.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Defaults to PENDING. `ALL` returns the decided history too.
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED, ALL]
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, default: 100, minimum: 1, maximum: 500 }
       responses:
         '200':
           description: OK
@@ -396,8 +412,8 @@ paths:
                 items: { $ref: '#/components/schemas/Approval' }
               # Two seed approvals (app-mobile): p1 waits on u1, p2 on u_owner.
               example:
-                - { approval_id: p1, initiator_user_id: u_owner, initiator_role: SELLER, target_user_id: u1, seller_id: u_owner, shop_name: Ahmet Bakkal, customer_id: c1, amount_minor: 5000, type: DEBT, description: 'Ekmek, süt', channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T07:05:00Z' }
-                - { approval_id: p2, initiator_user_id: u_market, initiator_role: SELLER, target_user_id: u_owner, seller_id: u_market, shop_name: Ayşe Market, customer_id: o1, amount_minor: 7500, type: DEBT, description: Temizlik malzemesi, channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T08:20:00Z' }
+                - { approval_id: p1, initiator_user_id: u_owner, initiator_role: SELLER, target_user_id: u1, seller_id: u_owner, shop_name: Ahmet Bakkal, customer_id: c1, amount_minor: 5000, type: DEBT, description: 'Ekmek, süt', channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T07:05:00Z', updated_at: '2026-07-25T07:05:00Z' }
+                - { approval_id: p2, initiator_user_id: u_market, initiator_role: SELLER, target_user_id: u_owner, seller_id: u_market, shop_name: Ayşe Market, customer_id: o1, amount_minor: 7500, type: DEBT, description: Temizlik malzemesi, channel: APP_PUSH, status: PENDING, requested_at: '2026-07-25T08:20:00Z', updated_at: '2026-07-25T08:20:00Z' }
   /approvals/{id}/approve:
     post:
       tags: [approvals]
@@ -751,7 +767,7 @@ components:
       # PLUS the forward three-line fields (initiator_*/target_user_id/channel). The
       # mock derives the three-line fields today (see plan Tur 21); full three-line
       # behaviour + app-pos's approvals UI land in a separate turn.
-      required: [approval_id, initiator_user_id, initiator_role, target_user_id, seller_id, shop_name, customer_id, amount_minor, type, channel, status, requested_at]
+      required: [approval_id, initiator_user_id, initiator_role, target_user_id, seller_id, shop_name, customer_id, amount_minor, type, channel, status, requested_at, updated_at]
       # Line 2: seller-POS -> buyer-mobile, awaiting the buyer's approval (seed p1).
       example:
         approval_id: p1
@@ -767,6 +783,7 @@ components:
         channel: APP_PUSH
         status: PENDING
         requested_at: '2026-07-25T07:05:00Z'
+        updated_at: '2026-07-25T07:05:00Z'
       properties:
         approval_id: { type: string }
         initiator_user_id: { type: string }
@@ -780,7 +797,8 @@ components:
         description: { type: string, nullable: true }
         channel: { $ref: '#/components/schemas/Channel' }
         status: { $ref: '#/components/schemas/ApprovalStatus' }
-        requested_at: { type: string, format: date-time }
+        requested_at: { type: string, format: date-time, description: When it was ASKED; never changes }
+        updated_at: { type: string, format: date-time, description: When it last CHANGED; moves on every status transition }
     ApprovalCreate:
       type: object
       required: [seller_id, customer_id, amount_minor, type, initiator_role, target_user_id]

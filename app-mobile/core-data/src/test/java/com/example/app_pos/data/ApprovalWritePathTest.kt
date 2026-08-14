@@ -1,6 +1,7 @@
 package com.example.app_pos.data
 
 import com.example.app_pos.data.remote.RemoteDataSource
+import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.ClaimStatus
@@ -74,6 +75,7 @@ class ApprovalWritePathTest {
         local = local,
         remote = remote,
         syncEngine = SyncEngine(local, remote, moshi),
+        pullEngine = PullEngine(local, remote),
         tokens = FakeTokenStore(),
         moshi = moshi
     )

@@ -69,11 +69,19 @@ class App : Application(), Configuration.Provider {
         // Backgrounded, unlike prime(): nothing on screen depends on the result, and the
         // drain absorbs its own failures. Blocking here would delay the first frame for a
         // network round trip.
-        appScope.launch { repository.syncNow() }
+        // Both directions, once, at launch: push what we owe the server, then read what it
+        // has for us. The pull matters most right here — the device no longer seeds itself,
+        // so on a fresh install this is what puts anything on the screen at all.
+        appScope.launch {
+            repository.syncNow()
+            repository.refreshApprovals()
+            repository.refreshBook()
+        }
 
         // And the safety net: keep trying in the background, even while the app is closed.
         // This is what covers a terminal that is never reopened until long after signal
         // returns. KEEP means an existing schedule survives this call (see SyncScheduler).
         syncScheduler.schedulePeriodicSync()
+        syncScheduler.schedulePeriodicPull()
     }
 }

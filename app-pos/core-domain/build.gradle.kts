@@ -14,4 +14,8 @@ dependencies {
     // JVM (no Android): the domain stays free of Room/Retrofit/Android imports — the
     // compiler enforces that purity.
     implementation(libs.kotlinx.coroutines.core)
+
+    // Pure-JVM tests for the pure-JVM rules that live here (phone canonicalisation).
+    // No Android test runner is involved.
+    testImplementation(libs.junit)
 }

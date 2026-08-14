@@ -2,19 +2,25 @@ package com.example.app_pos.data
 
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.remote.RemoteDataSource
+import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.mapper.toCreateDto
 import com.squareup.moshi.Moshi
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PullOutcome
+import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.User
 import com.example.app_pos.network.ApiResult
+import com.example.app_pos.network.isRetryable
 import com.example.app_pos.network.auth.TokenStore
 import com.example.app_pos.network.dto.UserDto
 import com.example.app_pos.network.mapper.toDomain
@@ -51,6 +57,7 @@ class OfflineFirstRepository @Inject constructor(
     private val local: LocalSource,
     private val remote: RemoteDataSource,
     private val syncEngine: SyncEngine,
+    private val pullEngine: PullEngine,
     private val tokens: TokenStore,
     moshi: Moshi
 ) : Repository {
@@ -66,10 +73,17 @@ class OfflineFirstRepository @Inject constructor(
     override fun currentSellerId(): String? = tokens.currentUserIdOrNull()
 
     /** Asks the server to send a code. False when it refused or could not be reached. */
-    override suspend fun requestOtp(phone: String): Boolean =
+    override suspend fun requestOtp(phone: String): OtpRequestResult =
         when (val result = remote.requestOtp(phone)) {
-            is ApiResult.Success -> result.data
-            else -> false
+            // The server answers `sent: false` when it declines the number itself.
+            is ApiResult.Success ->
+                if (result.data) OtpRequestResult.Sent else OtpRequestResult.Refused
+            // Never reached. Reported apart from a refusal so the screen does not blame the
+            // number for a dropped connection.
+            is ApiResult.NetworkError -> OtpRequestResult.Unreachable
+            is ApiResult.ApiError ->
+                if (result.isRetryable()) OtpRequestResult.Unreachable else OtpRequestResult.Refused
+            is ApiResult.UnexpectedError -> OtpRequestResult.Unreachable
         }
 
     /**
@@ -212,6 +226,106 @@ class OfflineFirstRepository @Inject constructor(
         local.addTransactionQueued(transaction, orderBody, payload)
     }
 
+    // --- approvals (the incoming inbox) --------------------------------------
+
+    override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> =
+        // Reads the local table, which refreshApprovals FILLS from the server. The Flow is
+        // the right shape for that: the pull writes Room, and this screen re-emits without
+        // knowing a network call happened.
+        local.observePendingApprovals(userId)
+
+    /**
+     * Pulls the server's inbox into the local table. See [Repository.refreshApprovals].
+     *
+     * Needs a session: the endpoint answers "what is waiting on YOU", so without a signed-in
+     * seller there is no question to ask.
+     */
+    override suspend fun refreshApprovals(): PullOutcome {
+        val userId = tokens.currentUserIdOrNull() ?: return PullOutcome.Unreachable
+        return pullEngine.pullApprovals(userId)
+    }
+
+    /** Pulls this shop's customers and their entries. See [Repository.refreshBook]. */
+    override suspend fun refreshBook(): PullOutcome {
+        // A session is required: /customers answers "the signed-in seller's book".
+        if (tokens.currentUserIdOrNull() == null) return PullOutcome.Unreachable
+        return pullEngine.pullBook()
+    }
+
+    /**
+     * Approves on the SERVER, which is what writes the ledger entry on this path, then
+     * mirrors the result locally.
+     *
+     * Deliberately NOT offline-tolerant: an approval is a decision the counterparty is
+     * waiting on, so recording it only on this device would show "approved" here while the
+     * other side still sees a pending card. When the server cannot be reached the local row
+     * is left untouched, so the card stays and the merchant can try again.
+     */
+    override suspend fun approvePending(approvalId: String): DecisionOutcome =
+        when (val result = remote.approve(approvalId)) {
+            is ApiResult.Success -> {
+                // Mirror the server's entry WITHOUT queueing it: the server already holds
+                // this write, and addTransaction would put a second copy in the outbox.
+                result.data?.let { local.addTransaction(it) }
+                // markApprovalDecided, NOT local.approvePending — the latter books the
+                // entry itself, which here is a SECOND copy of an amount the server already
+                // wrote. The two rows carry different generated ids, so the ledger's
+                // insert-IGNORE cannot deduplicate them and the balance is simply wrong.
+                // (Found on an app-mobile device: a 75 TL approval landed twice.)
+                local.markApprovalDecided(approvalId, STATUS_APPROVED)
+                DecisionOutcome.Applied
+            }
+
+            is ApiResult.ApiError -> staleCardOutcome(approvalId, result)
+                ?: DecisionOutcome.Failed(result.message)
+
+            // Keep the card: retrying IS the right next move when nothing was reached.
+            is ApiResult.NetworkError -> DecisionOutcome.Unreachable
+            is ApiResult.UnexpectedError -> DecisionOutcome.Failed()
+        }
+
+    override suspend fun rejectPending(approvalId: String): DecisionOutcome =
+        when (val result = remote.reject(approvalId)) {
+            is ApiResult.Success -> {
+                // Nothing is written on this path, so only the status changes.
+                local.markApprovalDecided(approvalId, STATUS_REJECTED)
+                DecisionOutcome.Applied
+            }
+
+            is ApiResult.ApiError -> staleCardOutcome(approvalId, result)
+                ?: DecisionOutcome.Failed(result.message)
+
+            is ApiResult.NetworkError -> DecisionOutcome.Unreachable
+            is ApiResult.UnexpectedError -> DecisionOutcome.Failed()
+        }
+
+    /**
+     * Recognises the refusals that mean "this card should not be here", and clears it.
+     *
+     * A 403 (addressed to someone else) or a 409 (already answered) cannot be fixed by
+     * trying again — the answer is identical every time. Leaving the row pending strands it
+     * on screen forever, which is exactly what a stale card did on an app-mobile test device.
+     *
+     * DELETED, not marked: this device does not know the real decision, and writing one
+     * would invent a record. The true trail lives on the server.
+     *
+     * Returns null when the error is something else, leaving the decision to the caller.
+     */
+    private suspend fun staleCardOutcome(
+        approvalId: String,
+        error: ApiResult.ApiError
+    ): DecisionOutcome? = when (error.code) {
+        CODE_FORBIDDEN -> {
+            local.deleteApproval(approvalId)
+            DecisionOutcome.NotYours
+        }
+        CODE_ALREADY_DECIDED -> {
+            local.deleteApproval(approvalId)
+            DecisionOutcome.AlreadyDecided
+        }
+        else -> null
+    }
+
     /**
      * Pushes whatever is queued. Safe to call at any time: it is a no-op on an empty queue,
      * only one drain runs at a time, and every send is idempotent.
@@ -238,6 +352,13 @@ class OfflineFirstRepository @Inject constructor(
         // Error codes the sign-in flow branches on, exactly as the contract spells them.
         const val CODE_USER_NOT_FOUND = "user_not_found"
         const val CODE_INVALID_CODE = "invalid_code"
+
+        // Refusals that mean the card is stale rather than the request being wrong.
+        const val CODE_FORBIDDEN = "forbidden"
+        const val CODE_ALREADY_DECIDED = "already_decided"
+
+        const val STATUS_APPROVED = "APPROVED"
+        const val STATUS_REJECTED = "REJECTED"
 
         /**
          * A new formatter per call: SimpleDateFormat is not thread-safe. ISO-8601 UTC is

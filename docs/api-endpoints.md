@@ -257,7 +257,8 @@ ise onay sonrası ayrıca **POS → PGW** (nakit/kart → fiş; gerçek intent F
   "description": "Ekmek, süt",
   "channel": "APP_PUSH",              // [üç-hat] APP_PUSH (app'li) | SMS_OTP (app'siz)
   "status": "PENDING",                // PENDING | APPROVED | REJECTED
-  "requested_at": "2026-07-25T10:05:00Z" }
+  "requested_at": "2026-07-25T10:05:00Z",   // ne zaman SORULDU — hiç değişmez
+  "updated_at": "2026-07-25T10:05:00Z" }    // ne zaman DEĞİŞTİ — her status geçişinde ilerler
 ```
 > `[üç-hat]` alanları contract'ta var ve Room şemasında tutulur, ama mock BUGÜN bunları türetir
 > (initiator_role=SELLER, target_user_id=buyerUserId, channel=CLAIMED?APP_PUSH:SMS_OTP). Tam
@@ -277,11 +278,22 @@ push kartı düşer). **UNCLAIMED** ise (app'siz) OTP mock true → **anında** 
 FakeRepository: `requestApproval` (+ `ApprovalService`).
 
 ### `GET /approvals`
-Bekleyenler (target = token).
+Target = token. **Client'lar bu ucu POLL EDİYOR** (Tur 39) ve lokal tabloyu cevaba göre
+senkronluyor → cevap **otoriter**: listede olmayan satır başka yerde karara bağlanmıştır ve
+lokalde de silinmelidir.
 ```jsonc
-// Response 200 -> [Approval]  (status=PENDING)
+// GET /approvals?status=PENDING&limit=100
+//   status: PENDING (varsayılan) | APPROVED | REJECTED | ALL   — ALL geçmişi de döndürür
+//   limit:  1..500, varsayılan 100
+// Response 200 -> [Approval]
+// 400 invalid_status — tanınmayan status
 ```
-FakeRepository: `observePendingApprovals`.
+`?since=` **bilinçli olarak YOK**: wire formatı saniye hassasiyetinde
+(`%Y-%m-%dT%H:%M:%SZ`), dışlayıcı bir `since` aynı saniyedeki satırları sessizce düşürürdü.
+Tam liste senkronu hem bu riski hem de "hayalet kart"ı ortadan kaldırıyor
+([deferred.md §F](deferred.md)).
+
+FakeRepository: `observePendingApprovals`; pull tarafı `refreshApprovals`.
 
 ### `POST /approvals/{id}/approve`
 Onaylar → ledger'a yazılır (tek yazma noktası). PAYMENT ise `settled_via_pgw` akışı FAZ 8.

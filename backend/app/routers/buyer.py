@@ -89,6 +89,9 @@ def my_debts(current_user: CurrentUser, db: DbSession) -> list[schemas.SellerDeb
                     if seller
                     else seller_id
                 ),
+                # The shop's own number when it has one, else the account's. A buyer cannot
+                # read the seller's user row, so this is their only way to reach them.
+                shop_phone=(seller.shop_phone or seller.phone) if seller else None,
                 balance_minor=balance_minor,
             )
         )

@@ -10,6 +10,9 @@ import javax.inject.Inject
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.TransactionType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -23,9 +26,13 @@ import kotlinx.coroutines.launch
  * shop wants to book on them, and payments their own customers want confirmed. The two
  * read very differently, so the list is split into sections by role.
  *
- * FOREGROUND POLLING (mock): the app is a caller, never a listener — no FCM. While this
- * screen is open the repository Flow re-emits, which is what a poll loop would observe.
- * TODO(FAZ 4): a WorkManager background poll refreshes this while the app is closed.
+ * FOREGROUND POLLING: the app is a caller, never a listener — no FCM. The cards are
+ * authored on the COUNTERPARTY's device, so nothing local can discover them; [poll] asks
+ * the server while this screen is open and the Flow above re-emits from Room.
+ *
+ * Polling only in the foreground is deliberate, and the asymmetry with app-pos is the
+ * point: this is a battery-powered phone, so background work here drains the outbox and
+ * nothing more. A POS sits on a counter and can afford to listen.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -40,6 +47,26 @@ class ApprovalsViewModel @Inject constructor(
                 buildItems(approvals, user.userId)
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Asks the server for the inbox, forever, while the caller's scope is alive.
+     *
+     * Driven from the Fragment's STARTED lifecycle rather than [viewModelScope]: a
+     * ViewModel outlives the visible screen, and a loop tied to it would keep hitting the
+     * network from a backgrounded app — the exact battery cost this app avoids by not
+     * polling in a Worker.
+     *
+     * The result is deliberately ignored. Every outcome is already handled where it
+     * matters: success rewrites Room and the Flow re-emits, and a failure leaves storage
+     * untouched by design. There is nothing useful to say to someone looking at a list that
+     * is still correct, so a poll never raises an error banner.
+     */
+    suspend fun poll() {
+        while (currentCoroutineContext().isActive) {
+            repo.refreshApprovals()
+            delay(POLL_INTERVAL_MS)
+        }
+    }
 
     /**
      * Groups by MY role and prepends a header to each non-empty group.
@@ -106,5 +133,14 @@ class ApprovalsViewModel @Inject constructor(
     /** Reject → the request is closed, nothing written. */
     fun reject(approvalId: String, onResult: (DecisionOutcome) -> Unit) {
         viewModelScope.launch { onResult(repo.rejectPending(approvalId)) }
+    }
+
+    private companion object {
+        /**
+         * Fifteen SECONDS, against WorkManager's fifteen-MINUTE floor. Affordable only
+         * because it runs while someone is looking at the screen: an approval is answered
+         * in a conversation, so a card arriving a quarter of an hour late would be useless.
+         */
+        const val POLL_INTERVAL_MS = 15_000L
     }
 }

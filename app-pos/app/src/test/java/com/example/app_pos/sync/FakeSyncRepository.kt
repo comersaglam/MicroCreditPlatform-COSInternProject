@@ -3,6 +3,10 @@ package com.example.app_pos.sync
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.DecisionOutcome
+import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PullOutcome
+import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
@@ -43,7 +47,7 @@ open class FakeSyncRepository(
     override fun currentSellerId(): String? = null
     open override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
-    override suspend fun requestOtp(phone: String): Boolean = false
+    override suspend fun requestOtp(phone: String): OtpRequestResult = OtpRequestResult.Unreachable
 
     override suspend fun signIn(phone: String, code: String): SignInResult =
         SignInResult.Unreachable
@@ -67,4 +71,15 @@ open class FakeSyncRepository(
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> = flowOf(0L)
     override suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody?) = Unit
     override fun observeUnsentCount(): Flow<Int> = flowOf(0)
+
+    // --- approvals (Turn 39). Open, so PullWorker's tests can drive refreshApprovals the
+    // way SyncWorker's tests drive syncNow.
+    override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> =
+        flowOf(emptyList())
+    override suspend fun approvePending(approvalId: String): DecisionOutcome =
+        DecisionOutcome.Applied
+    override suspend fun rejectPending(approvalId: String): DecisionOutcome =
+        DecisionOutcome.Applied
+    open override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Refreshed(0)
+    open override suspend fun refreshBook(): PullOutcome = PullOutcome.Refreshed(0)
 }

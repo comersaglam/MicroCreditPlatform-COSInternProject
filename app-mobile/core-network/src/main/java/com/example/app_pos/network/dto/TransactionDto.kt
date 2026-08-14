@@ -59,5 +59,8 @@ data class BalanceDto(
 data class SellerDebtDto(
     @param:Json(name = "seller_id") val sellerId: String,
     @param:Json(name = "shop_name") val shopName: String,
+    // Denormalised like shopName: a buyer cannot read the seller's account, so without
+    // this the card can name the shop but not call it.
+    @param:Json(name = "shop_phone") val shopPhone: String? = null,
     @param:Json(name = "balance_minor") val balanceMinor: Long
 )

@@ -2119,9 +2119,10 @@ anotasyon hedefi — app-pos'ta da var, davranışa etkisi yok). **30 unit test 
 (22 core-network + 8 app: SyncWorker karar tablosu dahil). Release güvenliği: APK'da
 loopback IP grep'i **0**, `API_BASE_URL = https://api.veresiye.example/`.
 
-**CİHAZ TESTİ BEKLİYOR** (Tur 36-37-38 birikti). Şema v2 + login değişikliği yüzünden
-**`adb uninstall com.example.app_mobile` ŞART**. Sunucu gerekli: `docker compose up` +
-`adb reverse tcp:4010 tcp:4010`. Sıra: giriş (telefon → kod `123456`) → Borçlarım →
+**CİHAZDA DOĞRULANDI** ✓ (2026-08-13, Tur 36-37-38 birlikte) — tarih formatı ve giriş akışı
+doğru çalıştı; yazma yolunda çıkan hatalar Tur 38b/38c'de düzeltildi. Şema v2 olduğu için
+**`adb uninstall com.example.app_mobile` gerekmişti**. Test edilen sıra:
+giriş (telefon → kod `123456`) → Borçlarım →
 Onaylar (Onayla/Reddet artık sunucuya gidiyor) → Profil → çıkış → tekrar giriş
 (**session diskte kalmalı, tekrar kod sormamalı**).
 
@@ -2196,7 +2197,8 @@ shopPhone araması eklemek reddedildi: hesap kişiye aittir, dükkana değil.
 exactly once` **kırmızıya döndü**; düzeltme geri alınınca yeşil. Yani test gerçekten koruyor,
 yanlışlıkla yeşil kalan bir test değil.
 
-**CİHAZ TESTİ BEKLİYOR** (şema değişmedi → `adb uninstall` GEREKMİYOR):
+**CİHAZDA DOĞRULANDI** ✓ (2026-08-13) — çift yazım gitti: sunucu verisiyle teyit edildi (p2
+`APPROVED`, ledger'da mükerrer kayıt yok). Test edilen adımlar:
 1. Onaylar → 75 TL'yi onayla → ledger'a **bir kez** düşmeli
 2. Borçlarım → Ayşe Market → Öde → "Onaya gönderildi" (sunucuya gitmeli)
 3. Müşterilerim → CLAIMED müşteri → Ödeme Al → onaya gider, ledger'a hemen yazmaz
@@ -2284,11 +2286,146 @@ Yeni: 3 `ApprovalWritePathTest` (403/409/ağ) + 3 `CustomerSelectViewModelTest`.
 **Mutasyon kontrolü (iki ayrı):** (a) `if (q.isEmpty()) all` → `emptyList()` yapıldı, test
 **kırmızıya döndü**; (b) 38b'nin çift yazım testi hâlâ koruyor. Testler gerçekten kilitliyor.
 
-**CİHAZ TESTİ BEKLİYOR** (şema değişmedi → `adb uninstall` GEREKMİYOR):
-1. Onaylar → p1 (50 TL) → Onayla/Reddet → kart **düşer**, "bu onay size ait değil" der
-2. Çıkış → giriş: numara gir → "Kod gönder" → telefon **ekranda kalır** (soluk), kod altına açılır
-3. "Numarayı değiştir" → telefon tekrar aktif
-4. mock-pos → tutar → VERESİYE → app-pos müşteri seç → **liste dolu gelir**, arama daraltır
-5. Listeden seç → onay → OTP → akış bozulmadan tamamlanır
+**CİHAZDA DOĞRULANDI** ✓ (2026-08-13; şema değişmediği için `adb uninstall` gerekmedi):
+1. Onaylar → p1 → kart **düşüyor** ✓
+2. Giriş: telefon alanı **ekranda kalıyor**, kod altına açılıyor ✓
+3. "Numarayı değiştir" ✓
+4. mock-pos → VERESİYE → müşteri **listesi dolu geliyor**, arama daraltıyor ✓
+5. Seçim → onay → OTP akışı bozulmadı ✓
 
 **Sıradaki:** Tur 39 — pull ekseni + "sunucu tek gerçeklik" ([deferred.md §F](deferred.md)).
+
+### 2026-08-14 — Tur 39: pull ekseni — "sunucu tek gerçeklik" (Onaylar hattı)
+
+**Sistemdeki yapısal boşluk kapandı:** iki client da sunucuya sadece YAZIYORDU.
+`RemoteDataSource`'ta **9 okuma sarmalı** vardı ve **hiçbirinin çağıranı yoktu**;
+`Repository` arayüzü "çekmek" fiilini hiç tanımlamıyordu. Sonuç: app-mobile'dan gelen
+veresiye onayını POS **göremiyordu**. Artık görebiliyor.
+
+**Kapsam kararı:** sadece Onaylar ekseni. Desen bir kez kurulup kanıtlanıyor;
+Borçlarım/Müşterilerim/geçmiş pull'u aynı deseni izleyerek Tur 40'a kaldı.
+
+**1) `since` yerine TAM LİSTE SENKRONU — plandan bilinçli sapma**
+
+§F.1 `?since=` öneriyordu. Kod okumasında iki somut sorun çıktı ve karar değişti:
+- **Sunucunun ISO formatı saniye hassasiyetinde** (`schemas.py` `IsoUtc` →
+  `%Y-%m-%dT%H:%M:%SZ`, mikrosaniye kırpılıyor çünkü client düz `SimpleDateFormat` ile
+  ayrıştırıyor). Dışlayıcı bir `since` **aynı saniyedeki satırları sessizce düşürür**.
+- **Karar verilmiş satır `since`'e hiç düşmez** → kart ekranda kalır. Yani çözmeye
+  çalıştığımız "hayalet kart" sorununun ta kendisi geri gelirdi.
+
+Tam liste **otoriter**: cevapta olmayan satır lokalde de silinir → hayalet kart yapısal
+olarak imkânsız. Bekleyen onay sayısı küçük, yani ucuz. `updated_at` yine de eklendi
+(denetim izi + ileride FCM/cursor için) ama **pull onu kullanmıyor**.
+
+**2) Backend: migration 0003 + `GET /approvals` filtreleri**
+
+`approvals.updated_at` eklendi (nullable → `requested_at`'ten backfill → NOT NULL, çünkü
+tablo dolu). `server_default` kullanılmadı: bu kod tabanında **zaman damgalarının sahibi
+Python**, her yazma noktası açıkça `datetime.now(UTC)` çağırıyor — `onupdate` hiç
+kullanılmıyor. Üç yazma noktası damgalanıyor (oluşturma / approve / reject).
+
+`GET /approvals`: `status` (varsayılan PENDING — **bugünkü davranış korunuyor**, `ALL`
+geçmişi açar) + `limit` (varsayılan 100). Poll edilen bir uçta sınırsız liste kabul edilemez.
+`_approval_out` 13 alanı tek tek saydığı için kolonu wire'a çıkarmak ayrıca gerekti.
+
+**3) `app/reset.py` — HTTP ucu YOK**
+
+`docker compose exec api python -m app.reset`. Kullanıcının açık kararı: token'lı/debug-gated
+bir uç bile eklenmeyecek. **Teknik nokta:** `transactions` üstünde append-only trigger var
+(`BEFORE UPDATE OR DELETE`), düz `DELETE` patlar → `TRUNCATE ... RESTART IDENTITY CASCADE`
+(tablo-seviyesi işlem, satır trigger'ı tetiklenmez; append-only garantisi bozulmuyor).
+
+**4) İki client: `PullEngine` + `refreshApprovals()`**
+
+`SyncEngine`'in ikizi — `@Singleton` + constructor injection + `mutex`, **DI modülü
+gerektirmedi**. Üç kural:
+- Sunucunun listesi **otoriter** (gelmeyen satır silinir)
+- **`Unreachable` boş liste DEĞİLDİR** → lokale hiç dokunulmaz. Bunu karıştırmak,
+  sinyalsiz bir telefonun kendi kutusunu silmesi demekti.
+- Okunamayan satır **düşürülür, tahmin edilmez** (tip işareti taşıyor)
+
+`LocalSource.syncApprovals` tek Room transaction'ında sil+yaz — ikisi ayrı gözlemlenirse
+liste 15 saniyede bir boşalıp dolar (glitch).
+
+**Mevcut `PendingApproval.toEntity` KULLANILMADI:** `channel`'ı APP_PUSH sabitliyor,
+`status`'ü PENDING varsayıyor, `initiatorRole`'ü türetiyor — yani sunucunun **az önce
+söylediği üç şeyi atıyor**. Doğrudan `ApprovalDto → ApprovalEntity` mapper'ı yazıldı.
+
+**5) app-pos: Onaylar kutusu (§A.4 kapandı) — turun asıl işi**
+
+app-pos çok geride başladı: `PendingApproval`/`DecisionOutcome` domain tipleri **yoktu**,
+`ApprovalDao`'nun **hiçbir çağıranı yoktu**, ekran yoktu. Hepsi eklendi (app-mobile'ın
+simetriği; tek fark **rol bölümü yok** — POS her zaman dükkan tarafı).
+
+**Keşifte bulunan iki tuzak:**
+- `ApprovalDao.observePendingFor`'da **`ORDER BY` YOKTU**. app-mobile'da Tur 36'da
+  düzeltilmişti ve gerekçesi tam olarak bu tur: poll tabloyu yeniden yazınca **sıra
+  kullanıcının altından kayardı**. Tek cihaz yazarken görünmeyen, poll gelince patlayan bir bug.
+- `delete(id)` yoktu → 403/409'da kartı düşürmek imkânsızdı.
+
+**6) §F.3'ün iki katmanı**: ekran açıkken **15 saniye** (`repeatOnLifecycle(STARTED)`,
+fragment durunca iptal), app-pos'ta ayrıca **`PullWorker`** (15 dk, arka plan).
+**app-mobile'da arka plan pull'u YOK** — pil kararı korundu; asimetri kasıtlı ve belgeli.
+
+**7) A.9 telefon normalizasyonu app-pos'ta düzeltildi**
+
+`PhoneFormat` `:app` → **`:core-domain`**; `UserDao` `LIKE '%..%'` ve `CustomerDao`
+`REPLACE(...)` → düz `WHERE phone = :stored`. Bu turda yapıldı çünkü pull sunucudan
+**kanonik E.164** yazıyor; gevşek eşleştirme o veriyle çakışırdı.
+
+**8) Cihaz seed'leri kalktı** (iki app'te de, C.4 kapandı). Demo verisi artık tek yerde:
+`backend/app/seed.py`. Ekranlar sunucudan besleniyor.
+
+**Öğrenilenler:**
+- **Bir zaman damgası "ne zaman oldu" demez, "neyin zamanı" der.** `requested_at` sorulma
+  anıydı; karar anını tutan alan olmadığı için karara bağlanmış satır bekleyenden zamanla
+  ayırt edilemiyordu. İki farklı olay = iki farklı kolon.
+- **Başarısızlığı boşlukla karıştırma.** "Sunucu bir şey döndürmedi" ile "sunucuya
+  ulaşılamadı" aynı `if` dalına düşerse, sinyalsiz cihaz kendi verisini siler. Tip bunu
+  ayırmak zorunda (`Unreachable` ≠ `Refreshed(0)`).
+- **Sunucudan gelen veriyi lokal kurallarla yeniden türetmek, sormanın amacını yok eder.**
+  `toEntity` üç alanı "hesaplıyordu"; pull'un tüm anlamı o üç alanı sunucudan almak.
+- **Görünmeyen bug, koşul değişince patlar.** app-pos'un eksik `ORDER BY`'ı tek yazar
+  varken zararsızdı; poll gelir gelmez kullanıcının altından sıra kaydıracaktı.
+
+**Doğrulama:** iki projede de `assembleDebug` ✓ `assembleRelease` ✓ (tek uyarı:
+`@ApplicationContext` anotasyon hedefi — eskiden beri var, davranışa etkisi yok).
+Release güvenliği: **iki APK'da da loopback IP grep'i 0**.
+
+- **Backend: 146 pytest / 0 fail** (137 → 146; yeni 9'u filtreleri + `updated_at`'i kilitliyor)
+- **app-mobile: 52 test / 0 fail** (45 → 52; yeni 7'si `PullPathTest`)
+- **app-pos: 43 test / 0 fail** (11 → 43; yeni `PullWorkerTest` 6 + `PhoneFormatTest` 6 + mevcut suite)
+
+**Mutasyon kontrolü (üç ayrı):**
+1. `approve`'dan `updated_at` damgası kaldırıldı → `test_approving_moves_updated_at...`
+   **kırmızı**
+2. `PullEngine`'de `NetworkError` dalı lokali temizleyecek şekilde bozuldu →
+   `an unreachable server leaves local rows untouched` **kırmızı** (en kritik kural)
+3. `PullWorker`'da `Failed → Result.failure()` yapıldı →
+   `a refusal never abandons the schedule` **kırmızı**
+
+**CİHAZ TESTİ BEKLİYOR — turun asıl sınavı, İKİ CİHAZ gerekiyor.**
+Şema değişti (app-pos'a approval yüzeyi) → **`adb uninstall` ŞART** (MIUI'de `pm clear`
+çalışmıyor). Koşullar: `docker compose up` + `adb reverse tcp:4010 tcp:4010`.
+1. `docker compose exec api python -m app.reset` → temiz sunucu
+2. Cihaz seed'i kalktığı için ekranlar **sunucudan** dolmalı (boş değil)
+3. **app-mobile'da ödeme onaya gönder → app-pos'un Onaylar ekranında ~15 sn içinde GÖRÜNMELİ**
+   ← §F'nin "bugün imkânsız" dediği şey
+4. app-pos'ta Onayla → ledger'a **bir kez** düşsün (38b'nin çift yazım guard'ı)
+5. app-mobile'da kart **kendiliğinden düşsün** (poll senkronu)
+6. Reddet: yazma yok, karşı taraftan kart düşsün
+7. Uçak modu → kutu **boşalmasın** (`Unreachable`)
+8. `p1` hayalet kartı artık hiç görünmemeli (kök neden kapandı)
+
+**DOĞRULANMADI (Docker daemon kapalıydı):** `alembic upgrade head` ve `python -m app.reset`
+**gerçek Postgres'te koşulmadı**. pytest SQLite üstünde ve şemayı `models.py`'den kuruyor →
+**migration 0003 test suite tarafından doğrulanmıyor**. `TRUNCATE ... CASCADE` de
+Postgres'e özgü. Reset'in tablo listesi ve seed döngüsü SQLite'ta ayrıca sınandı (tablo
+listesi metadata ile birebir örtüşüyor), ama **cihaz testinden önce Docker'la doğrulanmalı.**
+
+**Not:** app-pos daha önce **hiç cihazda çalıştırılmadı** (§E). app-mobile'da 38b/38c diye
+iki düzeltme turu çıktığı düşünülürse, burada da bir Tur 39b beklemek gerçekçi.
+
+**Sıradaki:** Tur 39b (cihaz testi düzeltmeleri) → Tur 40: pull'un kalan ekseni
+(Borçlarım / Müşterilerim / geçmiş), aynı desen.

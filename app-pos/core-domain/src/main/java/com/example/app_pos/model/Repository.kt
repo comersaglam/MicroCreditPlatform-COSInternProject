@@ -25,7 +25,7 @@ interface Repository {
      * off their phone and types it back, so the two halves are two round trips with a
      * person in between.
      */
-    suspend fun requestOtp(phone: String): Boolean
+    suspend fun requestOtp(phone: String): OtpRequestResult
 
     /**
      * Verifies the code and persists the session.
@@ -74,6 +74,52 @@ interface Repository {
      * and delivered later by [syncNow].
      */
     suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody? = null)
+
+    // --- approvals (the incoming inbox: what is waiting on THIS shop's decision) ---
+
+    /**
+     * Requests awaiting this shop's answer — a buyer declaring a payment the shop must
+     * confirm having received.
+     *
+     * The counterpart of the gate app-pos already writes THROUGH: until now the shop could
+     * only send entries for approval, never answer one, so the buyer-initiated line had no
+     * seller-side ending at all.
+     */
+    fun observePendingApprovals(userId: String): Flow<List<PendingApproval>>
+
+    /**
+     * Answers a pending approval. Approving is what writes the ledger entry on this path.
+     *
+     * Returns [DecisionOutcome] because not every refusal means "try again": a card that
+     * belongs to someone else, or was already answered, can never succeed and is dropped
+     * rather than left on screen forever.
+     */
+    suspend fun approvePending(approvalId: String): DecisionOutcome
+    suspend fun rejectPending(approvalId: String): DecisionOutcome
+
+    /**
+     * Reads the pending approvals from the SERVER and makes the local table match.
+     *
+     * The first read path in this contract — every other read here is a Room Flow, which
+     * worked only while the device was the sole author of what it displayed. An inbox is
+     * written by the COUNTERPARTY's device, so it cannot be discovered by observing local
+     * storage.
+     *
+     * The answer is authoritative: a row the server does not return has been decided
+     * elsewhere and is removed locally. Safe to call repeatedly — polling does exactly that.
+     */
+    suspend fun refreshApprovals(): PullOutcome
+
+    /**
+     * Reads this shop's book from the server: the customers in it and their ledger entries.
+     *
+     * Separate from [refreshApprovals] because the two behave differently on a partial
+     * answer. An approval missing from the server's list has been decided and is deleted
+     * locally; a ledger entry missing from a response has NOT been withdrawn — the ledger is
+     * append-only — so this one only ever adds. Sharing one method would turn that
+     * distinction into a runtime flag instead of a compile-time one.
+     */
+    suspend fun refreshBook(): PullOutcome
 
     // --- sync ---
 

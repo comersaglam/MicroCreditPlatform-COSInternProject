@@ -10,6 +10,7 @@
     <string name="login_verify_button">Giriş yap</string>
     <string name="login_edit_phone">Numarayı değiştir</string>
     <string name="msg_login_wrong_number">Geçersiz numara, tekrar deneyin</string>
+    <string name="msg_login_unreachable">Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin</string>
     <string name="msg_login_code_sent">Telefonunuza gönderilen kodu girin</string>
     <string name="msg_login_wrong_code">Kod hatalı, tekrar deneyin</string>
     <string name="register_confirm_title">Kayıt ol</string>

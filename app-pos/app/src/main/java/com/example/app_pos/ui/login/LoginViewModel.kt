@@ -6,7 +6,8 @@ import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
-import com.example.app_pos.util.PhoneFormat
+import com.example.app_pos.model.OtpRequestResult
+import com.example.app_pos.model.PhoneFormat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,7 +69,13 @@ class LoginViewModel @Inject constructor(
         _state.value = LoginState.SUBMITTING
         viewModelScope.launch {
             _state.value =
-                if (repo.requestOtp(stored)) LoginState.CODE_SENT else LoginState.OFFLINE
+                when (repo.requestOtp(stored)) {
+                    is OtpRequestResult.Sent -> LoginState.CODE_SENT
+                    // Refused vs unreachable: the number is wrong, or the server was never
+                    // reached. OFFLINE already says the latter honestly.
+                    is OtpRequestResult.Refused -> LoginState.ERROR
+                    is OtpRequestResult.Unreachable -> LoginState.OFFLINE
+                }
         }
     }
 
@@ -116,7 +123,11 @@ class LoginViewModel @Inject constructor(
             // app-pos registers a seller; the name is blank and filled in from profile.
             repo.registerUser(phone, displayName = "", isSeller = true)
             _state.value =
-                if (repo.requestOtp(phone)) LoginState.CODE_SENT else LoginState.OFFLINE
+                when (repo.requestOtp(phone)) {
+                    is OtpRequestResult.Sent -> LoginState.CODE_SENT
+                    is OtpRequestResult.Refused -> LoginState.ERROR
+                    is OtpRequestResult.Unreachable -> LoginState.OFFLINE
+                }
         }
     }
 

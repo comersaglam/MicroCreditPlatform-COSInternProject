@@ -39,6 +39,14 @@
             app:argType="string" />
     </fragment>
 
+    <!-- What is waiting on this shop's answer. Filled by a poll, not by anything this
+         device writes: the cards are raised on the customer's phone. -->
+    <fragment
+        android:id="@+id/approvalsFragment"
+        android:name="com.example.app_pos.ui.dashboard.approvals.ApprovalsFragment"
+        android:label="@string/nav_approvals"
+        tools:layout="@layout/fragment_approvals" />
+
     <fragment
         android:id="@+id/reportsFragment"
         android:name="com.example.app_pos.ui.dashboard.reports.ReportsFragment"

@@ -3,7 +3,6 @@ package com.example.app_pos.data.di
 import android.content.Context
 import androidx.room.Room
 import com.example.app_pos.data.OfflineFirstRepository
-import com.example.app_pos.data.SeedCallback
 import com.example.app_pos.data.db.AppDatabase
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.local.RoomLocalDataSource
@@ -35,7 +34,11 @@ object DataModule {
             // Mock phase: if the entity set changes, wipe rather than migrate. Real
             // migrations arrive with the backend phase (schemas are exported for diffing).
             .fallbackToDestructiveMigration(dropAllTables = true)
-            .addCallback(SeedCallback(context))
+            // No seed callback any more (Turn 39). The device used to write its own demo
+            // rows on first launch, which made the screen a mixture of local fiction and
+            // server truth. Demo data now lives in one place, `backend/app/seed.py`, and
+            // reaches the device the same way real data does. Reset it with:
+            //   docker compose exec api python -m app.reset
             .build()
 
     @Provides

@@ -8,6 +8,7 @@ import com.example.app_pos.network.api.LedgerApi
 import com.example.app_pos.network.api.SyncApi
 import com.example.app_pos.network.api.UserApi
 import com.example.app_pos.data.remote.RemoteDataSource
+import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
 import com.squareup.moshi.Moshi
 import com.example.app_pos.model.SignInResult
@@ -59,6 +60,7 @@ class OfflineFirstSessionTest {
             local = local,
             remote = remote,
             syncEngine = SyncEngine(local, remote, moshi),
+            pullEngine = PullEngine(local, remote),
             tokens = tokens,
             moshi = moshi
         )

@@ -29,7 +29,7 @@ interface Repository {
     val isPairedWithApp: Flow<Boolean>
 
     /** Asks the server to send a code. False when it refused or could not be reached. */
-    suspend fun requestOtp(phone: String): Boolean
+    suspend fun requestOtp(phone: String): OtpRequestResult
 
     /**
      * Verifies the code and persists the session the server returns.
@@ -90,6 +90,34 @@ interface Repository {
 
     // --- approvals (every write passes through here) ---
     fun observePendingApprovals(userId: String): Flow<List<PendingApproval>>
+
+    /**
+     * Reads the pending approvals from the SERVER and makes the local table match.
+     *
+     * The first read path in this contract: everything else here is a Room Flow, because
+     * until now the device was the only author of what it displayed. An inbox breaks that
+     * assumption — the rows are written by the OTHER party's device — so the screen cannot
+     * be correct without asking.
+     *
+     * The answer is authoritative: a row the server does not return has been decided
+     * somewhere else and is removed locally. That is what stops a card from lingering after
+     * the counterparty already answered it.
+     *
+     * Safe to call repeatedly — a foreground poll does exactly that.
+     */
+    suspend fun refreshApprovals(): PullOutcome
+
+    /**
+     * Reads this buyer's ledger from the server: which shops they owe, and the entries
+     * behind each balance.
+     *
+     * Separate from [refreshApprovals] because the two behave differently on a partial
+     * answer. An approval missing from the server's list has been decided and is deleted
+     * locally; a ledger entry missing from a response has NOT been withdrawn — the ledger is
+     * append-only — so this one only ever adds. Sharing one method would make that
+     * distinction a runtime flag instead of a compile-time one.
+     */
+    suspend fun refreshMyLedger(): PullOutcome
 
     /**
      * Answers a pending approval. Approving is what writes the ledger entry on this path.

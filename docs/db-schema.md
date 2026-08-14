@@ -164,7 +164,8 @@ Mevcut `PendingApproval` mock'unun (app-mobile) alanları + ileri üç-hat alanl
 | `description` | TEXT | YES | |
 | `channel` | TEXT | NO | APP_PUSH \| SMS_OTP |
 | `status` | TEXT | NO | PENDING \| APPROVED \| REJECTED |
-| `requested_at` | TIMESTAMP | NO | mock: `requestedAt` |
+| `requested_at` | TIMESTAMP | NO | mock: `requestedAt`. Ne zaman SORULDU — hiç değişmez |
+| `updated_at` | TIMESTAMP | NO | Ne zaman DEĞİŞTİ (migration 0003). `requested_at` karara bağlanmış satırı bekleyenden ayıramıyordu; `PENDING→APPROVED/REJECTED` geçişi damga bırakmıyordu |
 
 - Index: `INDEX(target_user_id, status)` (bekleyenler). app-mobile Room'unda **AKTİF** (Aşama 4:
   Onaylar sekmesi bu tablodan okur); app-pos Room'unda İSKELE (entity+DAO var, kullanım = ayrı
@@ -184,7 +185,8 @@ CREATE TABLE approvals (
   approval_id TEXT PRIMARY KEY, initiator_user_id TEXT NOT NULL, initiator_role TEXT NOT NULL,
   target_user_id TEXT NOT NULL, seller_id TEXT NOT NULL, shop_name TEXT NOT NULL,
   customer_id TEXT NOT NULL, amount_minor INTEGER NOT NULL, type TEXT NOT NULL, description TEXT,
-  channel TEXT NOT NULL, status TEXT NOT NULL, requested_at TEXT NOT NULL );
+  channel TEXT NOT NULL, status TEXT NOT NULL, requested_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL );
 CREATE INDEX idx_approvals_target ON approvals(target_user_id, status);
 ```
 

@@ -13,7 +13,7 @@ Two branches, decided by whether the counterparty has an account:
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from .. import models, schemas
@@ -24,6 +24,11 @@ from ..serializers import transaction_out
 router = APIRouter(tags=["approvals"])
 
 _VALID_TYPES = {"DEBT", "PAYMENT"}
+_VALID_STATUSES = {"PENDING", "APPROVED", "REJECTED"}
+
+# Not a status a row can hold -- it means "do not filter at all", which is why it is kept
+# apart from the set above rather than added to it.
+_STATUS_ALL = "ALL"
 
 
 def _approval_out(approval: models.Approval) -> schemas.Approval:
@@ -41,6 +46,7 @@ def _approval_out(approval: models.Approval) -> schemas.Approval:
         channel=approval.channel,
         status=approval.status,
         requested_at=approval.requested_at,
+        updated_at=approval.updated_at,
     )
 
 
@@ -132,6 +138,7 @@ def send_for_approval(
         response.status_code = status.HTTP_200_OK
         return transaction_out(transaction)
 
+    raised_at = datetime.now(UTC)
     approval = models.Approval(
         approval_id=str(uuid.uuid4()),
         # From the token, never the body: the row records who actually asked.
@@ -148,7 +155,10 @@ def send_for_approval(
         description=body.description,
         channel="APP_PUSH",
         status="PENDING",
-        requested_at=datetime.now(UTC),
+        requested_at=raised_at,
+        # Same instant as requested_at: a row that has only just been raised has not
+        # changed since. They diverge the moment somebody decides it.
+        updated_at=raised_at,
     )
     db.add(approval)
     db.commit()
@@ -158,21 +168,39 @@ def send_for_approval(
 
 @router.get("/approvals")
 def pending_approvals(
-    current_user: CurrentUser, db: DbSession
+    current_user: CurrentUser,
+    db: DbSession,
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=100, ge=1, le=500),
 ) -> list[schemas.Approval]:
     """
     What is waiting on THIS user's decision, newest first.
 
-    Filtered to PENDING. Decided rows are kept for the audit trail, so the filter -- not a
-    delete -- is what keeps the screen showing only what still needs an answer.
+    Defaults to PENDING, which is what the inbox wants and what this endpoint has always
+    returned -- decided rows are kept for the audit trail, so a filter rather than a delete
+    is what keeps the screen showing only what still needs an answer. `status=ALL` opens
+    that history up, since it was previously unreachable through the API at all.
+
+    `limit` exists because clients POLL this: an unbounded list is fine when a screen asks
+    once, and is not when it asks every fifteen seconds forever.
     """
+    query = select(models.Approval).where(
+        models.Approval.target_user_id == current_user.user_id
+    )
+
+    if status_filter is None:
+        query = query.where(models.Approval.status == "PENDING")
+    elif status_filter != _STATUS_ALL:
+        if status_filter not in _VALID_STATUSES:
+            raise api_error(
+                400,
+                "invalid_status",
+                "status must be PENDING, APPROVED, REJECTED or ALL",
+            )
+        query = query.where(models.Approval.status == status_filter)
+
     rows = db.execute(
-        select(models.Approval)
-        .where(
-            models.Approval.target_user_id == current_user.user_id,
-            models.Approval.status == "PENDING",
-        )
-        .order_by(models.Approval.requested_at.desc())
+        query.order_by(models.Approval.requested_at.desc()).limit(limit)
     ).scalars().all()
 
     return [_approval_out(approval) for approval in rows]
@@ -221,6 +249,7 @@ def approve(
         description=approval.description,
     )
     approval.status = "APPROVED"
+    approval.updated_at = datetime.now(UTC)
     db.commit()
 
     return transaction_out(transaction)
@@ -237,6 +266,7 @@ def reject(approval_id: str, current_user: CurrentUser, db: DbSession) -> Respon
     """
     approval = _decide(db, approval_id, current_user)
     approval.status = "REJECTED"
+    approval.updated_at = datetime.now(UTC)
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

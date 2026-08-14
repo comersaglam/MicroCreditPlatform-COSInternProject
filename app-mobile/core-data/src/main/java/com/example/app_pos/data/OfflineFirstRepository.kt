@@ -2,6 +2,7 @@ package com.example.app_pos.data
 
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.remote.RemoteDataSource
+import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
@@ -9,6 +10,8 @@ import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.PAYMENT_DESCRIPTION
 import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PullOutcome
+import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
@@ -17,6 +20,7 @@ import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.network.ApiResult
+import com.example.app_pos.network.isRetryable
 import com.example.app_pos.network.auth.TokenStore
 import com.example.app_pos.network.dto.ApprovalDto
 import com.example.app_pos.network.dto.TransactionCreateDto
@@ -55,6 +59,7 @@ class OfflineFirstRepository @Inject constructor(
     private val local: LocalSource,
     private val remote: RemoteDataSource,
     private val syncEngine: SyncEngine,
+    private val pullEngine: PullEngine,
     private val tokens: TokenStore,
     moshi: Moshi
 ) : Repository {
@@ -70,10 +75,17 @@ class OfflineFirstRepository @Inject constructor(
     override fun currentUserId(): String? = tokens.currentUserIdOrNull()
 
     /** Asks the server to send a code. False when it refused or could not be reached. */
-    override suspend fun requestOtp(phone: String): Boolean =
+    override suspend fun requestOtp(phone: String): OtpRequestResult =
         when (val result = remote.requestOtp(phone)) {
-            is ApiResult.Success -> result.data
-            else -> false
+            // The server answers `sent: false` when it declines the number itself.
+            is ApiResult.Success ->
+                if (result.data) OtpRequestResult.Sent else OtpRequestResult.Refused
+            // Never reached. Reported apart from a refusal so the screen does not blame the
+            // number for a dropped connection.
+            is ApiResult.NetworkError -> OtpRequestResult.Unreachable
+            is ApiResult.ApiError ->
+                if (result.isRetryable()) OtpRequestResult.Unreachable else OtpRequestResult.Refused
+            is ApiResult.UnexpectedError -> OtpRequestResult.Unreachable
         }
 
     /**
@@ -216,9 +228,28 @@ class OfflineFirstRepository @Inject constructor(
     // --- approvals -----------------------------------------------------------
 
     override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> =
-        // Still the local table. Nothing pulls the server's inbox yet, so an approval
-        // raised on ANOTHER device does not appear here — the gap tracked as Turn 39.
+        // Still reads the local table — and now something FILLS it from the server. The
+        // Flow is the right shape for that: refreshApprovals writes Room, and every screen
+        // observing this re-emits without knowing a network call happened.
         local.observePendingApprovals(userId)
+
+    /**
+     * Pulls the server's inbox into the local table. See [Repository.refreshApprovals].
+     *
+     * Needs a session: the endpoint answers "what is waiting on YOU", so without a signed-in
+     * user there is no question to ask. Reported as [PullOutcome.Unreachable] rather than a
+     * failure because a poll started just before sign-out is a race, not a fault.
+     */
+    override suspend fun refreshApprovals(): PullOutcome {
+        val userId = tokens.currentUserIdOrNull() ?: return PullOutcome.Unreachable
+        return pullEngine.pullApprovals(userId)
+    }
+
+    /** Pulls this buyer's debts and their entries. See [Repository.refreshMyLedger]. */
+    override suspend fun refreshMyLedger(): PullOutcome {
+        val userId = tokens.currentUserIdOrNull() ?: return PullOutcome.Unreachable
+        return pullEngine.pullMyLedger(userId)
+    }
 
     /**
      * Approves on the SERVER, which is what writes the ledger entry on this path, then

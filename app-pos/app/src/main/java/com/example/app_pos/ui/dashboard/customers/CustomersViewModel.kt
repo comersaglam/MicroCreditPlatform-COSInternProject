@@ -2,6 +2,9 @@ package com.example.app_pos.ui.dashboard.customers
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -66,5 +69,27 @@ class CustomersViewModel @Inject constructor(
 
     fun onFilterChanged(newFilter: CustomerFilter) {
         filter.value = newFilter
+    }
+
+    /**
+     * Pulls the book from the server while this screen is open.
+     *
+     * Needed because the flows above read Room, and Room only holds what a pull put there —
+     * the terminal stopped seeding itself in Turn 39. Without this the list is empty on a
+     * fresh install no matter what the server holds.
+     *
+     * Thirty seconds, not fifteen: a customer list changes when somebody books an entry, and
+     * an entry raised elsewhere already arrives through the approvals poll. This is the
+     * catch-up for writes made on another terminal, not a live feed.
+     */
+    suspend fun poll() {
+        while (currentCoroutineContext().isActive) {
+            repo.refreshBook()
+            delay(POLL_INTERVAL_MS)
+        }
+    }
+
+    private companion object {
+        const val POLL_INTERVAL_MS = 30_000L
     }
 }

@@ -5,6 +5,8 @@ import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PullOutcome
+import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
@@ -50,7 +52,7 @@ class FakeSyncRepository(
     override fun currentUserId(): String? = null
     override fun observeCurrentUser(): Flow<User?> = flowOf(null)
     override val isPairedWithApp: Flow<Boolean> = flowOf(false)
-    override suspend fun requestOtp(phone: String): Boolean = false
+    override suspend fun requestOtp(phone: String): OtpRequestResult = OtpRequestResult.Unreachable
     override suspend fun signIn(phone: String, code: String): SignInResult = SignInResult.Unreachable
     override suspend fun logout() = Unit
     override suspend fun pairWithApp() = Unit
@@ -106,4 +108,9 @@ class FakeSyncRepository(
 
     override suspend fun addTransaction(transaction: Transaction) = Unit
     override fun observeUnsentCount(): Flow<Int> = flowOf(0)
+
+    // The SyncWorker drains only; pulling is a foreground job on this app, so nothing
+    // under test here calls this.
+    override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
+    override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
 }
