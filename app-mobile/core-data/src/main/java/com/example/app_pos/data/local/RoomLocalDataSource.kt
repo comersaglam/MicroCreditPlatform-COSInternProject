@@ -147,6 +147,11 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     override suspend fun shopPhoneOf(sellerId: String): String? =
         users.findById(sellerId)?.shopPhone
 
+    // Room re-emits when the row lands, which is the whole point: the shop's number is
+    // written by the ledger pull, often after the screen observing it is already open.
+    override fun observeShopPhone(sellerId: String): Flow<String?> =
+        users.observeById(sellerId).map { it?.shopPhone }
+
     // --- claim ---------------------------------------------------------------
 
     override suspend fun claimCustomerForUser(userId: String, phone: String): List<Customer> {

@@ -187,6 +187,9 @@ class OfflineFirstRepository @Inject constructor(
 
     override suspend fun shopPhoneOf(sellerId: String): String? = local.shopPhoneOf(sellerId)
 
+    override fun observeShopPhone(sellerId: String): Flow<String?> =
+        local.observeShopPhone(sellerId)
+
     override suspend fun claimCustomerForUser(userId: String, phone: String): List<Customer> =
         local.claimCustomerForUser(userId, phone)
 

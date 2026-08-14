@@ -53,9 +53,14 @@ class SellerDetailViewModel @Inject constructor(
      * The shop's phone for the header — how the buyer reaches them. Empty when the
      * seller has not set one, so the row can hide. Mirrors CustomerDetailViewModel's
      * phone, simpler because sellerId is a constructor argument.
+     *
+     * OBSERVED, not read once. The number arrives with the ledger pull, which frequently
+     * lands after this screen is already open; a one-shot read taken before it would leave
+     * the row hidden for the whole visit even though the number was known seconds later.
      */
     val shopPhone: StateFlow<String> =
-        flow { emit(repo.shopPhoneOf(sellerId).orEmpty()) }
+        repo.observeShopPhone(sellerId)
+            .map { it.orEmpty() }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
     private val filter = MutableStateFlow(TransactionFilter.ALL)

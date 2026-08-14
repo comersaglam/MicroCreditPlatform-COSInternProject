@@ -165,9 +165,22 @@ fun PendingApproval.toEntity(
 
 // --- SellerDebt (the buyer's debt list: a GROUP BY + JOIN projection) ---
 
+/**
+ * What a shop is called before its name is known.
+ *
+ * The list is a JOIN of two separately-written tables: the ledger pull stores the entries,
+ * `storeShopNames` stores the names, and between those two writes a row genuinely has a
+ * balance and no name. The old fallback put the raw seller id on screen for that window
+ * ("u_market"), which is an internal key the buyer has no way to interpret — worse than
+ * saying nothing, because it looks like data. A neutral word carries the same "not known
+ * yet" without pretending to be the shop's name.
+ */
+private const val UNNAMED_SHOP = "Dükkan"
+
 fun SellerDebtRow.toDomain(): SellerDebt = SellerDebt(
     sellerId = sellerId,
-    // A seller who has not named their shop is shown by id, as the fake did.
-    shopName = shopName ?: sellerId,
+    // Blank counts as absent too: an empty name renders as an empty line, which reads as
+    // a broken row rather than a pending one.
+    shopName = shopName?.takeIf { it.isNotBlank() } ?: UNNAMED_SHOP,
     balanceMinor = balanceMinor
 )

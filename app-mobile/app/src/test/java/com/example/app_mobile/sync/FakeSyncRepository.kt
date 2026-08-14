@@ -66,6 +66,7 @@ class FakeSyncRepository(
     override suspend fun updateEmail(userId: String, email: String) = Unit
     override suspend fun shopNameOf(sellerId: String): String = sellerId
     override suspend fun shopPhoneOf(sellerId: String): String? = null
+    override fun observeShopPhone(sellerId: String): Flow<String?> = flowOf(null)
     override suspend fun claimCustomerForUser(userId: String, phone: String): List<Customer> =
         emptyList()
 

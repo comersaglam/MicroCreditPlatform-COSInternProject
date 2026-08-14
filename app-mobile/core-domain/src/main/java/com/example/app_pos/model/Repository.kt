@@ -55,6 +55,16 @@ interface Repository {
     suspend fun shopNameOf(sellerId: String): String
     /** The shop's contact number, or null when the seller has not set one. */
     suspend fun shopPhoneOf(sellerId: String): String?
+    /**
+     * The shop's contact number as a Flow, for screens that outlive the first read.
+     *
+     * The one-shot [shopPhoneOf] above is right for a caller that asks once and acts on the
+     * answer. It is wrong for a screen: a buyer learns a shop's number from the ledger pull,
+     * so opening the detail before that pull lands reads null and — with a one-shot read —
+     * keeps showing nothing for as long as the screen stays open, no matter what arrives
+     * afterwards. Observing the row instead lets the number appear when it does.
+     */
+    fun observeShopPhone(sellerId: String): Flow<String?>
 
     // --- claim (the bridge between a Customer record and a User account) ---
     /**
