@@ -197,7 +197,14 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
                         displayName = customer.displayName,
                         phone = customer.phone.orEmpty(),
                         claimStatus = customer.claimStatus.name,
-                        claimedByUserId = customer.claimedByUserId,
+                        // Kept ONLY when that user row exists locally: customers has a FK to
+                        // users on this column, and this device holds a user row for its own
+                        // account and the shops it owes — not for other people. On the claim
+                        // path the id IS this user, so it survives; a record claimed by
+                        // somebody else would otherwise crash the write on a FK violation.
+                        // claimStatus still carries "this belongs to an account".
+                        claimedByUserId = customer.claimedByUserId
+                            ?.takeIf { users.findById(it) != null },
                         createdBySellerId = customer.createdBySellerId,
                         // The server sends no created-at for customers, and this column only
                         // orders local lists. An existing row keeps what it had.

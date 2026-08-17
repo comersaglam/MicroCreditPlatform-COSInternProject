@@ -311,7 +311,20 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
                         displayName = customer.displayName,
                         phone = customer.phone.orEmpty(),
                         claimStatus = customer.claimStatus.name,
-                        claimedByUserId = customer.claimedByUserId,
+                        // Kept ONLY when that user row exists locally. customers has a FK to
+                        // users on this column, and a seller cannot read their customers'
+                        // accounts — the server tells them c1 is claimed by u1, but there is
+                        // no endpoint that would ever give this device a u1 row. Writing the
+                        // id anyway is a FOREIGN KEY violation that crashes the pull, which
+                        // is exactly what happened on the first genuinely clean install:
+                        // until allowBackup was turned off, a deleted local seed had been
+                        // supplying those user rows and hiding this.
+                        //
+                        // Nothing is lost by dropping it. claimStatus already carries "this
+                        // record belongs to an account", which is the part a seller's screens
+                        // use; the id itself is only meaningful on the buyer's own device.
+                        claimedByUserId = customer.claimedByUserId
+                            ?.takeIf { users.findById(it) != null },
                         createdBySellerId = customer.createdBySellerId,
                         // The server does not send a created-at for customers, and this
                         // column only orders local lists. An existing row keeps whatever it
