@@ -116,4 +116,5 @@ class FakeSyncRepository(
     // under test here calls this.
     override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
     override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
+    override suspend fun refreshBook(): PullOutcome = PullOutcome.Unreachable
 }

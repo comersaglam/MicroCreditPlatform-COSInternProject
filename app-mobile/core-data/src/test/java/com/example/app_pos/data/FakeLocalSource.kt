@@ -79,6 +79,8 @@ class FakeLocalSource(
 
     override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
 
+    override suspend fun refreshBook(): PullOutcome = PullOutcome.Unreachable
+
     /** Entries the last storeBuyerLedger stored, or null when it was never called. */
     var storedBuyerLedger: List<Transaction>? = null
         private set
@@ -87,8 +89,18 @@ class FakeLocalSource(
     var storedShopNames: Map<String, Pair<String, String?>>? = null
         private set
 
+    /**
+     * Everything storeLedger has stored, ACCUMULATED across calls — the book pull calls it
+     * once per customer, so overwriting would hide every customer but the last.
+     */
+    val storedLedger: MutableList<Transaction> = mutableListOf()
+
     override suspend fun storeBuyerLedger(entries: List<Transaction>, userId: String) {
         storedBuyerLedger = entries
+    }
+
+    override suspend fun storeLedger(entries: List<Transaction>) {
+        storedLedger += entries
     }
 
     override suspend fun storeShopNames(shopsBySellerId: Map<String, Pair<String, String?>>) {

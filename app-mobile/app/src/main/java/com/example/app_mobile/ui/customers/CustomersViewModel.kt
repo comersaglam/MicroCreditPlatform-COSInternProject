@@ -10,6 +10,9 @@ import javax.inject.Inject
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -119,6 +122,30 @@ class CustomersViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Pulls this user's book from the server while the screen is open.
+     *
+     * The flows above read Room, and until this existed nothing server-side ever wrote the
+     * seller half of that table — the list showed only what this install had created itself,
+     * which is how it came up empty on a clean device. The buyer screen has had its own poll
+     * since Turn 40 (see DebtsViewModel.poll); this is the missing other half.
+     *
+     * Same thirty seconds, and for the same reason: entries booked through an approval
+     * already arrive on the approvals poll, so this is the catch-up for writes made
+     * elsewhere, not a live feed. A buyer-only account polls harmlessly — the server refuses
+     * and the pull reports nothing refreshed.
+     */
+    suspend fun poll() {
+        while (currentCoroutineContext().isActive) {
+            repo.refreshBook()
+            delay(POLL_INTERVAL_MS)
+        }
+    }
+
     fun onSearchChanged(newQuery: String) { query.value = newQuery }
     fun onFilterChanged(newFilter: CustomerFilter) { filter.value = newFilter }
+
+    private companion object {
+        const val POLL_INTERVAL_MS = 30_000L
+    }
 }

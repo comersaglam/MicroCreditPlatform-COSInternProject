@@ -72,10 +72,14 @@ class App : Application(), Configuration.Provider {
         // Both directions, once, at launch: push what we owe the server, then read what it
         // has for us. The pull matters most right here — the device no longer seeds itself,
         // so on a fresh install this is what puts anything on the screen at all.
+        // Both roles are pulled: this account can owe shops AND keep a book of its own, and
+        // each side has its own endpoint. Only the buyer half used to run here, which is why
+        // Müşterilerim came up empty while Borçlarım filled in.
         appScope.launch {
             repository.syncNow()
             repository.refreshApprovals()
             repository.refreshMyLedger()
+            repository.refreshBook()
         }
 
         // And the safety net: keep trying in the background, even while the app is closed.

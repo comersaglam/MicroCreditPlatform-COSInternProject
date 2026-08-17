@@ -234,6 +234,118 @@ class PullPathTest {
         assertNull(local.storedShopNames)
     }
 
+    // --- the seller's book: the THIRD pull, and the one this app was missing ---
+
+    private fun customerJson(id: String = "c1", name: String = "Ahmet Yılmaz") = """
+        {"customer_id":"$id","display_name":"$name","phone":"+905551112233",
+         "claim_status":"UNCLAIMED","claimed_by_user_id":null,
+         "created_by_seller_id":"u_owner","balance_minor":4000}
+    """.trimIndent()
+
+    /**
+     * The gap this whole path closes. Müşterilerim read a Room table that nothing
+     * server-side ever wrote to, so it showed only what this install had created itself —
+     * empty on a clean device, half-full afterwards.
+     */
+    @Test
+    fun `the seller's customers and their entries are stored`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[${customerJson()}]"))
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """[{"transaction_id":"t1","seller_id":"u_owner","customer_id":"c1",
+                    "amount_minor":5000,"type":"DEBT","description":"Ekmek",
+                    "created_at":"2026-08-14T09:00:00Z"}]"""
+            )
+        )
+        val local = FakeLocalSource()
+
+        val outcome = engine(local).pullBook()
+
+        assertEquals(PullOutcome.Refreshed(2), outcome)
+        assertEquals("c1", local.storedCustomers.single().customerId)
+        assertEquals("t1", local.storedLedger.single().transactionId)
+    }
+
+    /**
+     * A buyer-only account has no book, and the server says so with a 403. That is the
+     * normal answer to a question this account had no business asking — not a fault to
+     * report. Turning it into a Failed would put a red error on the screen of every user
+     * who is not a shopkeeper.
+     */
+    @Test
+    fun `a buyer-only account is refused without reporting a failure`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"code":"not_a_seller","message":"Not a seller"}}""")
+        )
+        val local = FakeLocalSource()
+
+        val outcome = engine(local).pullBook()
+
+        assertEquals(PullOutcome.Refreshed(0), outcome)
+        assertTrue("nothing may be written", local.storedCustomers.isEmpty())
+    }
+
+    /** Any OTHER refusal is still a refusal, and must not be swallowed with it. */
+    @Test
+    fun `an unrelated refusal on the book pull is still reported`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(403)
+                .setBody("""{"error":{"code":"forbidden","message":"Nope"}}""")
+        )
+        val local = FakeLocalSource()
+
+        val outcome = engine(local).pullBook()
+
+        assertTrue(outcome is PullOutcome.Failed)
+        assertTrue(local.storedCustomers.isEmpty())
+    }
+
+    /**
+     * Same rule as the buyer ledger: the book is append-only, so an empty answer removes
+     * nothing. Only the inbox treats absence as news.
+     */
+    @Test
+    fun `an empty book never deletes stored entries`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[]"))
+        val local = FakeLocalSource()
+
+        val outcome = engine(local).pullBook()
+
+        assertEquals(PullOutcome.Refreshed(0), outcome)
+        assertTrue("the ledger is append-only", local.storedLedger.isEmpty())
+    }
+
+    /** Unreachable leaves storage completely alone on this path too. */
+    @Test
+    fun `an unreachable server leaves the stored book untouched`() = runTest {
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+        val local = FakeLocalSource()
+
+        val outcome = engine(local).pullBook()
+
+        assertEquals(PullOutcome.Unreachable, outcome)
+        assertTrue(local.storedCustomers.isEmpty())
+        assertTrue(local.storedLedger.isEmpty())
+    }
+
+    /**
+     * The customers already stored stay when the history call fails partway. Rolling them
+     * back would make a flaky connection show an empty list instead of a stale one, and the
+     * next poll finishes the job either way.
+     */
+    @Test
+    fun `customers survive a history call that fails partway`() = runTest {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("[${customerJson()}]"))
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+        val local = FakeLocalSource()
+
+        val outcome = engine(local).pullBook()
+
+        assertEquals(PullOutcome.Unreachable, outcome)
+        assertEquals("c1", local.storedCustomers.single().customerId)
+    }
+
     /**
      * The server's own words are stored, not a local re-derivation of them.
      *

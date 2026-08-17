@@ -342,6 +342,19 @@ class OfflineFirstRepository @Inject constructor(
     }
 
     /**
+     * Pulls this user's own book. See [Repository.refreshBook].
+     *
+     * The session gate is the same as the two above, and needed for the same reason: the
+     * endpoint answers "the book of whoever is asking", so with nobody signed in there is no
+     * question. No user id is passed on — unlike the buyer pull, the server reads the seller
+     * off the token.
+     */
+    override suspend fun refreshBook(): PullOutcome {
+        tokens.currentUserIdOrNull() ?: return PullOutcome.Unreachable
+        return pullEngine.pullBook()
+    }
+
+    /**
      * Approves on the SERVER, which is what writes the ledger entry on this path, then
      * mirrors the result locally.
      *

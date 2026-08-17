@@ -100,6 +100,21 @@ interface LocalSource : Repository {
     suspend fun storeBuyerLedger(entries: List<Transaction>, userId: String)
 
     /**
+     * Stores ledger entries from THIS user's own book — the seller half of the pull.
+     *
+     * The mirror image of [storeBuyerLedger], and deliberately a separate method rather than
+     * a flag on it. That one DERIVES a customer row per entry, because a buyer is never told
+     * the record behind their own history; here the rows arrive properly filled from
+     * `GET /customers` and were already written by [storeCustomers]. Deriving them again
+     * would overwrite real names and numbers with blanks.
+     *
+     * ADDITIVE and keyed by the server's transaction id: re-pulling the same history is a
+     * no-op rather than a duplicate, which is what makes polling safe. Nothing is deleted —
+     * the ledger is append-only, so an entry missing from a response was never withdrawn.
+     */
+    suspend fun storeLedger(entries: List<Transaction>)
+
+    /**
      * Records the shop name and phone carried on the debts response, so the Borçlarım list
      * can both label its rows and offer a way to call the shop.
      *

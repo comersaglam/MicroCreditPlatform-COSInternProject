@@ -137,6 +137,23 @@ interface Repository {
     suspend fun refreshMyLedger(): PullOutcome
 
     /**
+     * Reads this user's OWN book from the server: the customers in it and their entries.
+     *
+     * The seller-role counterpart of [refreshMyLedger]. This app is one account in two roles
+     * and needs both verbs — the buyer one answers "what do I owe", this one answers "who
+     * owes me". Only the buyer half existed, so Müşterilerim read a table that nothing
+     * server-side ever wrote to and showed just the rows this install had created itself.
+     *
+     * Additive, for the same reason as [refreshMyLedger]: the ledger is append-only.
+     *
+     * A buyer-only account gets a refusal from the endpoint, which this reports as a
+     * successful refresh of nothing — asking is harmless and the answer is not an error.
+     *
+     * Safe to call repeatedly — a foreground poll does exactly that.
+     */
+    suspend fun refreshBook(): PullOutcome
+
+    /**
      * Answers a pending approval. Approving is what writes the ledger entry on this path.
      *
      * Returns [DecisionOutcome] because not every refusal means "try again": a card that

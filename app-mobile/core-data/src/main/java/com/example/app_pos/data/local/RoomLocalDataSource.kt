@@ -315,6 +315,9 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     /** Same as above: storage has no network. */
     override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
 
+    /** Same as above: storage has no network. */
+    override suspend fun refreshBook(): PullOutcome = PullOutcome.Unreachable
+
     override suspend fun syncApprovals(rows: List<ApprovalEntity>, targetUserId: String) {
         db.withTransaction {
             // Delete first, then insert: the reverse order would briefly hold rows the
@@ -366,6 +369,18 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             // insert-IGNORE, keyed by the server's transaction id: re-pulling the same
             // history is a no-op rather than a duplicate, which is what makes polling this
             // safe. The ledger is append-only, so a row already here is already correct.
+            entries.forEach { transactions.insert(it.toEntity()) }
+        }
+    }
+
+    override suspend fun storeLedger(entries: List<Transaction>) {
+        db.withTransaction {
+            // No customer rows are derived here, unlike storeBuyerLedger: the seller pull
+            // already stored them from GET /customers, filled in. Deriving blanks on top
+            // would undo that.
+            //
+            // insert-IGNORE keyed by the server's transaction id, so re-pulling the same
+            // history is a no-op rather than a duplicate.
             entries.forEach { transactions.insert(it.toEntity()) }
         }
     }

@@ -106,11 +106,20 @@ interface CustomerDao {
      * customer only joins the book on their first entry, so the person just added vanished
      * from the list that added them. The server draws the same union (`_book_customer_ids`).
      *
-     * The `claimedByUserId <> :sellerId` clause keeps the BUYER side out. This app is one
-     * account in two roles and both write to this table: the buyer pull stores a stub row
-     * for every record this user holds in somebody else's book (id and owner only — the
-     * server never tells a buyer the name on a shop's copy). Without the exclusion those
-     * stubs surfaced on Müşterilerim as a customer with no name and no number.
+     * The last clause keeps the BUYER side out. This app is one account in two roles and both
+     * write to this table: the buyer pull stores a stub row for every record this user holds
+     * in somebody else's book (id and owner only — the server never tells a buyer the name on
+     * a shop's copy). Without the exclusion those stubs surfaced on Müşterilerim as a customer
+     * with no name and no number.
+     *
+     * It tests what a stub actually IS — no name, no number, and created by nobody this
+     * device knows (storeBuyerLedger writes exactly that). It used to test
+     * `claimedByUserId <> :sellerId` instead, which is not the same question and threw away
+     * real rows: a shopkeeper who is also a customer somewhere holds a properly filled record
+     * claimed by their own account, and it vanished from their own list. Worse, the FK guard
+     * in storeCustomers only keeps `claimedByUserId` when a matching local user row happens
+     * to exist — so under the old clause a row's visibility depended on unrelated data, and
+     * the same book rendered differently on two devices.
      *
      * NOTE the parentheses around the union: the exclusion must apply to BOTH halves. As
      * `A OR B AND C` SQLite would bind the AND tighter and let every buyer stub back in
@@ -120,7 +129,7 @@ interface CustomerDao {
         "SELECT * FROM customers WHERE " +
             "(customerId IN (SELECT DISTINCT customerId FROM transactions WHERE sellerId = :sellerId) " +
             "OR createdBySellerId = :sellerId) " +
-            "AND (claimedByUserId IS NULL OR claimedByUserId <> :sellerId)"
+            "AND NOT (displayName = '' AND phone = '' AND createdBySellerId IS NULL)"
     )
     fun observeForSeller(sellerId: String): Flow<List<CustomerEntity>>
 

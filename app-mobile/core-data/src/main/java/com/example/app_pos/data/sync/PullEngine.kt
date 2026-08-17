@@ -76,6 +76,58 @@ class PullEngine @Inject constructor(
     }
 
     /**
+     * Refreshes this user's OWN book: the customers in it and their ledger entries.
+     *
+     * The seller half of the pull, and the reason this app needed a second one at all. This
+     * app is one account in two roles, and until now only the buyer half existed — so
+     * Borçlarım was fed from the server while Müşterilerim read a table nothing ever filled.
+     * The list showed only what this install had written itself, which is why it looked
+     * empty on a clean device and half-full afterwards.
+     *
+     * Entries are fetched alongside the customers even though `GET /customers` already
+     * answers with a balance: every screen past the list computes in SQL from `transactions`,
+     * so storing only the summary leaves those blank and puts a server-computed number next
+     * to locally-computed ones that disagree with it.
+     *
+     * **Additive, like [pullMyLedger] and unlike [pullApprovals].** Nothing is deleted: the
+     * ledger is append-only, so an entry missing from a response was not withdrawn — the
+     * response was partial.
+     *
+     * **A buyer-only account is not a failure.** The endpoint is a shop's book, so an account
+     * that is not a seller gets 403 `not_a_seller` — the normal answer to a question it had
+     * no business asking, not something to show the user. It reports [PullOutcome.Refreshed]
+     * with nothing refreshed. Checking a local `isSeller` flag instead would be worse: a
+     * stale flag would leave a newly-registered shop staring at an empty list until the next
+     * sign-in.
+     */
+    suspend fun pullBook(): PullOutcome = mutex.withLock {
+        val customers = when (val result = remote.customers()) {
+            is ApiResult.Success -> result.data
+            is ApiResult.ApiError ->
+                if (result.code == CODE_NOT_A_SELLER) return@withLock PullOutcome.Refreshed(0)
+                else return@withLock result.toFailureOutcome("Müşteriler okunamadı")
+            else -> return@withLock result.toFailureOutcome("Müşteriler okunamadı")
+        }
+
+        local.storeCustomers(customers)
+
+        var stored = 0
+        for (customer in customers) {
+            when (val history = remote.transactionHistory(customer.customerId)) {
+                is ApiResult.Success -> {
+                    local.storeLedger(history.data)
+                    stored += history.data.size
+                }
+                // Stop rather than report success: the customers already stored stay, and
+                // the next poll finishes the job.
+                else -> return@withLock history.toFailureOutcome("Geçmiş okunamadı")
+            }
+        }
+
+        PullOutcome.Refreshed(customers.size + stored)
+    }
+
+    /**
      * Refreshes what this buyer owes: the shops, their ledger entries, and the customer
      * records tying the two together.
      *
@@ -136,4 +188,9 @@ class PullEngine @Inject constructor(
             // Success never reaches here; the callers branch on it first.
             is ApiResult.Success -> PullOutcome.Refreshed(0)
         }
+
+    private companion object {
+        /** The server's refusal to a buyer-only account asking for a shop's book. */
+        const val CODE_NOT_A_SELLER = "not_a_seller"
+    }
 }
