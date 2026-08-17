@@ -2728,3 +2728,72 @@ yeni), iki app'in unit testleri, `assembleDebug`, dex sayımı (`CustomerCreateO
 gerçekten siliyor; **ama bu APK'lar kurulduktan SONRA** geçerli.
 
 **Sıradaki:** Tur 41 — değişmedi (onay-yolu tanımı §H + §G.1, §G.2).
+
+### 2026-08-17 — Tur 40e: app-mobile kendi defterini HİÇ çekmiyormuş  [4 turluk semptomun kökü]
+
+Kullanıcının sorusu: *"posta müşteriler tam görünüyor ancak mobile de liste ya boş ya
+da yarım... kaçırdığımız nokta neymiş?"* Cevap: bir bug değil, **hiç yazılmamış kod**.
+
+**Kök neden.** app-mobile **iki rollü** (hem alıcı hem satıcı) ama pull'un yalnız
+**alıcı yarısı** yazılmıştı. `GET /customers`'ın bu app'te **sıfır çağıranı** vardı —
+`RemoteDataSource.customers()` ölü koddu — ve `LocalSource`'ta **`storeLedger` hiç
+yoktu**. Yani "Müşterilerim", sunucu tarafından hiçbir şeyin yazmadığı bir Room
+tablosunu okuyordu. İçindeki tek satırlar **bu kurulumun kendi yazdıkları**: temiz
+cihazda boş, sonra yarım. Borçlarım baştan beri çalışıyordu çünkü onun ikizi
+(`pullMyLedger`) **vardı**.
+
+**Bu Tur 40'ın planlama hatasının tekrarı.** Tur 40 "pull ekseni tamam" derken her app'e
+**bir** metot ekledi: app-pos'a `pullBook`, app-mobile'a `pullMyLedger`. Tek rollü bir
+app için bu işin tamamı; iki rollü olan için **yarısı**. Tur 40d'de eklenen
+`createdBySellerId` de bu yüzden işe yaramadı: kolon geldi, onu dolduracak pull yok.
+
+**Yapılanlar (hepsi app-mobile; app-pos ve backend'e DOKUNULMADI):**
+
+1. **`LocalSource.storeLedger`** — `storeBuyerLedger`'dan **ayrı** metot, bayrak değil.
+   O metot her satır için **boş müşteri satırı TÜRETİYOR** (alıcıya kaydın adı hiç
+   söylenmez); burada satırlar `GET /customers`'tan **dolu** geliyor, tekrar türetmek
+   gerçek isim/numarayı boşla ezerdi.
+2. **`PullEngine.pullBook()`** — app-pos'un ikizi. `pullApprovals`'ın aksine
+   **additive**: cevapta olmayan ledger satırı geri alınmamıştır, cevap kısmidir.
+3. **`Repository.refreshBook()`** + tetikleyiciler: `App.kt` açılış, `CustomersViewModel`
+   ekran-açıkken 30 sn poll (`DebtsViewModel`'in deseni). **Arka plan `PullWorker`
+   EKLENMEDİ** — pil kararı kasıtlı ve belgeli.
+4. **403 `not_a_seller` sessiz dal.** Alıcı-only hesap uca sorduğunda sunucu reddediyor;
+   bu **`Refreshed(0)`**, `Failed` değil. Sistemin normal cevabını kullanıcıya kırmızı
+   hata olarak göstermek 40b'nin `OtpRequestResult` dersinin tekrarı olurdu. ⚠️ Yerel
+   `isSeller` bayrağına bakmak daha kötü: bayat bayrak, yeni satıcı olan hesaba bir
+   sonraki girişe kadar boş liste gösterirdi.
+5. **`observeForSeller`'ın stub dışlaması düzeltildi.** Eskisi
+   `claimedByUserId <> :sellerId` idi — **başka bir soru** soruyor ve gerçek satırları
+   atıyordu: bir dükkân sahibi başka yerde müşteriyse, kendi hesabına claim'li **dolu**
+   bir kaydı var ve kendi listesinden **siliniyordu** (seed'de `o1`/u_owner tam bu).
+   Üstelik **kararsızdı**: `storeCustomers` (dünkü FK guard'ı) `claimedByUserId`'yi
+   ancak yerel user satırı varsa koruyor → bir satırın görünürlüğü **alakasız veriye**
+   bağlıydı. Yeni şart stub'ın **gerçek imzasını** soruyor: boş ad + boş numara +
+   `createdBySellerId IS NULL`. 40b'nin çift-rol sızıntısını hâlâ yakalıyor.
+   ⚠️ Parantezler korundu (`A OR B AND C` tuzağı).
+
+**Öğrenilen:** **"Deseni kurduk" ile "her rol için kurduk" aynı şey değil.** Simetrik
+görünen iki app'ten biri iki rollüyse, tek metot eklemek işin yarısıdır — ve eksik yarı
+hata vermez, sadece **sessizce boş** çalışır. Tur 40'ın kendi dersi ("kaynağı kaldırmadan
+önce yerine geçeni bağla") burada bir kez daha, bu sefer rol ekseninde tekrarlandı.
+
+**Doğrulama.** **61 unit test / 0 fail** (55 → 61; 6 yeni `pullBook` testi: dolu defter,
+403 sessiz dal, alakasız 403, boş defter silmiyor, unreachable dokunmuyor, yarıda kalan
+geçmiş müşterileri bırakıyor). `assembleDebug` koşuldu ve **APK dex'i grep'lendi**:
+`pullBook` 3, `refreshBook` 5, `storeLedger` 8, `not_a_seller` 1, yeni SQL şartı 1,
+**eski `claimedByUserId <> ` şartı 0**. Room üretilen SQL'i de okundu (parantezler doğru).
+
+**CİHAZDA DOĞRULANMADI — kurulum kullanıcıda.** Backend değişmedi, `--build` gerekmez:
+```
+docker compose -f backend/docker-compose.yml exec api python -m app.reset
+adb uninstall <app-mobile paketi>   # allowBackup=false artık gerçekten siliyor
+```
+u_owner (+905554443322) ile gir → **Müşterilerim'de 5 satır** (app-pos'takinin aynısı):
+Ahmet Yılmaz 40,00 / Ayşe Demir 165,00 / Mehmet Kaya 0,00 / Fatma Şahin 25,50 /
+Hasan Öztürk 210,00. Sunucu loglarında `GET /customers` **görünmeli** (40b'de 0'dı).
+⚠️ u_owner hem satıcı hem alıcı (`o1` ile Ayşe Market'e 60,00 TL borçlu) — 5. maddenin
+asıl sınavı: Borçlarım'da Ayşe Market, Müşterilerim'de 5 müşteri, ikisi birbirini
+kirletmemeli.
+
+**Sıradaki:** Tur 41 — değişmedi (onay-yolu tanımı §H + §G.1, §G.2).
