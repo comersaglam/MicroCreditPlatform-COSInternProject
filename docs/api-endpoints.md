@@ -189,8 +189,16 @@ Idempotency zorunlu: `Idempotency-Key` header = `transaction_id`. `basket` veril
         "section_no": 1, "status": 1, "type": 0, "item_limit": 0 }
     ] } }
 // Response 201 -> Transaction   (retry with same key -> 200, same Transaction)
+// 403 not_in_book — müşteri bu satıcının defterinde değil (Tur 41)
 ```
 FakeRepository: `addTransaction` (+ orderBody Aşama 3'te).
+
+⚠️ **Defter üyeliği doğrulanır (Tur 41).** `seller_id`'nin token'dan gelmesi *başkasının
+defterine* yazmayı engelliyordu; bu kontrol **aynanın diğer yüzünü** kapatıyor: başka
+dükkânın müşteri id'siyle **kendi defterine** yazmak. O satır, kişinin `/me/debts`'inde hiç
+gitmediği bir dükkâna borç olarak görünürdü. Üyelik `customers` ile aynı kuralla türetilir
+(*ledger'da satırı var* **VEYA** *`created_by_seller_id` bu satıcı*), tek uygulama
+`app/ledger.py`'de.
 
 ### `GET /transactions?customer_id=c1`
 ```jsonc
@@ -271,11 +279,28 @@ push kartı düşer). **UNCLAIMED** ise (app'siz) OTP mock true → **anında** 
 // Request
 { "seller_id": "u_owner", "customer_id": "c1", "amount_minor": 5000,
   "type": "DEBT", "description": "Veresiye",
-  "initiator_role": "SELLER", "target_user_id": "u1" }
+  "initiator_role": "SELLER", "target_user_id": "u1",
+  "origin": "POS" }              // POS | PHONE — varsayılan PHONE (Tur 41)
 // Response 201 -> Approval (PENDING)          // CLAIMED target
 //   OR       -> Transaction (already written) // UNCLAIMED target (immediate)
 ```
 FakeRepository: `requestApproval` (+ `ApprovalService`).
+
+**`origin` (Tur 41)** isteği hangi CİHAZIN açtığını söyler ve onaylanınca `pgw_jobs`'a iş
+bırakılıp bırakılmayacağına karar verir. Tezgâh PGW'nin önünde durup kendi intent'ini
+attığı için `POS` hiç iş yaratmaz; `PHONE` yaratır. Yanlış değer, fişin **iki kez**
+kesilmesi (POS'a PHONE demek) ya da **hiç** kesilmemesi (tersi) demektir.
+
+### `GET /approvals/{id}`  — isteği AÇAN taraf cevabı buradan öğrenir
+`GET /approvals` "sana ne soruldu"yu listeler, ve **isteği açan taraf asla karar veren taraf
+değildir** — yani satışı açık tutan tezgâh cevabı o listeden öğrenemez. İki uç da okuyabilir
+(initiator + target), üçüncü bir hesap okuyamaz.
+```jsonc
+// Response 200 -> Approval
+// 403 forbidden          — ne başlatan ne hedef
+// 404 approval_not_found
+```
+Client: `Repository.approvalStatus` (app-pos, satış beklerken 5 sn poll).
 
 ### `GET /approvals`
 Target = token. **Client'lar bu ucu POLL EDİYOR** (Tur 39) ve lokal tabloyu cevaba göre
@@ -307,6 +332,49 @@ FakeRepository: `approvePending`.
 // Response 204   (yazma yok)
 ```
 FakeRepository: `rejectPending`.
+
+---
+
+## A.7 PGW jobs — sunucunun TERMİNALE bıraktığı iş (Tur 41)
+
+Yol 3, 4 ve 5 telefonda başlıyor ama **PGW'de bitiyor**, ve PGW'ye yalnız POS ulaşabiliyor.
+Sunucu ise bir terminali arayamaz (NAT arkası, FCM yok). Bu yüzden işi yazıp bırakıyor,
+terminal gelip alıyor. Ayrıntı ve kolonlar: [db-schema.md §A.7](db-schema.md).
+
+### `GET /pgw-jobs`
+Token'daki satıcının bekleyen işleri, **en eskisi önce** (onaylar kutusunun tersine: burası
+sırayla tüketilen bir kuyruk, fişler satışların sırasını izlemeli).
+```jsonc
+// GET /pgw-jobs?limit=50        // 1..200, varsayılan 50
+// Response 200 -> [PgwJob]
+// 403 not_a_seller — alıcı-only hesabın terminali yok
+```
+Client: `PgwDispatcher.pendingJobs` → `PgwJobRunner` (app-pos, 5 sn poll, ekran açıkken).
+
+### `POST /pgw-jobs/{id}/ack`  — **idempotent**
+İş PGW'ye iletildi. Zaten DELIVERED olan bir işi ack'lemek **200** döner, çakışma değil:
+terminal önce intent'i atıp sonra ack'liyor, yani kayıp bir cevap onu *gerçekten teslim
+edilmiş* bir işin ack'ini tekrarlar hâlde bırakır. Bunu hata saymak işi sonsuza dek PENDING
+bırakır ve fiş her poll'de yeniden kesilir.
+```jsonc
+// Response 200 -> PgwJob (DELIVERED)
+// 403 forbidden      — başka dükkânın işi
+// 404 job_not_found
+```
+
+### `POST /pgw-jobs`  — satıcı KENDİ kasasına iş yollar (yol 4)
+Onay **yok** ve bu bir eksiklik değil: kapı bir tarafın diğerine tek taraflı kayıt açmasını
+engeller, burada dükkân **kendi tezgâhında** tahsilat istiyor ve müşteri kartı uzatarak
+onaylıyor. Ledger'a da **hiçbir şey yazılmaz** — intent'i kuyruğa koymak kimsenin ödediğinin
+kanıtı değil.
+```jsonc
+// Request  { "kind": "COLLECT", "customer_id": "c1", "amount_minor": 2500 }
+// Response 201 -> PgwJob (PENDING)
+// 400 invalid_kind — yalnız COLLECT; RECEIPT sunucuya özel (eşlik ettiği kayıtla yazılır)
+// 403 not_in_book / not_a_seller
+```
+`seller_id` gövdede **yok**: terminal token'la adreslenir, yani kimse başka dükkânın
+kasasına iş koyamaz.
 
 ---
 

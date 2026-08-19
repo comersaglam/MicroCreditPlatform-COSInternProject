@@ -163,6 +163,7 @@ Mevcut `PendingApproval` mock'unun (app-mobile) alanları + ileri üç-hat alanl
 | `type` | TEXT | NO | DEBT \| PAYMENT |
 | `description` | TEXT | YES | |
 | `channel` | TEXT | NO | APP_PUSH \| SMS_OTP |
+| `origin` | TEXT | NO | POS \| PHONE (Tur 41, migration 0004) — onaylanınca PGW işi yaratılıp yaratılmayacağına bu karar verir |
 | `status` | TEXT | NO | PENDING \| APPROVED \| REJECTED |
 | `requested_at` | TIMESTAMP | NO | mock: `requestedAt`. Ne zaman SORULDU — hiç değişmez |
 | `updated_at` | TIMESTAMP | NO | Ne zaman DEĞİŞTİ (migration 0003). `requested_at` karara bağlanmış satırı bekleyenden ayıramıyordu; `PENDING→APPROVED/REJECTED` geçişi damga bırakmıyordu |
@@ -179,15 +180,60 @@ Mevcut `PendingApproval` mock'unun (app-mobile) alanları + ileri üç-hat alanl
 - **`customer_id` zorunlu:** istek hangi deftere açıldıysa onay oraya yazılır. Onay anında
   yeniden çözülmez — bir alıcının birden çok kaydı olabilir (dükkan başına bir tane), yeniden
   tahmin yanlış defteri seçebilirdi.
+- **`origin` neden gerekti (Tur 41):** onay verilince sunucu, telefonda başlayan satışlar için
+  `pgw_jobs`'a bir iş bırakır. Tezgâhta açılan satış bunu istemez — terminal PGW'nin önünde
+  duruyor ve kendi intent'ini zaten atıyor, yani iş yaratmak **fişi iki kez** kestirirdi. İstek
+  anında kaydedilir çünkü karar saatler sonra verilebilir ve o an bu bilgi kaybolmuş olur.
 
 ```sql
 CREATE TABLE approvals (
   approval_id TEXT PRIMARY KEY, initiator_user_id TEXT NOT NULL, initiator_role TEXT NOT NULL,
   target_user_id TEXT NOT NULL, seller_id TEXT NOT NULL, shop_name TEXT NOT NULL,
   customer_id TEXT NOT NULL, amount_minor INTEGER NOT NULL, type TEXT NOT NULL, description TEXT,
-  channel TEXT NOT NULL, status TEXT NOT NULL, requested_at TEXT NOT NULL,
+  channel TEXT NOT NULL, origin TEXT NOT NULL, status TEXT NOT NULL, requested_at TEXT NOT NULL,
   updated_at TEXT NOT NULL );
 CREATE INDEX idx_approvals_target ON approvals(target_user_id, status);
+```
+
+## A.7 `pgw_jobs` (terminale bırakılan PGW işi — Tur 41, migration 0004)
+
+Sunucunun POS'a **ulaşamaması** yüzünden var. Yol 3, 4, 5 telefonda başlıyor ama PGW'de
+bitiyor, ve PGW'ye yalnız terminal ulaşabiliyor; sunucu ise NAT arkasındaki bir cihazı
+arayamıyor (FCM de yok). Çözüm: işi yaz, terminal gelip alsın.
+
+| Kolon | Tip | Null | Not |
+|---|---|---|---|
+| `job_id` | TEXT | NO | PK |
+| `seller_id` | TEXT | NO | FK→users; **hangi terminal çekecek** |
+| `kind` | TEXT | NO | RECEIPT (fiş kes) \| COLLECT (karttan ödeme al) |
+| `transaction_id` | TEXT | YES | eşlik ettiği ledger satırı; COLLECT'te NULL (para henüz alınmadı) |
+| `customer_id` | TEXT | NO | |
+| `amount_minor` | INTEGER | NO | |
+| `order_body` | TEXT | YES | PGW'ye aynen gidecek JSON; COLLECT'te NULL (PGW kendi sepetini kurar) |
+| `status` | TEXT | NO | PENDING \| DELIVERED |
+| `created_at` | TIMESTAMP | NO | |
+| `updated_at` | TIMESTAMP | NO | |
+
+- Index: `INDEX(seller_id, status)` — bu tablonun hizmet ettiği tek sorgu.
+- **Neden `approvals`'a bir bayrak değil:** iki tablo **farklı soru** cevaplıyor. Approval
+  "kim KARAR verecek", job "kim İLETECEK **ve iletti mi**". İkinci yarı olmadan yeniden
+  kurulan bir terminal geçmişteki her fişi tekrar keserdi.
+- **Ack idempotent, ve sıra önemli:** terminal önce intent'i atar, sonra ack'ler. Aradaki bir
+  çökme işi PENDING bırakır → tekrar denenir → fiş **iki kez** kesilir; can sıkıcı ama
+  düzeltilebilir. Ters sıra fişi tamamen kaybeder. Garanti bilinçli olarak **en az bir kez**.
+- **`transaction_id`'de FK YOK:** RECEIPT işi eşlik ettiği kayıtla aynı commit'te yazılır ama
+  COLLECT NULL taşır; kolon "varsa eşlik ettiği kayıt" olarak okunmalı, satırların yalnız
+  yarısının sağlayabileceği bir kısıt olarak değil.
+- Karara bağlanan satır **silinmez** (`approvals` ile aynı kural): PGW'ye ne teslim edildiğinin
+  izi, eşlik ettiği ledger kadar değerli.
+
+```sql
+CREATE TABLE pgw_jobs (
+  job_id TEXT PRIMARY KEY, seller_id TEXT NOT NULL REFERENCES users(user_id),
+  kind TEXT NOT NULL, transaction_id TEXT, customer_id TEXT NOT NULL,
+  amount_minor INTEGER NOT NULL, order_body TEXT, status TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL );
+CREATE INDEX idx_pgw_jobs_seller ON pgw_jobs(seller_id, status);
 ```
 
 ---

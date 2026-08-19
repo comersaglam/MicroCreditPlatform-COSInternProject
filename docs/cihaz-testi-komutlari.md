@@ -18,6 +18,7 @@ adb reverse tcp:4010 tcp:4010
 # 4. Şema değiştiyse SIFIRLA (Tur 39'da ŞART; MIUI'de `pm clear` çalışmaz)
 adb uninstall com.example.app_pos
 adb uninstall com.example.app_mobile
+adb uninstall com.example.mock_pos      # ⚠️ Tur 41: mock-pos'un ESKİ id'si
 
 # 5. Kur (ayrı Gradle projeleri, sırayla — 8GB RAM)
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
@@ -25,7 +26,18 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 (cd app-pos    && ./gradlew --stop)
 (cd app-mobile && ./gradlew :app:installDebug --max-workers=2 -Dorg.gradle.java.installations.auto-detect=false)
 (cd app-mobile && ./gradlew --stop)
+(cd mock-pos   && ./gradlew :app:installDebug --max-workers=2 -Dorg.gradle.java.installations.auto-detect=false)
+(cd mock-pos   && ./gradlew --stop)
 ```
+
+> ⚠️ **mock-pos'un paket adı DEĞİŞTİ (Tur 41).** Artık taklit ettiği gerçek geçidin id'sini
+> taşıyor: `com.tokeninc.sardis.paymentgateway`. Android için bu **ayrı bir uygulama**, yani
+> eski kurulum elle kaldırılmazsa **iki ödeme uygulaması yan yana durur** ve yanlışına
+> dokunmak "veresiye uygulaması bulunamadı" gibi görünür. Yukarıdaki `adb uninstall
+> com.example.mock_pos` bir kez, geçiş için gerekli.
+>
+> Doğrulama: `adb shell pm list packages | grep -E "paymentgateway|mock_pos"` — yalnız
+> `paymentgateway` kalmalı.
 
 > **MIUI/HyperOS notu:** `INSTALL_FAILED_USER_RESTRICTED` alırsanız
 > Ayarlar → Ek ayarlar → Geliştirici seçenekleri → **"USB ile yükleme"** açık olmalı.

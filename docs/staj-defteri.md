@@ -42,9 +42,7 @@ Kaynak: [progress.md](progress.md) (Tur 1–40e). 40 turluk gerçek çalışma g
 - action, extra ve Android 11 package visibility.
 
 **Salı 28.07 · 8 saat**
-- Veresiye onay ekranını yazdım; kayıtlar artık
-- append-only ledger'a düşüyor, bakiye hareketlerden
-- hesaplanıyor. Ekranları Flow ile canlı bağladım.
+
 
 **Çarşamba 29.07 · 8 saat**
 - Uygulaması olmayan müşteri kaydı açma akışını yazdım.

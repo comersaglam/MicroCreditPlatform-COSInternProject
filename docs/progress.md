@@ -2797,3 +2797,129 @@ asıl sınavı: Borçlarım'da Ayşe Market, Müşterilerim'de 5 müşteri, ikis
 kirletmemeli.
 
 **Sıradaki:** Tur 41 — değişmedi (onay-yolu tanımı §H + §G.1, §G.2).
+
+### 2026-08-19 — Tur 41: onay yollarının yeniden tanımı (§H) + iki UI maddesi
+
+Kullanıcının beş yol tanımı geldi ve uygulandı. **Kod okuması dokümandan daha sert bir
+tablo çıkardı:** iki ayrı yazma mimarisi vardı ve birbirinden habersizdi.
+
+| Yol | Onay (Tur 40e'de) | Uç |
+|---|---|---|
+| POS'ta veresiye yazma (satıcının **ANA** yolu) | ❌ yok | `POST /transactions` |
+| POS'ta tahsilat alma | ❌ yok | `POST /transactions` |
+| app-mobile satıcı → CLAIMED müşteri | ✅ var | `POST /approvals` |
+| app-mobile alıcı → ödeme beyanı | ✅ var | `POST /approvals` |
+| İki app, UNCLAIMED karşı taraf | ❌ yok (anında yazılır) | `POST /approvals` → 200 |
+
+Üç somut bulgu:
+
+1. **`OtpService.verifyOtp` dekoratifti** — gövdesi `delay(300); return true`. Boş kod bile
+   geçiyordu, `hasApp` parametresi hiçbir dalı değiştirmiyordu. POS'taki OTP ekranı bir kapı
+   değil, bir animasyondu.
+2. **app-pos onay İSTEYEMİYORDU.** `Repository`'de `requestApproval` yoktu; sadece
+   `approvePending`/`rejectPending` vardı. `RemoteDataSource.sendForApproval` **yazılmıştı
+   ama çağıranı yoktu** (ölü kod).
+3. **Backend'de kapı yoktu.** `ledger.py`'de `Approval` kelimesi hiç geçmiyordu.
+
+Yani *"satıcı tek taraflı borç yazamaz"* ilkesi, satıcının **ana aracında** hiç
+uygulanmamıştı. Kullanıcının *"posta veresiye ödemesi alırken onaya atmıyor"* gözlemi
+buydu; kökü UI değil, mimariydi.
+
+**Yol üstünde bulunan güvenlik açığı:** `POST /transactions` `customer_id`'yi yalnız "var
+mı" diye kontrol ediyordu. `seller_id` token'dan geldiği için **başkasının defterine**
+yazmak engelliydi, ama **aynanın diğer yüzü** açıktı: A satıcısı, B'nin müşterisinin
+id'siyle **kendi defterine** kayıt açabiliyordu. O satır, o kişinin `/me/debts`'inde hiç
+gitmediği bir dükkâna borç olarak görünürdü. Defter üyeliği kontrolü eklendi (403
+`not_in_book`), sorgu `app/ledger.py`'ye taşındı — defter ekranı ile yazma yolu aynı
+soruya farklı cevap veremesin.
+
+**Yeni kavram: `pgw_jobs` (migration 0004).** Yol 3, 4, 5 telefonda başlıyor ama **PGW'de
+bitiyor**, ve PGW'ye yalnız POS ulaşabiliyor. Sunucu POS'u arayamaz (NAT, FCM yok) → işi
+yazıp bırakıyor, terminal gelip alıyor. Onay tablosuna sıkıştırılmadı çünkü **soru farklı**:
+approval "kim karar verecek", job "kim iletecek **ve iletti mi**". İkinci yarı olmadan
+yeniden kurulan bir terminal geçmişteki her fişi tekrar keserdi. Ack **idempotent**:
+terminal önce intent'i atıyor, sonra ack'liyor — kayıp cevap, gerçekten teslim edilmiş bir
+işin ack'ini tekrarlamakla sonuçlanır, ve bunu hata saymak işi sonsuza dek PENDING
+bırakırdı. Garanti bilinçli olarak **en az bir kez**: iki kez kesilen fiş can sıkıcı ve
+düzeltilebilir, hiç kesilmeyen fiş değil.
+
+**`approvals.origin` (POS | PHONE)** — onay verilince PGW işi yaratılıp yaratılmayacağına
+bu karar veriyor. Olmadan, tezgâhta açılan bir satış onaylandığında **fiş iki kez**
+kesilirdi (terminal kendi intent'ini zaten atmış oluyor). Mevcut satırlar **POS**'a
+backfill edildi: teknik olarak hepsi telefon kaynaklıydı, ama değer **ne kaydettiğine değil
+ne YAPTIĞINA** göre seçildi — POS hiçbir iş yaratmayan dal, ve haftalar önce tamamlanmış
+bir satış için migration sonrası fiş kesilmemeli.
+
+**`GET /approvals/{id}` (yeni)** — gelen kutusu "sana ne soruldu"yu listeler ve **isteği
+açan taraf asla karar veren taraf değildir**, yani satışı açık tutan tezgâh cevabı oradan
+öğrenemezdi.
+
+**Yol 1'in dönüşü.** `setResult` kodda **hiç yoktu**; `finishCreditHandoff` sadece
+`finish()` çağırıyordu. Artık sonuç taşıyor. Bu, app-pos'u **`singleTask`'tan
+`singleTop`'a** taşımayı zorladı: `singleTask` kendi task'ında koşar ve Android onu
+**anında `RESULT_CANCELED`** ile cevaplar — kabul edilen ve reddedilen her satış PGW'ye
+birebir aynı görünürdü. `taskAffinity=""` launcher'dan açılışı kendi task'ında tutuyor
+(singleTask'ın buradaki asıl işi buydu).
+
+**Onay yolu bilinçli olarak offline-tolerant DEĞİL** — app-pos'un her yerde uyduğu
+offline-first kuralından tek sapma. Sinyal yokken kimse sorulamaz, ve kaydı yine de yazmak
+kapının önlemek için var olduğu **tam olarak o tek taraflı yazma** olurdu. Satış duruyor.
+
+**mock-pos artık taklit ettiği PGW.** `applicationId` = `com.tokeninc.sardis.paymentgateway`,
+gerçek bileşen adını Kotlin sınıfına bağlayan bir `activity-alias` ile — böylece app-pos
+gerçek terminalde kullanacağı adresi taşıyor, geliştirmeye özel bir adı değil. Fiş
+kesemediği için **gelen orderBody ile gerçek PGW'nin ne yapacağını** ekranda söylüyor
+(kullanıcının açık isteği). ⚠️ app-pos'a `<queries>` bloğu eklendi: Android 11+ altında
+onsuz PGW **kurulu olsa bile** görünmez ve `startActivity` sessizce patlar.
+
+**Yol 4 bilinçli olarak onaysız.** Kapı, bir tarafın diğerine tek taraflı kayıt açmasını
+engeller; kendi tezgâhında **para tahsil etmek** bunun tersidir ve müşteri kartı uzatarak
+onaylar. Ledger'a da yazılmıyor: kimse henüz ödemedi. Ekran "kasaya **iletildi**" diyor,
+"ödendi" demiyor.
+
+**§G.1 (adsız satır).** Boş satır, tek bir alan eksikken **verinin kayıp olduğunu**
+düşündürüyordu. Telefon başlık oldu, ikincil satır "isim girilmemiş" diyor. Arama da
+telefonu eşleştiriyor — listede tanınması en zor satır, aranamayan satırdı da.
+**Kaynak sorusu kapandı:** buyer stub'ları SQL'de zaten ayıklanıyor
+([Daos.kt:128-134](../app-mobile/core-data/src/main/java/com/example/app_pos/data/db/dao/Daos.kt));
+kalan kaynak gerçek → kayıt `displayName = ""` gönderiyor (`LoginViewModel`). Yani bunlar
+gerçek hesaplar, kozmetik düzeltme veri boşluğu örtmüyor.
+
+**§G.2 (alacak/verecek).** Etiket zaten doğruydu ("Bu satıcıya borcum"); **değer** iki yönlü
+çiziliyordu. Satıcının kırmızı/yeşil şeması kopyalanmıştı, yani fazla ödemede **negatif
+borç** çıkıyordu ve **sıfır bakiye "ödeme alındı" yeşiline** düşüp olmamış bir olayı
+duyuruyordu. Artık **etiket işaretle birlikte** değişiyor, tutar hep pozitif, sıfır nötr.
+Aynı sıfır hatası Borçlarım listesinde de düzeltildi.
+
+**Doğrulama.** 175 backend testi (154 → 175), iki app'in unit testleri, üç APK.
+Canlı backend'e karşı uçtan uca:
+
+- PHONE kaynaklı onay → onaylanınca **RECEIPT işi**, `orderBody` içinde `"type":17`
+- ack **iki kez 200**, iş kuyruktan düşüyor
+- aynı satış `origin=POS` ile onaylandığında **hiç iş yok**
+- yol 4 → `COLLECT` işi, `order_body: null` (PGW kendi sepetini kurar)
+- başka dükkânın müşterisine yazma **403**, kendi müşterisine **201**
+
+APK dex'i grep'lendi (`requestApproval` 9, `PgwJobRunner` 22, `paymentgateway` 2,
+`collectAtTerminal` 9, `titleFor` 5) ve manifest'ler `aapt2` ile okundu: mock-pos'un paket
+adı + alias, app-pos'un `launchMode=1` (singleTop) + `queries`.
+
+**CİHAZDA DOĞRULANMADI — kurulum kullanıcıda.** Sıra:
+```
+docker compose -f backend/docker-compose.yml up -d --build api
+docker compose -f backend/docker-compose.yml exec api python -m app.reset
+adb uninstall com.example.app_pos
+adb uninstall com.example.app_mobile
+adb uninstall com.example.mock_pos            # ⚠️ ESKİ paket adı — yeni APK farklı id ile kurulur
+```
+⚠️ mock-pos'un `applicationId`'si değişti, yani eskisi **ayrı bir uygulama olarak kalır**;
+elle kaldırılmazsa iki ödeme uygulaması yan yana durur.
+
+**Öğrenilen:** **"Desen kurulu" ile "her giriş noktasında kurulu" aynı şey değil.** Onay
+kapısı Tur 38'den beri vardı ve doğru çalışıyordu — ama satıcının ana aracında hiç yoktu,
+ve önündeki OTP ekranı kapı **varmış gibi görünüyordu**. 40e'nin dersi (rol ekseninde eksik
+yarı) burada **cihaz ekseninde** tekrarlandı: eksik yarı yine hata vermedi, sadece sessizce
+kapıyı atladı.
+
+**Sıradaki:** OTP'nin gerçekleştirilmesi (kullanıcı kararı: sunuma kadar mock), UNCLAIMED
+için SMS-OTP onayı (§H'de tartışılacak madde), PGW handshake, yol 1 timeout, FCM.

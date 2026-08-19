@@ -4,7 +4,7 @@
 > değil. Ama altı ay sonra koda bakan (sen dahil) "burası neden yarım?" diye soracak. Cevaplar
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
-> Son güncelleme: 2026-08-14, Tur 40b (pull tamamlandı + cihaz testi düzeltmeleri) sonrası.
+> Son güncelleme: 2026-08-19, Tur 41 (onay yollarının yeniden tanımı) sonrası.
 > Kalıcı adım günlüğü: [progress.md](progress.md). Uygulama planı ve §0 kararları:
 > [faz5-backend-plan.md](faz5-backend-plan.md). Kararların gerekçesi:
 > [architecture-pos.md](architecture-pos.md), [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md).
@@ -46,7 +46,14 @@ listesine sızması, `/me/debts`'te eksik `shop_phone`, ağ hatasının "Geçers
 gösterilmesi, alt navigasyonda sönen sekme). Asıl kök neden bir **build hatasıydı**: app-pos
 için `assembleDebug` koşulmamıştı, telefondaki APK Tur 39'a aitti.
 
-**Kalan iş:** §G'deki iki UI maddesi + kullanıcının yazacağı **onay yolu tanımı** (§H).
+**Tur 41: onay kapısı tezgâha ulaştı (§H kapandı).** Kullanıcının beş yol tanımı uygulandı.
+app-pos artık `requestApproval` ÇAĞIRIYOR (uç yazılıydı, çağıranı yoktu) ve satışı müşterinin
+cevabı için bekletip PGW'ye gerçek sonucu döndürüyor. Telefonda başlayıp PGW'de biten yollar
+için `pgw_jobs` kuyruğu eklendi — sunucu POS'u arayamadığı için işi yazıp bırakıyor, terminal
+gelip alıyor. §G.1 ve §G.2 de kapandı.
+
+**Kalan iş:** aşağıdaki §H.1'de listeli — OTP'nin gerçekleştirilmesi, UNCLAIMED için SMS-OTP,
+PGW handshake, yol 1 timeout.
 
 ---
 
@@ -552,49 +559,100 @@ gerekiyordu (kök neden). Kök neden = okuma yolunun olmaması.
 
 ---
 
-## G. Cihaz testi 3. turdan (Tur 40b) kalan UI maddeleri
+## G. Cihaz testi 3. turdan kalan UI maddeleri — ✅ KAPANDI (Tur 41)
 
-Kullanıcının ekran-ekran raporundaki iki madde **bilerek bu turda yapılmadı**: ikisi de
-gösterim kuralı, veri yolu değil, ve onay yollarının yeniden tanımlanmasıyla (§H) aynı
-ekranlara dokunuyorlar.
+### ~~G.1 Adsız müşteri satırı boş görünüyor~~  ✅ KAPANDI (Tur 41)
 
-### G.1 Adsız müşteri satırı boş görünüyor  ⚠️ AÇIK
+Ad boşsa **telefon başlık** oluyor, ikincil satır *"isim girilmemiş"* diyor. Arama da
+telefonu eşleştiriyor — listede tanınması en zor satır, aranamayan satırdı da. İki app'te
+de ortak bir `CustomerLabel.kt` (`titleFor` / `matchesQuery`) üzerinden.
 
-Bir müşterinin adı yoksa satır tamamen boş çiziliyor. **İstenen davranış (kullanıcının
-sözleriyle):** *"en azından telefon numarası gözükmeli ve ismi yoksa da isim girilmemiş
-demesi lazım."*
+**"Asıl soru" cevaplandı:** adsız satırların kaynağı **(a) buyer stub'ları DEĞİL** — onlar
+SQL'de zaten ayıklanıyor ([Daos.kt:128-134](../app-mobile/core-data/src/main/java/com/example/app_pos/data/db/dao/Daos.kt)).
+Kaynak **(b)**: kayıt akışı `registerUser(phone, displayName = "")` gönderiyor (iki app'in
+`LoginViewModel`'i), yani bunlar **gerçek ama adsız hesaplar**. Sunum düzeltmesi bu yüzden
+meşru — kozmetik bir yama gerçek bir veri boşluğunu örtmüyor.
 
-İki parçalı iş:
-1. **Sunum:** ad boşsa telefon numarasını başlık yap + "isim girilmemiş" ikincil satır.
-   Şu anki boş satır, verinin kayıp olduğunu düşündürüyor — oysa kayıp olan sadece bir alan.
-2. **Asıl soru:** POS'ta her kayıtta ad **zorunlu** olduğu halde bu satırlar nereden adsız
-   geliyor? İki aday: (a) buyer tarafında türetilen stub satırlar (Tur 40b'de POS listesinden
-   ayıklandı ama buyer tarafında hâlâ adsız), (b) §F.4/4'teki telefonla açılmış hesaplar.
-   Sunumu düzeltmeden önce bu ayrım netleşmeli — yoksa gerçek bir veri boşluğu kozmetikle
-   örtülür.
+### ~~G.2 Buyer'ın dükkân detayında "alacak/verecek" başlığı~~  ✅ KAPANDI (Tur 41)
 
-### G.2 Buyer'ın dükkân detayında "alacak/verecek" başlığı  ⚠️ AÇIK
+Teşhis kısmen yanlıştı: **etiket zaten doğruydu** ("Bu satıcıya borcum"). İki yönlü olan
+**değerdi**. Satıcı ekranının `if (balance > 0) balance_due else payment_received` şeması
+kopyalanmıştı, sonuç:
 
-Ekranın üstünde bu bağlamda anlamsız bir alacak/verecek özeti duruyor (ss4). Buyer bir
-dükkâna yalnızca **borçlanır**; iki yönlü bakiye başlığı seller ekranından kopyalanmış
-görünüyor. İncelenip ya kaldırılmalı ya da tek yönlü "bu dükkâna borcum" özetine
-indirgenmeli.
+- fazla ödemede ekran *"Bu satıcıya borcum: −50,00 TL"* diyordu — **negatif borç**
+- **sıfır bakiye** "ödeme alındı" yeşiline düşüyor, olmamış bir olayı duyuruyordu
+
+Artık **etiket işaretle birlikte** değişiyor (borcum / alacağım / borcum yok), tutar hep
+pozitif (`abs`), sıfır nötr renkte (`balance_settled`). Aynı sıfır hatası **Borçlarım**
+listesinde (`SellerDebtAdapter`) da düzeltildi.
 
 ---
 
-## H. Onay yollarının yeniden tanımı — kullanıcı yazacak  ⏸️ BEKLEMEDE
+## H. Onay yollarının yeniden tanımı — ✅ UYGULANDI (Tur 41)
 
-Kullanıcının açık ertelemesi (2026-08-14): *"posta veresiye ödemesi alırken vs onaya atmıyor
-ama bu pathleri kesinleştircez, sorun yok şimdilik. Bazı onaylar gidicek, bazı onayların yeri
-değişecek, bazıları ise eklenecek. Yazıcam sonraki turda sana."*
+Kullanıcının tanımı geldi ve **beş yol** olarak uygulandı. Kısaltmalar kullanıcının
+sözlüğü: `pos` = app-pos, `mb` = müşteri mobile (alıcı rolü), `sb` = satıcı mobile,
+`PGW` = ödeme geçidi (bugün mock-pos), `server` = backend + tüm istemcilerin sync'i.
 
-**Bu yüzden Tur 40b'de hiçbir onay yönlendirmesi değiştirilmedi** — hangi işlemin onaya
-düşeceği bir **ürün kararı**, ve yarım bilgiyle dokunmak mevcut doğru davranışı da bozardı.
+**Yön kuralları (güvenlik sınırı, kullanıcı kararı):**
 
-Bugünkü hâl (referans olsun diye): yazma yolu `ApprovalService`'ten geçiyor; karşı taraf
-uygulamayı tutuyorsa (CLAIMED) kart açılıyor, tutmuyorsa (UNCLAIMED) anında yazılıyor. Üç
-onay hattı ve yönleri [[approval-three-lines-pgw-settle]] ve [db-schema.md](db-schema.md)
-§A.6'da.
+```
+mb  ──uyarır──▶  sb            mb ──✗──▶ pos      (mb POS'a DOKUNAMAZ)
+sb  ──ödeme──▶  pos            sb ──✗──▶ PGW      (sb PGW'yi uyaramaz)
+pos ──▶ PGW  (açar / fiş keser)     pos ──▶ mb  (onay gönderir)
+PGW ──▶ pos  (intent ile çağırır, success/fail BEKLER)
+```
 
-Kullanıcının tanımı gelince değişecek yerler: `ApprovalService` yönlendirme kuralları,
-`POST /approvals`'ın CLAIMED/UNCLAIMED dalı, ve iki app'in Onaylar ekranlarındaki bölümleme.
+| # | Yol | Zincir | Onay |
+|---|---|---|---|
+| 1 | pos'tan veresiye | PGW → pos → **mb onay** → server → pos `setResult` → PGW fiş | ✅ mb |
+| 2 | pos'tan tahsilat | pos (tutar) → PGW intent + server'a kayıt | ❌ |
+| 3 | sb'den veresiye | sb → **mb onay** → server → **pos'a iş** → PGW `type 17` fiş | ✅ mb |
+| 4 | sb'den tahsilat | sb → **pos'a iş** → pos PGW'yi çağırır | ❌ |
+| 5 | mb'den ödeme | mb → **sb onay** → server → **pos'a iş** → pos PGW'yi AÇAR | ✅ sb |
+
+**Yol 2 ve 4'te onay yok, ve bu bir eksiklik değil:** kapı bir tarafın diğerine tek taraflı
+kayıt açmasını engeller; ikisi de **tahsilat**, yani parayı dükkân alıyor ve müşteri kartı
+uzatarak onaylıyor.
+
+### H.1 Bu turda BİLİNÇLİ olarak yapılmayanlar
+
+**1. OTP hâlâ mock (kullanıcı kararı).** *"OTP kısmı şu anki sistemiyle kalabilir,
+muhtemelen sunuma kadar bunu mock tutacağız diğer işlemler bitene kadar."*
+[`OtpService.verifyOtp`](../app-pos/app/src/main/java/com/example/app_pos/data/OtpService.kt)
+hâlâ koşulsuz `true` döndürüyor. ⚠️ **Ama artık zararsız:** ekranın arkasındaki gerçek kapı
+`requestApproval`, ve kararı **mb veriyor**. Tur 40e'de bu ekran tek "kapı"ydı ve hiçbir şey
+doğrulamıyordu.
+
+**2. UNCLAIMED karşı taraf için SMS-OTP onayı — AÇIK, tartışılacak.** Kullanıcının notu:
+*"müşteri için mobile varsa oradan yoksa otp (şu anda app'i olmayan otp'ler karmaşık olacaksa
+atlanabilir, tartışalım)."* Bugün `POST /approvals`'ın UNCLAIMED dalı **sessizce anında
+yazıyor** ([approvals.py](../backend/app/routers/approvals.py)) — ne SMS gidiyor, ne kod
+doğrulanıyor, ne de denetim izi için approval satırı kalıyor. Yani app'i olmayan müşteri
+için kapı **hiç yok**, ve bu gerçek dünyadaki müşterilerin çoğu demek.
+
+**3. PGW handshake yok (kullanıcı kararı).** *"eğer ki biz apppostan pgw ye fiş/ödeme
+yoladıysak o ödeme pgw de onaylanmış gibi direkt beklemeden kaydedelim db ye. al ver
+handshake'i olmasın o noktada."* Yani pos→PGW yönünde **gönderim = onay** sayılıyor.
+Gerçek projede PGW'nin cevabı dinlenecek; kod yorumlarında `TODO(pgw-handshake)`.
+
+**4. Yol 1'de timeout yok (kullanıcı kararı).** Tezgâh müşterinin cevabını **süresiz**
+bekliyor; esnaf iptal edebiliyor. Timeout, PGW'ye ne söyleneceği ve açılmış isteğin geri
+çekilip çekilmeyeceği kararlarını gerektiriyor — ayrı tur. `TODO(timeout)` düşüldü.
+
+**5. FCM yok.** POS 5 sn poll ediyor (`pgw_jobs` ve bekleyen onay için), onaylar kutusu
+15 sn. Gerçek anlık teslim FCM ister; `devices` tablosu iskeleti hazır (§D).
+
+### H.2 Uygulama sırasında bulunan iki şey
+
+**Güvenlik açığı (kapatıldı):** `POST /transactions` `customer_id`'yi yalnız "var mı" diye
+kontrol ediyordu. `seller_id` token'dan geldiği için başkasının defterine yazmak engelliydi,
+ama **aynanın diğer yüzü** açıktı: A satıcısı, B'nin müşterisinin id'siyle **kendi defterine**
+kayıt açabilirdi ve o satır, kişinin `/me/debts`'inde hiç gitmediği bir dükkâna borç olarak
+görünürdü. Artık **defter üyeliği** doğrulanıyor (403 `not_in_book`).
+
+**`singleTask` ↔ `startActivityForResult` uyumsuzluğu:** app-pos `singleTask` idi, yani
+kendi task'ında koşuyordu ve Android bunu **anında `RESULT_CANCELED`** ile cevaplıyor.
+Yol 1'in tamamı bu sonuca dayandığı için `singleTop` + `taskAffinity=""`'ye geçildi.
+⚠️ Bu manifest satırı **yol 1'in çalışması için şart**; "sadece bir launchMode" diye
+değiştirilirse kabul edilen ve reddedilen her satış PGW'ye aynı görünür.
