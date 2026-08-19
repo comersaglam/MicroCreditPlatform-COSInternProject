@@ -30,10 +30,15 @@ class ApprovalAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(approval: PendingApproval) = with(binding) {
+            val context = root.context
             approvalCustomer.text = approval.counterpartyName
+            // Say WHO is asking WHAT of whom. "Veresiye onayı · 75,00 TL" named a type and
+            // an amount but never a direction, so a card could be read as a demand for
+            // money when it was a request to write debt — the shopkeeper cannot answer a
+            // question they cannot tell apart.
             val kindRes = if (approval.type == TransactionType.DEBT)
-                R.string.approval_debt_label else R.string.approval_payment_label
-            approvalKind.text = root.context.getString(kindRes)
+                R.string.approval_debt_line else R.string.approval_payment_line
+            approvalKind.text = context.getString(kindRes, approval.counterpartyName)
             approvalAmount.text = approval.amountMinor.toTlString()
 
             approvalDescription.text = approval.description

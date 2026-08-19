@@ -26,7 +26,13 @@ sealed interface ApprovalListItem {
     data class Card(
         val approval: PendingApproval,
         val tone: ApprovalTone,
-        val counterpartyPhone: String
+        val counterpartyPhone: String,
+        /**
+         * The line stating WHO is asking WHAT — four wordings, since the same request
+         * reads oppositely from each end. Resolved here because it depends on my role,
+         * which the adapter does not know.
+         */
+        @param:StringRes val kindRes: Int
     ) : ApprovalListItem {
         override val id: String get() = approval.approvalId
     }

@@ -23,3 +23,17 @@ const val ORIGIN_POS: String = "POS"
 
 /** Raised on a phone — the server queues the gateway half for a terminal to collect. */
 const val ORIGIN_PHONE: String = "PHONE"
+
+/**
+ * Which side of an account a request is addressed to.
+ *
+ * One account holds both roles, so "what is waiting on me" is really two inboxes. A
+ * terminal asks for [ROLE_SELLER] only: the till is a shop tool, and its owner's personal
+ * business at another shop belongs on their phone — the POS has no screen that could even
+ * show the result of answering it.
+ */
+const val ROLE_SELLER: String = "SELLER"
+
+/** The other half: somebody else's shop asking to book something on you. */
+const val ROLE_BUYER: String = "BUYER"
+

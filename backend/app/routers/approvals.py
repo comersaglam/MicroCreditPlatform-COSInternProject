@@ -33,6 +33,12 @@ ORIGIN_POS = "POS"
 ORIGIN_PHONE = "PHONE"
 _VALID_ORIGINS = {ORIGIN_POS, ORIGIN_PHONE}
 
+# Which side of an account is being addressed. One account holds both, so "what is waiting
+# on me" is two different inboxes depending on which hat the user is wearing.
+ROLE_SELLER = "SELLER"
+ROLE_BUYER = "BUYER"
+_VALID_ROLES = {ROLE_SELLER, ROLE_BUYER}
+
 # Not a status a row can hold -- it means "do not filter at all", which is why it is kept
 # apart from the set above rather than added to it.
 _STATUS_ALL = "ALL"
@@ -100,7 +106,7 @@ def send_for_approval(
     if body.type not in _VALID_TYPES:
         raise api_error(400, "invalid_type", "type must be DEBT or PAYMENT")
 
-    if body.initiator_role not in {"BUYER", "SELLER"}:
+    if body.initiator_role not in _VALID_ROLES:
         raise api_error(400, "invalid_role", "initiator_role must be BUYER or SELLER")
 
     if body.origin not in _VALID_ORIGINS:
@@ -185,6 +191,7 @@ def pending_approvals(
     current_user: CurrentUser,
     db: DbSession,
     status_filter: str | None = Query(default=None, alias="status"),
+    as_role: str | None = Query(default=None, alias="role"),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[schemas.Approval]:
     """
@@ -195,12 +202,29 @@ def pending_approvals(
     is what keeps the screen showing only what still needs an answer. `status=ALL` opens
     that history up, since it was previously unreachable through the API at all.
 
+    `role` narrows the inbox to the side of the user being asked, which matters because one
+    account holds two. Answering as SELLER means the request is about YOUR shop's book;
+    answering as BUYER means somebody else's shop wants to book something on you. A POS
+    asks for SELLER only: the terminal is a shop tool, and its owner's personal debts at
+    another shop have no business appearing on the counter -- worse, the till has no screen
+    that could show the RESULT of approving one, so answering there looks like nothing
+    happened. Omitted, both come back, which is what a phone wants.
+
     `limit` exists because clients POLL this: an unbounded list is fine when a screen asks
     once, and is not when it asks every fifteen seconds forever.
     """
     query = select(models.Approval).where(
         models.Approval.target_user_id == current_user.user_id
     )
+
+    if as_role is not None:
+        if as_role not in _VALID_ROLES:
+            raise api_error(400, "invalid_role", "role must be SELLER or BUYER")
+        # Which side you are on is decided by whether the book in question is YOURS -- not
+        # by initiator_role, which records who ASKED. Both of today's lines are raised by a
+        # SELLER, so filtering on that would return the same rows for either value.
+        is_my_book = models.Approval.seller_id == current_user.user_id
+        query = query.where(is_my_book if as_role == ROLE_SELLER else ~is_my_book)
 
     if status_filter is None:
         query = query.where(models.Approval.status == "PENDING")

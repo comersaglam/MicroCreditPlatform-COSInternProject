@@ -8,6 +8,7 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * The approval gate every write passes through, in whichever of the three directions it
@@ -29,9 +30,16 @@ interface ApprovalApi {
     @POST("approvals")
     suspend fun send(@Body body: ApprovalCreateDto): ApprovalSendResultDto
 
-    /** Approvals waiting on the signed-in user to answer. */
+    /**
+     * Approvals waiting on the signed-in user to answer.
+     *
+     * [role] narrows the inbox to one side of the account. A terminal asks for SELLER: the
+     * till is a shop tool, and its owner's personal debts at ANOTHER shop are not its
+     * business — nor could it show the result of approving one, since a personal debt
+     * appears on no POS screen. Null asks for both, which is what a phone wants.
+     */
     @GET("approvals")
-    suspend fun pending(): List<ApprovalDto>
+    suspend fun pending(@Query("role") role: String? = null): List<ApprovalDto>
 
     /**
      * One approval by id — how the side that RAISED a request learns the answer.

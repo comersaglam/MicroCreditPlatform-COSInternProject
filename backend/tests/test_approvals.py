@@ -418,3 +418,87 @@ def test_a_stranger_cannot_read_an_approval(client, owner_auth, market_auth):
 
     response = client.get(f"/approvals/{approval_id}", headers=market_auth)
     assert response.status_code == 403
+
+
+# --- role: one account, two inboxes ---
+#
+# u_owner is the case that forced this. They run Ahmet Bakkal AND are a customer at Ayşe
+# Market (record o1), so "what is waiting on u_owner" mixes two unrelated things: their
+# shop's business, and their own personal debt somewhere else. The seeded p2 is the second
+# kind, and it was appearing on the till.
+
+
+def test_a_seller_inbox_excludes_the_owners_personal_requests(client, owner_auth):
+    """
+    p2 is Ayşe Market asking u_owner-as-CUSTOMER to accept 75 TL of veresiye. A POS is a
+    shop tool; its owner's debts at another shop do not belong on the counter -- and the
+    till has no screen that could show the result of approving one, so answering there
+    looks like nothing happened at all.
+    """
+    ids = [
+        row["approval_id"]
+        for row in client.get(
+            "/approvals", headers=owner_auth, params={"role": "SELLER"}
+        ).json()
+    ]
+    assert "p2" not in ids
+
+
+def test_a_buyer_inbox_is_exactly_the_other_half(client, owner_auth):
+    ids = [
+        row["approval_id"]
+        for row in client.get(
+            "/approvals", headers=owner_auth, params={"role": "BUYER"}
+        ).json()
+    ]
+    assert ids == ["p2"]
+
+
+def test_an_unfiltered_inbox_still_returns_both(client, owner_auth):
+    """What a phone asks for: one account, both roles, split in the UI rather than here."""
+    ids = {
+        row["approval_id"]
+        for row in client.get("/approvals", headers=owner_auth).json()
+    }
+    assert "p2" in ids
+
+
+def test_a_payment_a_customer_declares_reaches_the_sellers_inbox(
+    client, owner_auth, buyer_auth
+):
+    """
+    The line the till SHOULD answer (path 5): a buyer says they paid, the shop confirms
+    having received it. Filtering by role must not drop this one.
+    """
+    approval_id = client.post(
+        "/approvals",
+        headers=buyer_auth,
+        json=_seller_request(
+            initiator_role="BUYER", type="PAYMENT", target_user_id="u_owner"
+        ),
+    ).json()["approval_id"]
+
+    ids = [
+        row["approval_id"]
+        for row in client.get(
+            "/approvals", headers=owner_auth, params={"role": "SELLER"}
+        ).json()
+    ]
+    assert approval_id in ids
+
+
+def test_the_role_is_derived_from_whose_book_it_is(client, owner_auth):
+    """
+    NOT from initiator_role, which records who ASKED. Both of today's lines are raised by
+    a SELLER, so filtering on that field would return identical rows for either value --
+    the split has to ask whether the BOOK belongs to the person answering.
+    """
+    p2 = client.get("/approvals/p2", headers=owner_auth).json()
+    assert p2["initiator_role"] == "SELLER"      # asked by a shop...
+    assert p2["seller_id"] != "u_owner"          # ...but not u_owner's shop
+
+
+def test_an_unknown_role_is_rejected(client, owner_auth):
+    response = client.get("/approvals", headers=owner_auth, params={"role": "ADMIN"})
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_role"

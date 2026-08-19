@@ -214,8 +214,9 @@ class RemoteDataSource @Inject constructor(
             )
         }
 
-    suspend fun pendingApprovals(): ApiResult<List<ApprovalDto>> =
-        apiCall(moshi) { approvalApi.pending() }
+    /** [role] narrows the inbox to one side of the account; null asks for both. */
+    suspend fun pendingApprovals(role: String? = null): ApiResult<List<ApprovalDto>> =
+        apiCall(moshi) { approvalApi.pending(role) }
 
     /**
      * The status of an approval this shop RAISED — how a waiting sale learns the answer.

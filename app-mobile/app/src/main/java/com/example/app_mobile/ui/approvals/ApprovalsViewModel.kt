@@ -104,7 +104,16 @@ class ApprovalsViewModel @Inject constructor(
                 else ->
                     if (isSeller) ApprovalTone.INCOMING_STRONG else ApprovalTone.OUTGOING_STRONG
             },
-            counterpartyPhone = counterpartyPhone(userId, isSeller)
+            counterpartyPhone = counterpartyPhone(userId, isSeller),
+            // Naming a type and an amount ("Veresiye onayı · 75,00 TL") left the direction
+            // unsaid, and from the buyer's end a shop's request to WRITE debt reads like a
+            // demand to PAY. Each of the four combinations gets its own sentence.
+            kindRes = when {
+                type == TransactionType.DEBT && isSeller -> R.string.approval_line_debt_seller
+                type == TransactionType.DEBT -> R.string.approval_line_debt_buyer
+                isSeller -> R.string.approval_line_payment_seller
+                else -> R.string.approval_line_payment_buyer
+            }
         )
 
     /**

@@ -47,8 +47,6 @@
 
     <!-- Approvals -->
     <string name="approvals_empty">Bekleyen onayınız yok.</string>
-    <string name="approval_debt_label">Veresiye onayı</string>
-    <string name="approval_payment_label">Ödeme onayı</string>
     <string name="approval_approve">Onayla</string>
     <string name="approval_reject">Reddet</string>
     <string name="approval_approved">Onaylandı</string>
@@ -158,4 +156,15 @@
          amount is always shown positive. A minus under "what I owe" reads as negative debt. -->
     <string name="detail_balance_label_credit">Bu satıcıdan alacağım</string>
     <string name="detail_balance_label_settled">Bu satıcıya borcum yok</string>
+    <!-- The card must state the DIRECTION. One account holds both roles, so the same
+         request reads oppositely from each end: what a shop calls "writing veresiye" is,
+         to the customer, somebody asking to put a debt on them. -->
+    <string name="approval_line_debt_seller">%1$s veresiye yazılmasını onaylıyor</string>
+    <string name="approval_line_debt_buyer">%1$s size veresiye yazmak istiyor</string>
+    <string name="approval_line_payment_seller">%1$s ödeme yaptığını bildiriyor</string>
+    <!-- Shop-initiated PAYMENT: the till recording money it says it received from you.
+         NOT a buyer's own declaration — the server always routes those to the shop
+         (routers/approvals.py: a BUYER initiator makes seller_id the approver), so a
+         card in the buyer's section is never one the buyer raised. -->
+    <string name="approval_line_payment_buyer">%1$s sizden ödeme aldığını bildiriyor</string>
 </resources>

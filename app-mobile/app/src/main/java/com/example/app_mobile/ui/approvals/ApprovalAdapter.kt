@@ -43,9 +43,9 @@ class ApprovalAdapter(
         fun bind(item: ApprovalListItem.Card) = with(binding) {
             val approval = item.approval
             approvalShop.text = approval.counterpartyName
-            val kindRes = if (approval.type == TransactionType.DEBT)
-                R.string.approval_debt_label else R.string.approval_payment_label
-            approvalKind.text = root.context.getString(kindRes)
+            // The wording is chosen in the ViewModel: it depends on my role on this card,
+            // and the same request reads oppositely from each end.
+            approvalKind.text = root.context.getString(item.kindRes, approval.counterpartyName)
             approvalAmount.text = approval.amountMinor.toTlString()
             approvalDescription.text = approval.description
 

@@ -3,6 +3,7 @@ package com.example.app_pos.data.sync
 import com.example.app_pos.data.db.toEntityOrNull
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.remote.RemoteDataSource
+import com.example.app_pos.model.ROLE_SELLER
 import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.network.ApiResult
 import com.example.app_pos.network.isRetryable
@@ -57,7 +58,12 @@ class PullEngine @Inject constructor(
      * would take its caller's coroutine down every fifteen seconds.
      */
     suspend fun pullApprovals(targetUserId: String): PullOutcome = mutex.withLock {
-        when (val result = remote.pendingApprovals()) {
+        // SELLER only. One account holds both roles, so a shopkeeper who is also a customer
+        // somewhere else has TWO inboxes, and only one of them is this terminal's business.
+        // Without the filter, Ayşe Market asking this shop's OWNER to accept veresiye on
+        // their personal account landed on the till — where answering it changed nothing
+        // visible, because a personal debt appears on no POS screen.
+        when (val result = remote.pendingApprovals(role = ROLE_SELLER)) {
             is ApiResult.Success -> {
                 val rows = result.data.mapNotNull { it.toEntityOrNull() }
                 local.syncApprovals(rows, targetUserId)

@@ -160,8 +160,11 @@
 
     <!-- Onaylar: requests waiting on this shop's answer (Turn 39). -->
     <string name="approvals_empty">Bekleyen onay yok.</string>
-    <string name="approval_debt_label">Veresiye onayı</string>
-    <string name="approval_payment_label">Ödeme onayı</string>
+    <!-- The card must state the DIRECTION, not just a type and an amount: on the till the
+         only line left after the role filter is a customer declaring a payment, but naming
+         it plainly is what stops the card being read as a demand for money. -->
+    <string name="approval_debt_line">%1$s veresiye yazılmasını onaylıyor</string>
+    <string name="approval_payment_line">%1$s ödeme yaptığını bildiriyor</string>
     <string name="approval_approve">Onayla</string>
     <string name="approval_reject">Reddet</string>
     <string name="approval_approved">Onaylandı</string>

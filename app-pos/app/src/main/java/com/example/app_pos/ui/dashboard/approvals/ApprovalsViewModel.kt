@@ -25,9 +25,16 @@ import javax.inject.Inject
  * entries for the customer to approve, but a customer declaring a payment had nobody on
  * this side to confirm it. That line now ends here.
  *
- * Simpler than app-mobile's screen of the same name, and deliberately so: that app is one
- * account in two roles and has to split the list by which role you are on each card. A POS
- * is only ever the shop, so every card here is a customer asking and the shop answering.
+ * Simpler than app-mobile's screen of the same name, but NOT because the account is
+ * simpler — it is the same account, in the same two roles. The difference is that this
+ * screen only ever shows ONE of them: the pull asks for SELLER, so every card here is a
+ * customer asking and the shop answering, and no split is needed.
+ *
+ * That filter is load-bearing, not a tidy-up. A shopkeeper is usually also a customer
+ * somewhere else, and those requests were landing here too — the seeded case is another
+ * shop asking this terminal's OWNER to accept veresiye on their personal account. Approving
+ * it worked and appeared to do nothing, because the result is a debt THEY owe, which no POS
+ * screen shows. A till is a shop tool; its owner's own debts belong on their phone.
  *
  * FOREGROUND POLLING: the app is a caller, never a listener — no FCM. These cards are
  * authored on the CUSTOMER's device, so nothing local can discover them; [poll] asks the

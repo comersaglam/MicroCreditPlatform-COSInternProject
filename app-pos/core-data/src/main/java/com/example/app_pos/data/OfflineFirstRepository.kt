@@ -4,6 +4,7 @@ import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.remote.RemoteDataSource
 import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
+import com.example.app_pos.model.ROLE_SELLER
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.mapper.toCreateDto
@@ -555,7 +556,6 @@ class OfflineFirstRepository @Inject constructor(
         // Which side of the approval line this device is. A terminal is always the shop --
         // there is no buyer-initiated path from a till -- so unlike app-mobile, which
         // carries both roles in one account, this never has to be decided at runtime.
-        const val ROLE_SELLER = "SELLER"
 
         // Error codes the sign-in flow branches on, exactly as the contract spells them.
         const val CODE_USER_NOT_FOUND = "user_not_found"
