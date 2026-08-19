@@ -223,6 +223,9 @@ class FakeLocalSource(
     override fun observePendingApprovals(userId: String): Flow<List<PendingApproval>> = flowOf(emptyList())
     override suspend fun rejectPending(approvalId: String): DecisionOutcome =
         DecisionOutcome.Applied
+    /** Storage cannot reach a till; the composing repository sends this to the server. */
+    override suspend fun collectAtTerminal(customerId: String, amountMinor: Long): Boolean = false
+
     override suspend fun initiatePayment(
         userId: String,
         sellerId: String,

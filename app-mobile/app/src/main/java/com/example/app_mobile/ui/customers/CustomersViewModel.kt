@@ -7,6 +7,7 @@ import com.example.app_pos.model.PhoneFormat
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.example.app_mobile.util.matchesQuery
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -48,7 +49,10 @@ class CustomersViewModel @Inject constructor(
     val customers: StateFlow<List<Customer>> =
         combine(sellerCustomers, query, filter) { all, q, f ->
             all
-                .filter { it.displayName.contains(q, ignoreCase = true) }
+                // Matches the phone too: a customer with no name was unreachable through
+                // search, so the row hardest to recognise was also the one that could not
+                // be looked up. See Customer.matchesQuery.
+                .filter { it.matchesQuery(q) }
                 .filter { customer ->
                     when (f) {
                         CustomerFilter.ALL -> true

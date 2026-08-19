@@ -3,6 +3,7 @@ package com.example.app_pos.network.di
 import android.content.Context
 import com.example.app_pos.network.NetworkConfig
 import com.example.app_pos.network.api.ApprovalApi
+import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
@@ -127,6 +128,9 @@ object NetworkModule {
 
     @Provides @Singleton fun provideApprovalApi(@ApiClient retrofit: Retrofit): ApprovalApi =
         retrofit.create(ApprovalApi::class.java)
+
+    @Provides @Singleton fun providePgwJobApi(@ApiClient retrofit: Retrofit): PgwJobApi =
+        retrofit.create(PgwJobApi::class.java)
 
     @Provides @Singleton fun provideSyncApi(@ApiClient retrofit: Retrofit): SyncApi =
         retrofit.create(SyncApi::class.java)

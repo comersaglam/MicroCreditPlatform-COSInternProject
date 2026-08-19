@@ -30,4 +30,14 @@
 
     <!-- Mock basket picker (long-press VERESİYE to send an item-level basket) -->
     <string name="basket_picker_title">Sepet seç (mock PGW)</string>
+    <!-- Shown when app-pos sends this app a gateway request. A mock cannot print, so it
+         reports what the real gateway would have done with what it received. -->
+    <string name="pgw_request_title">Ödeme uygulamasına istek geldi</string>
+    <string name="pgw_request_body">Normalde şunu yapardım: %1$s\n\norderBody:\n%2$s</string>
+    <string name="pgw_would_print_receipt">veresiye fişi keserdim (paymentItems type 17)</string>
+    <string name="pgw_would_collect_payment">karttan ödeme alırdım</string>
+    <!-- What app-pos answered about the veresiye: the moment a real gateway decides
+         whether to print its slip. -->
+    <string name="msg_credit_approved">Veresiye onaylandı — fiş kesilirdi</string>
+    <string name="msg_credit_declined">Veresiye tamamlanmadı — fiş kesilmezdi</string>
 </resources>

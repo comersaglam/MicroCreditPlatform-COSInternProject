@@ -11,7 +11,20 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.mock_pos"
+        // The REAL payment gateway's id, claimed on purpose. This app stands in for it, so
+        // app-pos must be able to address it exactly as it will address the real one on a
+        // Token terminal:
+        //
+        //   am start -n com.tokeninc.sardis.paymentgateway/.MainActivity --es orderBody '…'
+        //
+        // Keeping com.example.mock_pos here would mean app-pos carried a development-only
+        // package name in its own source, and the one thing that must not be a mock at
+        // integration time is the address of the thing being integrated with.
+        //
+        // `namespace` stays com.example.mock_pos: that is the Kotlin package (where the
+        // source lives), separate from the applicationId (how Android addresses the app).
+        // The activity alias in the manifest bridges the two.
+        applicationId = "com.tokeninc.sardis.paymentgateway"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

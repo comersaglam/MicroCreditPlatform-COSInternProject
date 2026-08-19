@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.example.app_pos.util.matchesQuery
 import com.example.app_pos.model.Customer
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,7 +54,10 @@ class CustomerSelectViewModel @Inject constructor(
             // and had to type a name from memory — guessing, with no way to check a
             // spelling. Seeing the names is what actually prevents picking the wrong one.
             if (q.isEmpty()) all
-            else all.filter { it.displayName.contains(q, ignoreCase = true) }
+            // Matches the phone too: a customer with no name was unreachable through
+            // search, so the row hardest to recognise was also the one that could not be
+            // looked up. See Customer.matchesQuery.
+            else all.filter { it.matchesQuery(q) }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // "Add '<name>' as a new customer" is offered whenever something is typed;

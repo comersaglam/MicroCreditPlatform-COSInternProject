@@ -90,12 +90,13 @@ class CustomerDetailViewModel @Inject constructor(
     fun onFilterChanged(newFilter: TransactionFilter) { filter.value = newFilter }
 
     /**
-     * Books a veresiye (DEBT) or takes a payment (PAYMENT) for this customer, through
-     * the approval gate: an app-holding customer gets a pending approval; an app-less
-     * one is written immediately (mock SMS-OTP). Suspend call runs in viewModelScope.
+     * Books a veresiye for this customer, through the approval gate (path 3).
+     *
+     * An app-holding customer gets a pending approval; an app-less one is written
+     * immediately (mock SMS-OTP). Once approved, the SERVER leaves a receipt job for this
+     * shop's terminal — the gateway cannot be reached from a phone.
      */
-    fun submit(
-        type: TransactionType,
+    fun writeDebt(
         amountMinor: Long,
         description: String,
         onResult: (ApprovalOutcome) -> Unit
@@ -112,10 +113,26 @@ class CustomerDetailViewModel @Inject constructor(
                     sellerId = sellerId,
                     customerId = customerId,
                     amountMinor = amountMinor,
-                    type = type,
+                    type = TransactionType.DEBT,
                     description = description
                 )
             )
         }
+    }
+
+    /**
+     * Sends a payment to this shop's till for the customer to settle by card (path 4).
+     *
+     * NOT an approval, and not a ledger write. The gate exists so nobody books an entry
+     * against the other party unilaterally; being paid at your own till is the opposite
+     * situation — the customer consents by handing over a card. And nothing is booked here
+     * because nobody has paid yet: the entry appears when the gateway takes the money.
+     *
+     * [onResult] is false when the till was not told, so the screen can say so rather than
+     * implying somebody is about to be charged.
+     */
+    fun collectAtTerminal(amountMinor: Long, onResult: (Boolean) -> Unit) {
+        if (amountMinor <= 0) return onResult(false)
+        viewModelScope.launch { onResult(repo.collectAtTerminal(customerId, amountMinor)) }
     }
 }

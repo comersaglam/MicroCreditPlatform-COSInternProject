@@ -81,7 +81,15 @@ class CustomerDetailFragment : Fragment() {
         }
     }
 
-    /** Amount popup for a veresiye/payment; lira parsed, stored as kuruş. */
+    /**
+     * Amount popup; lira parsed, stored as kuruş.
+     *
+     * The two buttons no longer share an ending, which is the whole point of paths 3 and 4.
+     * A veresiye needs the customer's agreement, so it goes through the approval gate and
+     * the server queues the receipt once they accept. A payment needs a CARD, which only
+     * the till can take — so it is sent to the terminal and nothing is booked here, because
+     * nobody has paid yet.
+     */
     private fun showAmountDialog(type: TransactionType) {
         val input = EditText(requireContext()).apply {
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
@@ -96,17 +104,40 @@ class CustomerDetailFragment : Fragment() {
                 val lira = input.text.toString().replace(',', '.').toDoubleOrNull() ?: return@setPositiveButton
                 val amountMinor = (lira * 100).roundToLong()
                 if (amountMinor <= 0) return@setPositiveButton
-                val description = if (type == TransactionType.DEBT) "Veresiye" else "Ödeme"
-                // Wait for the actual result instead of guessing from isClaimed: that flag
-                // starts false while its lookup is in flight, so a claimed customer was
-                // being told the entry had been written when it was awaiting approval.
-                viewModel.submit(type, amountMinor, description) { outcome ->
-                    val ctx = context ?: return@submit
-                    Toast.makeText(ctx, outcome.message(ctx), Toast.LENGTH_SHORT).show()
+                when (type) {
+                    TransactionType.DEBT -> writeDebt(amountMinor)
+                    TransactionType.PAYMENT -> collectAtTerminal(amountMinor)
                 }
             }
             .setNegativeButton(R.string.pay_dialog_negative, null)
             .show()
+    }
+
+    /** Path 3: through the approval gate, then the server tells the till to print. */
+    private fun writeDebt(amountMinor: Long) {
+        // Wait for the actual result instead of guessing from isClaimed: that flag starts
+        // false while its lookup is in flight, so a claimed customer was being told the
+        // entry had been written when it was awaiting approval.
+        viewModel.writeDebt(amountMinor, DEBT_DESCRIPTION) { outcome ->
+            val ctx = context ?: return@writeDebt
+            Toast.makeText(ctx, outcome.message(ctx), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Path 4: the till is asked to take the payment by card.
+     *
+     * Says the terminal was NOTIFIED, never that money arrived — the customer still has to
+     * present a card at the till, and claiming otherwise would let a shopkeeper believe a
+     * debt was settled when nothing has happened yet.
+     */
+    private fun collectAtTerminal(amountMinor: Long) {
+        viewModel.collectAtTerminal(amountMinor) { queued ->
+            val ctx = context ?: return@collectAtTerminal
+            val message =
+                if (queued) R.string.collect_sent_to_terminal else R.string.collect_not_sent
+            Toast.makeText(ctx, message, Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun observePhone() {
@@ -144,5 +175,14 @@ class CustomerDetailFragment : Fragment() {
         super.onDestroyView()
         binding.transactionList.adapter = null
         _binding = null
+    }
+
+    private companion object {
+        /**
+         * What a veresiye written from the shopkeeper's phone is called in the ledger.
+         * A constant rather than an inline literal: it reaches the customer's approval
+         * card, so it is user-visible text with exactly one source.
+         */
+        const val DEBT_DESCRIPTION = "Veresiye"
     }
 }

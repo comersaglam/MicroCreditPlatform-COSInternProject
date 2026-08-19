@@ -103,6 +103,8 @@ class FakeSyncRepository(
         type: TransactionType,
         description: String
     ): ApprovalOutcome = ApprovalOutcome.Failed()
+    override suspend fun collectAtTerminal(customerId: String, amountMinor: Long): Boolean = false
+
     override suspend fun initiatePayment(
         userId: String,
         sellerId: String,

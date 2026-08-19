@@ -170,4 +170,8 @@
     <string name="decision_not_yours">Bu onay size ait değil, listeden kaldırıldı</string>
     <string name="decision_already_decided">Bu onay zaten yanıtlanmış, listeden kaldırıldı</string>
     <string name="decision_unreachable">Sunucuya ulaşılamadı, tekrar deneyin</string>
+    <!-- G.1: a customer the shopkeeper never named. The phone becomes the title and this
+         says which field is missing, so a blank row cannot read as missing data. -->
+    <string name="customer_unnamed">İsimsiz müşteri</string>
+    <string name="customer_name_missing">isim girilmemiş</string>
 </resources>

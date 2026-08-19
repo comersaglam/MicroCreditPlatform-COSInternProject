@@ -23,6 +23,7 @@ import com.example.app_mobile.util.toTlString
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToLong
 
 /**
@@ -125,12 +126,41 @@ class SellerDetailFragment : Fragment() {
             .show()
     }
 
+    /**
+     * The buyer's side of the balance, stated in ONE direction at a time.
+     *
+     * A buyer only ever owes a shop, so a two-way figure makes no sense here — and the
+     * screen was drawing one: the seller's red/green treatment was copied across, so
+     * overpaying produced "what I owe this shop: −50,00 TL", a negative debt, and a settled
+     * balance of zero came out in the "money received" green as though something had just
+     * been paid. Both are the seller's vocabulary read from the wrong end.
+     *
+     * So the LABEL moves with the sign and the amount is always shown positive: what is
+     * owed, what the shop owes back after an overpayment, or simply nothing outstanding.
+     */
     private fun observeBalance() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.balanceMinor.collect { balance ->
-                    binding.detailBalance.text = balance.toTlString()
-                    val colorRes = if (balance > 0) R.color.balance_due else R.color.payment_received
+                    val labelRes = when {
+                        balance > 0 -> R.string.detail_balance_label
+                        balance < 0 -> R.string.detail_balance_label_credit
+                        else -> R.string.detail_balance_label_settled
+                    }
+                    binding.detailBalanceLabel.setText(labelRes)
+
+                    // Magnitude only: the direction is in the label now, and a minus sign
+                    // under a "what I owe" heading reads as a negative debt.
+                    binding.detailBalance.text = abs(balance).toTlString()
+
+                    val colorRes = when {
+                        balance > 0 -> R.color.balance_due
+                        // Nothing outstanding is not an event. Zero used to take the same
+                        // green as a fresh payment, announcing something that did not
+                        // happen; a neutral colour just states the fact.
+                        balance == 0L -> R.color.balance_settled
+                        else -> R.color.payment_received
+                    }
                     binding.detailBalance.setTextColor(requireContext().getColor(colorRes))
                 }
             }

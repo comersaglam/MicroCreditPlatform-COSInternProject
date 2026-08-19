@@ -8,6 +8,7 @@ import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.network.ApiResult
 import com.example.app_pos.network.api.ApprovalApi
+import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
@@ -16,6 +17,8 @@ import com.example.app_pos.network.api.SyncApi
 import com.example.app_pos.network.api.UserApi
 import com.example.app_pos.network.apiCall
 import com.example.app_pos.network.dto.ApprovalDto
+import com.example.app_pos.network.dto.PGW_KIND_COLLECT
+import com.example.app_pos.network.dto.PgwJobCreateDto
 import com.example.app_pos.network.dto.ApprovalSendResultDto
 import com.example.app_pos.network.dto.OtpRequestDto
 import com.example.app_pos.network.dto.OtpVerifyDto
@@ -70,6 +73,7 @@ class RemoteDataSource @Inject constructor(
     private val ledgerApi: LedgerApi,
     private val buyerApi: BuyerApi,
     private val approvalApi: ApprovalApi,
+    private val pgwJobApi: PgwJobApi,
     private val syncApi: SyncApi,
     // apiCall parses the error envelope with it, so the same Moshi that decodes responses
     // also decodes failures — one configuration, not two.
@@ -208,6 +212,25 @@ class RemoteDataSource @Inject constructor(
                     initiatorRole = initiatorRole,
                     targetUserId = targetUserId,
                     origin = origin
+                )
+            )
+        }
+
+    // --- payment-gateway jobs -------------------------------------------------
+
+    /**
+     * Queues a payment for the signed-in seller's own till (path 4).
+     *
+     * Create only. Fetching and acking jobs is the TERMINAL's half — this device cannot
+     * reach the gateway, so it has nothing to deliver.
+     */
+    suspend fun queueCollectAtTerminal(customerId: String, amountMinor: Long): ApiResult<Unit> =
+        apiCall(moshi) {
+            pgwJobApi.create(
+                PgwJobCreateDto(
+                    kind = PGW_KIND_COLLECT,
+                    customerId = customerId,
+                    amountMinor = amountMinor
                 )
             )
         }

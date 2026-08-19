@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -45,6 +46,39 @@ class MainActivity : AppCompatActivity() {
         bindKeypad()
         bindPaymentMethods()
         observeAmount()
+        showIncomingRequest(intent)
+    }
+
+    /**
+     * Launched with a request from app-pos rather than by a person tapping the icon.
+     *
+     * This app cannot print anything, so it reports what the REAL gateway would have done
+     * with what it received. That is the whole value of the mock at this stage: the intent
+     * either arrived in the right shape or it did not, and this makes that visible without
+     * a terminal.
+     */
+    private fun showIncomingRequest(intent: Intent) {
+        val orderBody = intent.getStringExtra(EXTRA_ORDER_BODY) ?: return
+
+        // paymentItems[].type is what separates the two requests: 17 is a credit slip,
+        // anything else is an ordinary card payment. Read as text rather than parsed —
+        // the point here is to show what arrived, not to interpret it.
+        val action =
+            if (orderBody.contains("\"type\":$ITEM_TYPE_CREDIT")) R.string.pgw_would_print_receipt
+            else R.string.pgw_would_collect_payment
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.pgw_request_title)
+            .setMessage(getString(R.string.pgw_request_body, getString(action), orderBody))
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    /** A second gateway request arriving while this screen is already open. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        showIncomingRequest(intent)
     }
 
     /**
@@ -121,23 +155,47 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Sends the orderBody JSON to app-pos over the CREDIT intent. */
+    /**
+     * Sends the orderBody JSON to app-pos over the CREDIT intent, and WAITS for its answer.
+     *
+     * The result is the point. A real gateway launches the veresiye app to find out whether
+     * the customer agreed, and prints its slip on that answer — so it cannot fire and
+     * forget. app-pos reports RESULT_OK once the customer approves and RESULT_CANCELED when
+     * they refuse; without listening, a refused veresiye would be indistinguishable from an
+     * accepted one and the slip would print either way.
+     *
+     * NEW_TASK is gone for the same reason: a launch into its own task returns its result
+     * immediately as CANCELED, so the two are mutually exclusive. app-pos still declares
+     * its own task affinity, which is what kept it out of this app's back stack.
+     */
     private fun handOff(orderBody: String) {
         val intent = Intent(ACTION_CREDIT).apply {
             // Same-device app; targeting the package keeps the handoff explicit.
             setPackage(APP_POS_PACKAGE)
-            // app-pos opens in its OWN task (separate recents card), so it does not
-            // live inside this app's back stack — it is the real POS payment app's
-            // stand-in and must not own the veresiye app's lifecycle.
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             putExtra(EXTRA_ORDER_BODY, orderBody)
         }
         try {
-            startActivity(intent)
+            creditResult.launch(intent)
         } catch (e: ActivityNotFoundException) {
             toast(getString(R.string.msg_credit_app_missing))
         }
     }
+
+    /**
+     * What app-pos answered about the veresiye — the moment a real gateway would decide
+     * whether to print.
+     *
+     * Registered as a field rather than created per handoff because the Activity result API
+     * requires registration before STARTED, and a launcher made inside the click handler
+     * would crash on the first tap.
+     */
+    private val creditResult =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val message =
+                if (result.resultCode == RESULT_OK) R.string.msg_credit_approved
+                else R.string.msg_credit_declined
+            toast(getString(message))
+        }
 
     /** Guards every method: nothing proceeds before an amount is entered. */
     private fun requireAmount(): Boolean {
@@ -162,5 +220,9 @@ class MainActivity : AppCompatActivity() {
         private const val APP_POS_PACKAGE = "com.example.app_pos"
         private const val ACTION_CREDIT = "com.example.app_pos.action.CREDIT"
         private const val EXTRA_ORDER_BODY = "orderBody"
+
+        // The gateway's payment-item type for a credit slip -- THEIR number. Used here only
+        // to say which of the two things the real gateway would have done.
+        private const val ITEM_TYPE_CREDIT = 17
     }
 }

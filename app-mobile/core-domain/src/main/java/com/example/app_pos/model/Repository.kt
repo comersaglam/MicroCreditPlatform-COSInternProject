@@ -181,6 +181,22 @@ interface Repository {
     ): ApprovalOutcome
 
     /**
+     * A seller collects a payment AT THEIR TILL, started from their phone.
+     *
+     * Deliberately not an approval. The gate exists so nobody books an entry against the
+     * other party unilaterally; here the shop is asking to be paid at its own terminal and
+     * the customer consents by handing over a card. Nothing reaches the ledger from this
+     * call either — the entry appears when the gateway actually takes the money.
+     *
+     * The work is left for the TERMINAL because this device cannot reach the payment
+     * gateway: only a POS can, which is the whole reason the server holds a job queue.
+     *
+     * Returns false when the server refused or could not be reached, so the screen can say
+     * the till was not told rather than implying somebody is about to be charged.
+     */
+    suspend fun collectAtTerminal(customerId: String, amountMinor: Long): Boolean
+
+    /**
      * A buyer pays a seller, through the same approval gate.
      *
      * Returns [ApprovalOutcome.NoCustomerRecord] when this buyer has no record with that

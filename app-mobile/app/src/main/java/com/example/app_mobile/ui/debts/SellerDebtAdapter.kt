@@ -27,9 +27,14 @@ class SellerDebtAdapter(
         fun bind(debt: SellerDebt) = with(binding) {
             shopName.text = debt.shopName
             balance.text = debt.balanceMinor.toTlString()
-            // Red while still owed, green once settled or overpaid — same semantics
-            // as app-pos, read from the buyer's side.
-            val colorRes = if (debt.balanceMinor > 0) R.color.balance_due else R.color.payment_received
+            // Red while still owed, green once the shop owes money back. Settled is
+            // NEITHER: zero used to take the "payment received" green, which announced an
+            // event that had not happened — the row simply has nothing outstanding.
+            val colorRes = when {
+                debt.balanceMinor > 0 -> R.color.balance_due
+                debt.balanceMinor == 0L -> R.color.balance_settled
+                else -> R.color.payment_received
+            }
             balance.setTextColor(root.context.getColor(colorRes))
             root.setOnClickListener { onClick(debt) }
         }

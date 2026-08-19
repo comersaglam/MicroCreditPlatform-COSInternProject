@@ -31,6 +31,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            The name the REAL gateway is addressed by. app-pos starts it as
+
+                com.tokeninc.sardis.paymentgateway/.MainActivity
+
+            which resolves to <applicationId>.MainActivity — and this app's actual class
+            lives in com.example.mock_pos, its Kotlin package. An alias bridges the two, so
+            app-pos carries the real component name and needs no development-only variant.
+            When the real gateway is installed instead, nothing on the app-pos side changes.
+        -->
+        <activity-alias
+            android:name="com.tokeninc.sardis.paymentgateway.MainActivity"
+            android:targetActivity=".MainActivity"
+            android:exported="true" />
     </application>
 
 </manifest>

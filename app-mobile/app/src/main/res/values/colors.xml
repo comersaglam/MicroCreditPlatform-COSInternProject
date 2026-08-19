@@ -49,4 +49,8 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
+    <!-- Nothing outstanding: neither a debt nor a payment, so neither red nor green.
+         Zero used to take the "payment received" green and announce an event that had
+         not happened. -->
+    <color name="balance_settled">#6B7280</color>
 </resources>

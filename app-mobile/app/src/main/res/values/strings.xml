@@ -146,4 +146,16 @@
     <string name="profile_become_seller">Satıcı ol</string>
     <string name="profile_become_seller_soon">Satıcı olma yakında eklenecek.</string>
     <string name="profile_logout">Çıkış yap</string>
+    <!-- Path 4: the till was told to take a card payment. Deliberately says NOTIFIED,
+         not PAID — the customer still has to present a card at the terminal. -->
+    <string name="collect_sent_to_terminal">Kasaya iletildi — müşteri kasadan kartla ödeyebilir</string>
+    <string name="collect_not_sent">Sunucuya ulaşılamadı — kasaya iletilemedi</string>
+    <!-- G.1: a customer the shopkeeper never named. The phone becomes the title and this
+         says which field is missing, so a blank row cannot read as missing data. -->
+    <string name="customer_unnamed">İsimsiz müşteri</string>
+    <string name="customer_name_missing">isim girilmemiş</string>
+    <!-- G.2: the buyer's balance is one-directional, so the LABEL carries the sign and the
+         amount is always shown positive. A minus under "what I owe" reads as negative debt. -->
+    <string name="detail_balance_label_credit">Bu satıcıdan alacağım</string>
+    <string name="detail_balance_label_settled">Bu satıcıya borcum yok</string>
 </resources>

@@ -498,6 +498,13 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         return ApprovalOutcome.WrittenImmediately
     }
 
+    /**
+     * Storage cannot reach a till. Answering false rather than pretending: the composing
+     * repository sends this to the server, and a caller wired only to storage must not be
+     * told a terminal was notified when nothing left the device.
+     */
+    override suspend fun collectAtTerminal(customerId: String, amountMinor: Long): Boolean = false
+
     override suspend fun initiatePayment(
         userId: String,
         sellerId: String,

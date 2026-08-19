@@ -9,6 +9,7 @@ import com.example.app_pos.R
 import com.example.app_pos.databinding.ItemCustomerBinding
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
+import com.example.app_pos.util.titleFor
 import com.example.app_pos.util.toTlString
 
 /**
@@ -32,19 +33,26 @@ class CustomerAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(customer: Customer) = with(binding) {
-            customerName.text = customer.displayName
+            val context = root.context
+            // A nameless customer is titled by their PHONE, not left blank — a blank row
+            // reads as missing data when only one field is absent. See titleFor.
+            customerName.text = customer.titleFor(context)
             customerBalance.text = customer.balanceMinor.toTlString()
 
             val statusRes = when (customer.claimStatus) {
                 ClaimStatus.CLAIMED -> R.string.status_claimed
                 ClaimStatus.UNCLAIMED -> R.string.status_unclaimed
             }
-            // Phone alongside the status so two same-named customers are distinct.
-            val status = root.context.getString(statusRes)
-            customerStatus.text = customer.phone
-                ?.takeIf { it.isNotBlank() }
-                ?.let { "$status · $it" }
-                ?: status
+            // Phone alongside the status so two same-named customers are distinct — unless
+            // the phone is already the title, in which case repeating it says nothing and
+            // the missing name is the useful thing to report.
+            val status = context.getString(statusRes)
+            val detail = if (customer.displayName.isBlank()) {
+                context.getString(R.string.customer_name_missing)
+            } else {
+                customer.phone?.takeIf { it.isNotBlank() }
+            }
+            customerStatus.text = detail?.let { "$status · $it" } ?: status
 
             // Red for an outstanding debt (>0 = still owed), green once it is
             // settled or overpaid (<=0), so a paid-off customer reads as "all good".

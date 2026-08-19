@@ -523,6 +523,16 @@ class OfflineFirstRepository @Inject constructor(
      * to the local source, which meant a payment never left the device while the screen
      * reported success.
      */
+    /**
+     * Leaves a payment for this seller's till to collect. See [Repository.collectAtTerminal].
+     *
+     * Nothing local happens on purpose, not even offline. There is no entry to write yet —
+     * the money has not been taken — and a job kept on this device could never reach the
+     * terminal that has to act on it, so an unreachable server is simply reported.
+     */
+    override suspend fun collectAtTerminal(customerId: String, amountMinor: Long): Boolean =
+        remote.queueCollectAtTerminal(customerId, amountMinor) is ApiResult.Success
+
     override suspend fun initiatePayment(
         userId: String,
         sellerId: String,
