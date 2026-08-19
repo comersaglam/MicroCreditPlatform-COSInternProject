@@ -52,8 +52,14 @@ cevabı için bekletip PGW'ye gerçek sonucu döndürüyor. Telefonda başlayıp
 için `pgw_jobs` kuyruğu eklendi — sunucu POS'u arayamadığı için işi yazıp bırakıyor, terminal
 gelip alıyor. §G.1 ve §G.2 de kapandı.
 
-**Kalan iş:** aşağıdaki §H.1'de listeli — OTP'nin gerçekleştirilmesi, UNCLAIMED için SMS-OTP,
-PGW handshake, yol 1 timeout.
+**Beş yol da CİHAZDA doğrulandı (2026-08-19).** Sunucu logunda tam zincir görüldü: onay
+bekleyen POS'un `GET /approvals/{id}` döngüsü, `approve` sonrası `GET /pgw-jobs` → `ack`,
+POS'un `?role=SELLER` filtresi ve telefonun filtresiz kutusu.
+
+**Kalan iş:** §H.1'de listeli (OTP, UNCLAIMED için SMS-OTP, PGW handshake, yol 1 timeout)
++ cihaz testinden çıkan iki not: **§C.3.1** (logout 401 log gürültüsü) ve **§F.5** (pullBook
+N+1). İkisi de kullanıcı kararıyla ertelendi: *"sunuma az kaldı, kozmetik yerlere
+odaklanacağız."*
 
 ---
 
@@ -311,6 +317,27 @@ JWT stateless olduğu için iptal edilecek bir şey yok; kısa access TTL + clie
 temizlemesi tezgâhtaki gerçek riski karşılıyor. Uç yine de var ve **token istiyor** ki ileride
 revocation list eklenirse **client değişmesin**.
 
+#### C.3.1 `POST /auth/logout` 401 dönüyor — log gürültüsü  ⚠️ AÇIK (Tur 41 cihaz testi)
+
+Cihaz testinde görüldü: çıkış yapılırken uç **401** dönüyor ve ardından `POST /auth/refresh`
+**gelmiyor** — yani istek yetkisiz gidip öylece kalıyor. Access token'ın süresi dolmuşken
+çıkış yapılınca oluyor.
+
+**Kullanıcıya zararı YOK ve bu kasıtlı:**
+[`OfflineFirstRepository.logout`](../app-pos/core-data/src/main/java/com/example/app_pos/data/OfflineFirstRepository.kt)
+sunucunun cevabını `runCatching` ile **bilerek yok sayıyor** — başarısız bir revoke, esnafı
+hâlâ giriş yapmış görünen bir kabukta bırakmamalı. Yerel temizlik kararı veren taraf, ve
+sunucuda `logout` zaten no-op.
+
+**Neden yine de not:** bu bir **log gürültüsü** sorunu. Gerçek bir yetki hatası çıktığında
+sunucu logunda bu üç beklenen 401'den ayırt edilemez. `TokenAuthenticator`'ın yenilemeyi
+denememesinin sebebi de incelenmeli (`logout` çağrısında `authenticate()` zinciri neden
+devreye girmiyor).
+
+**Ucuz çözüm adayları:** (a) token geçersizken ucu hiç çağırmamak, (b) `logout`'u
+authenticator'ın yeniden-deneme kapsamı dışında işaretlemek, (c) sunucuda bu uç için 401
+yerine 204 dönmek (çıkış zaten idempotent bir "artık oturumum yok" beyanı).
+
 ### ~~C.4 Cihaz seed'i ile sunucu seed'i ayrı gerçeklikler~~  ✅ KAPANDI (Tur 39)
 `SeedCallback` **iki app'ten de silindi**. Demo verisi artık tek yerde: `backend/app/seed.py`.
 Ekranlar sunucudan besleniyor, yani cihazdaki her satırın bir kaynağı var.
@@ -558,6 +585,39 @@ gerekiyordu (kök neden). Kök neden = okuma yolunun olmaması.
    **Ama sunum tarafı eksik çıktı** — bkz. §G.1.
 
 ---
+
+### F.5 `pullBook` N+1 istek atıyor — ölçek notu  ⚠️ AÇIK (Tur 41 cihaz testi)
+
+Sunucu logunda görüldü: her `GET /customers`'tan sonra **müşteri başına bir** `GET
+/transactions?customer_id=…` gidiyor, ve bu ön planda 30 sn'de bir tekrarlanıyor.
+
+```
+GET /customers                      200
+GET /transactions?customer_id=c1    200
+GET /transactions?customer_id=c2    200
+GET /transactions?customer_id=c4    200
+GET /transactions?customer_id=c5    200
+GET /transactions?customer_id=c3    200      ← 5 müşteri = 6 istek, her poll'de
+```
+
+**Bugün sorun değil, yarın olur:** seed'de 5 müşteri var. 200 müşterili gerçek bir dükkânda
+her poll **201 istek** demek — pil, veri ve sunucu yükü üçü birden.
+
+**Neden böyle:** `GET /customers` bakiyeyi zaten türetip veriyor, ama ekranların ihtiyacı
+olan **hareket geçmişi** o cevapta yok ([§F](deferred.md) "iki kaynak yazmak defterle
+bakiyeyi ayrıştırırdı" kararı). Entry'ler ayrı çekiliyor, ve uç **müşteri-başına** olduğu
+için çağrı sayısı müşteri sayısıyla çarpılıyor.
+
+**Çözüm adayları (ölçülmeden seçilmemeli):**
+1. **`GET /transactions`'ı seller-scoped toplu hâle getirmek** — `customer_id` opsiyonel
+   olsun, verilmezse bu satıcının TÜM hareketleri tek cevapta gelsin. En küçük değişiklik;
+   uç zaten token ile scope'lanıyor.
+2. **`?since=` eklemek** — ama §F.2'deki saniye-hassasiyeti tuzağı burada da geçerli
+   (`transactions` için `since` uygun, çünkü append-only ve `created_at` hiç değişmiyor).
+3. **Sayfalama** — ilk açılışta N günlük pencere, geçmişi ekran açıldıkça çekmek.
+
+⚠️ Hangisi seçilirse seçilsin, **ledger pull'unun additive silme kuralı korunmalı**: cevapta
+olmayan satır silinmez ([§F](deferred.md) tablosu).
 
 ## G. Cihaz testi 3. turdan kalan UI maddeleri — ✅ KAPANDI (Tur 41)
 
