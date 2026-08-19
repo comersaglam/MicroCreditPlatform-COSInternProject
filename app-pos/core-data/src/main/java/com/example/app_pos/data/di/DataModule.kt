@@ -6,6 +6,7 @@ import com.example.app_pos.data.OfflineFirstRepository
 import com.example.app_pos.data.db.AppDatabase
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.data.local.RoomLocalDataSource
+import com.example.app_pos.model.PgwDispatcher
 import com.example.app_pos.model.Repository
 import dagger.Module
 import dagger.Provides
@@ -49,4 +50,17 @@ object DataModule {
     @Provides
     @Singleton
     fun provideRepository(impl: OfflineFirstRepository): Repository = impl
+
+    /**
+     * Gateway dispatch, bound separately from [Repository] even though one class serves
+     * both.
+     *
+     * Kept apart because the two are consumed by different things for different reasons:
+     * every screen needs the Repository, while only the component that fires gateway
+     * intents needs this. Folding these three methods into Repository would put them on
+     * the surface of eight ViewModels that must never call them.
+     */
+    @Provides
+    @Singleton
+    fun providePgwDispatcher(impl: OfflineFirstRepository): PgwDispatcher = impl
 }

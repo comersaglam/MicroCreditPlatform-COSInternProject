@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from .. import models, schemas
 from ..deps import CurrentUser, DbSession
-from ..ledger import balance_of, balances_by_customer
+from ..ledger import balance_of, balances_by_customer, book_customer_ids
 from ..phone import to_stored
 from ..security import api_error
 
@@ -38,39 +38,6 @@ def _require_seller(user: models.User) -> None:
     """These endpoints are a shop's book; a buyer-only account has none."""
     if not user.is_seller:
         raise api_error(403, "not_a_seller", "This account is not a seller")
-
-
-def _book_customer_ids(
-    db, seller_id: str, phone: str | None = None
-) -> set[str]:
-    """
-    Which customer rows belong to this seller's book.
-
-    Membership has two sources, and both are needed. The ledger covers everyone this
-    seller has ever charged, which is the normal case. `created_by_seller_id` covers the
-    customer who was written down but not yet charged -- they have no ledger rows, and on
-    the ledger alone they would belong to no book at all.
-
-    Optionally narrowed to one phone, which is how the duplicate check asks the same
-    question about a single person.
-    """
-    charged = select(models.Transaction.customer_id).where(
-        models.Transaction.seller_id == seller_id
-    )
-    added = select(models.Customer.customer_id).where(
-        models.Customer.created_by_seller_id == seller_id
-    )
-
-    if phone is not None:
-        # Restrict both halves to the rows for this phone, so the union stays about one
-        # person instead of pulling the whole book back to filter in Python.
-        matching = select(models.Customer.customer_id).where(
-            models.Customer.phone == phone
-        )
-        charged = charged.where(models.Transaction.customer_id.in_(matching))
-        added = added.where(models.Customer.phone == phone)
-
-    return set(db.execute(charged.union(added)).scalars().all())
 
 
 @router.post("/customers", status_code=status.HTTP_201_CREATED)
@@ -97,7 +64,7 @@ def create_customer(
     if not body.display_name:
         raise api_error(400, "invalid_name", "Display name is required")
 
-    if _book_customer_ids(db, current_user.user_id, phone=phone):
+    if book_customer_ids(db, current_user.user_id, phone=phone):
         raise api_error(409, "customer_exists", "This phone is already in your book")
 
     customer = models.Customer(
@@ -131,7 +98,7 @@ def list_customers(current_user: CurrentUser, db: DbSession) -> list[schemas.Cus
     """
     _require_seller(current_user)
 
-    customer_ids = _book_customer_ids(db, current_user.user_id)
+    customer_ids = book_customer_ids(db, current_user.user_id)
     if not customer_ids:
         return []
 

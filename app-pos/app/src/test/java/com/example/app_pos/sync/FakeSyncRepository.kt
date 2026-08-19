@@ -1,6 +1,8 @@
 package com.example.app_pos.sync
 
 import com.example.app_pos.model.CustomerCreateOutcome
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.ApprovalStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
@@ -12,6 +14,7 @@ import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -82,6 +85,17 @@ open class FakeSyncRepository(
         DecisionOutcome.Applied
     override suspend fun rejectPending(approvalId: String): DecisionOutcome =
         DecisionOutcome.Applied
+    override suspend fun requestApproval(
+        sellerId: String,
+        customerId: String,
+        amountMinor: Long,
+        type: TransactionType,
+        description: String,
+        origin: String
+    ): ApprovalOutcome = ApprovalOutcome.Unreachable
+
+    override suspend fun approvalStatus(approvalId: String): ApprovalStatus? = null
+
     open override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Refreshed(0)
     open override suspend fun refreshBook(): PullOutcome = PullOutcome.Refreshed(0)
 }

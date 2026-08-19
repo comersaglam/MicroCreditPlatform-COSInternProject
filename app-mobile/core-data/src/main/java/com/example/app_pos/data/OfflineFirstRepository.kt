@@ -5,6 +5,7 @@ import com.example.app_pos.data.remote.RemoteDataSource
 import com.example.app_pos.data.sync.PullEngine
 import com.example.app_pos.data.sync.SyncEngine
 import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.network.dto.ORIGIN_PHONE
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.SellerInfo
@@ -459,7 +460,12 @@ class OfflineFirstRepository @Inject constructor(
             type = type,
             description = description,
             initiatorRole = if (fromUserId == sellerId) ROLE_SELLER else ROLE_BUYER,
-            targetUserId = targetUserId.orEmpty()
+            targetUserId = targetUserId.orEmpty(),
+            // Always a phone — this app never runs on a till. It is what tells the server
+            // to leave the gateway half of the sale for a terminal to collect: nobody here
+            // can reach the PGW, so an approval raised from this device would otherwise be
+            // agreed and then never reach a receipt.
+            origin = ORIGIN_PHONE
         )
 
         return when (result) {
@@ -475,7 +481,10 @@ class OfflineFirstRepository @Inject constructor(
                             counterpartyName = counterpartyNameFor(fromUserId, sellerId, approval)
                         )
                         card?.let { local.insertPendingApproval(it, fromUserId) }
-                        if (card != null) ApprovalOutcome.SentForApproval
+                        // The id travels back for callers that must WAIT for the answer.
+                        // Nothing on a phone does today — the seller taps send and carries
+                        // on — but a till does, and the outcome type is shared.
+                        if (card != null) ApprovalOutcome.SentForApproval(approval.approvalId)
                         else ApprovalOutcome.Failed()
                     }
                     // Nobody could tap approve, so the server wrote it. Mirror WITHOUT

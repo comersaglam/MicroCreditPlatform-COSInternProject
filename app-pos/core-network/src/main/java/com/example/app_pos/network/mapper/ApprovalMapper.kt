@@ -1,17 +1,17 @@
 package com.example.app_pos.network.mapper
 
+import com.example.app_pos.model.ApprovalStatus
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.network.dto.ApprovalCreateDto
+import com.example.app_pos.network.dto.ApprovalDto
 
 /**
- * Approval → wire. Request direction only, on purpose.
+ * Approval ↔ wire.
  *
- * app-pos can SEND a write for approval, but it has no approvals inbox yet (the Room
- * entity and DAO exist as a skeleton, and there is no domain type to map an ApprovalDto
- * onto). app-mobile is the side that renders approvals today; when app-pos grows its own
- * inbox, the response-direction mapper lands here alongside a domain model — and the
- * unknown-value rule for status/initiator_role/channel is to drop the row, since an
- * approval that cannot be rendered is worse than one that is not shown.
+ * Both directions now: app-pos sends entries for approval AND renders an inbox (Turn 39),
+ * so the response direction is no longer a skeleton. The unknown-value rule holds where it
+ * is applied — a status this build does not recognise is dropped rather than guessed at,
+ * because an approval rendered as the wrong thing is worse than one not shown.
  */
 
 /**
@@ -28,7 +28,8 @@ fun approvalCreateDto(
     type: TransactionType,
     description: String?,
     initiatorRole: String,
-    targetUserId: String
+    targetUserId: String,
+    origin: String
 ): ApprovalCreateDto = ApprovalCreateDto(
     sellerId = sellerId,
     customerId = customerId,
@@ -36,5 +37,19 @@ fun approvalCreateDto(
     type = type.name,
     description = description,
     initiatorRole = initiatorRole,
-    targetUserId = targetUserId
+    targetUserId = targetUserId,
+    // Required rather than defaulted: which device raised the request decides whether the
+    // server queues gateway work, and a wrong default would print a duplicate receipt in
+    // one direction or drop one entirely in the other. Each caller states it.
+    origin = origin
 )
+
+/**
+ * The approval's status as a domain value, or null when this build does not recognise it.
+ *
+ * Null is a real answer here, not a parse failure to paper over: the caller is a sale
+ * waiting at the till, and "I do not know what the server means" must keep it waiting
+ * rather than resolve to APPROVED and print a receipt for something nobody agreed to.
+ */
+fun ApprovalDto.statusOrNull(): ApprovalStatus? =
+    ApprovalStatus.entries.firstOrNull { it.name == status }

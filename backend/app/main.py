@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import SessionLocal
-from .routers import approvals, auth, buyer, customers, ledger, users
+from .routers import approvals, auth, buyer, customers, ledger, pgw_jobs, users
 from .seed import is_empty, seed
 
 
@@ -67,6 +67,7 @@ app.include_router(customers.router)
 app.include_router(ledger.router)
 app.include_router(buyer.router)
 app.include_router(approvals.router)
+app.include_router(pgw_jobs.router)
 
 
 @app.get("/health", tags=["meta"])

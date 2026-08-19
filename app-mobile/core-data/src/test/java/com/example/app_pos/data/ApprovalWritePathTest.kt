@@ -185,7 +185,9 @@ class ApprovalWritePathTest {
             amountMinor = 5000, type = TransactionType.DEBT, description = "Ekmek"
         )
 
-        assertEquals(ApprovalOutcome.SentForApproval, outcome)
+        // The SERVER's approval id, not a locally invented one: a caller that waits for
+        // the answer has to ask about the row the server actually raised.
+        assertEquals(ApprovalOutcome.SentForApproval("a-1"), outcome)
         assertEquals(1, local.approvals.size)
         assertTrue("ledger must stay empty", local.ledger.isEmpty())
         // The local branch decides for itself; on the online path it must not run at all.
@@ -261,7 +263,7 @@ class ApprovalWritePathTest {
 
         val outcome = repository(local).initiatePayment("u1", "u_market", 1000)
 
-        assertEquals(ApprovalOutcome.SentForApproval, outcome)
+        assertEquals(ApprovalOutcome.SentForApproval("a-2"), outcome)
         assertEquals("the request must reach the server", 1, server.requestCount)
         assertEquals("/approvals", server.takeRequest().path)
     }

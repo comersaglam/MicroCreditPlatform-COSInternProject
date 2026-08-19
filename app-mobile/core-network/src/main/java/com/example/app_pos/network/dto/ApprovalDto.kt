@@ -29,9 +29,17 @@ data class ApprovalDto(
     @param:Json(name = "type") val type: String,
     @param:Json(name = "description") val description: String? = null,
     @param:Json(name = "channel") val channel: String,
+    /** "POS" or "PHONE" — which device raised this. Decides gateway work on approval. */
+    @param:Json(name = "origin") val origin: String = ORIGIN_PHONE,
     @param:Json(name = "status") val status: String,
     @param:Json(name = "requested_at") val requestedAt: String
 )
+
+/** Raised at a POS terminal, which hands its own intent to the gateway. */
+const val ORIGIN_POS: String = "POS"
+
+/** Raised on a phone, where nobody is standing at the gateway. */
+const val ORIGIN_PHONE: String = "PHONE"
 
 /**
  * POST /approvals — send a write for approval. When the target holds the app a PENDING
@@ -46,5 +54,12 @@ data class ApprovalCreateDto(
     @param:Json(name = "type") val type: String,
     @param:Json(name = "description") val description: String? = null,
     @param:Json(name = "initiator_role") val initiatorRole: String,
-    @param:Json(name = "target_user_id") val targetUserId: String
+    @param:Json(name = "target_user_id") val targetUserId: String,
+
+    /**
+     * Which kind of device raised this: "POS" or "PHONE". It decides whether approving
+     * leaves gateway work behind — a terminal is already in front of the PGW and fires
+     * its own intent, so a job queued for it would hand the same receipt over twice.
+     */
+    @param:Json(name = "origin") val origin: String
 )

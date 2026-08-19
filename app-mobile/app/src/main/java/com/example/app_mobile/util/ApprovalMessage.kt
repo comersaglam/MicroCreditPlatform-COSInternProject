@@ -25,6 +25,11 @@ fun ApprovalOutcome.message(context: Context): String = when (this) {
     // Saved here only. Deliberately not phrased as plain success: nobody else has seen
     // it, and until it syncs the two sides can disagree.
     is ApprovalOutcome.QueuedOffline -> context.getString(R.string.approval_queued_offline)
+    // Nothing was written ANYWHERE — distinct from QueuedOffline above, which at least
+    // kept the entry on this device. Reached only from a till today (app-pos stops a sale
+    // rather than booking a debt nobody could agree to), but worded here because the
+    // outcome type is shared and a missing branch would be a crash rather than a message.
+    is ApprovalOutcome.Unreachable -> context.getString(R.string.approval_unreachable)
     // Prefer the server's own explanation — it knows why it refused, and replacing that
     // with a generic line is how a fixable problem becomes a mystery.
     is ApprovalOutcome.Failed -> message ?: context.getString(R.string.approval_failed)

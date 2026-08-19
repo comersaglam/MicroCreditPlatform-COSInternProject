@@ -459,9 +459,12 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             // The card names the OTHER side, so it reads right whichever way it points.
             val counterpartyName =
                 if (fromUserId == sellerId) shopNameOf(sellerId) else row.displayName
+            // Held rather than inlined: the outcome carries it back, so a caller that has
+            // to wait for the answer can ask about this exact request.
+            val approvalId = UUID.randomUUID().toString()
             approvals.insert(
                 PendingApproval(
-                    approvalId = UUID.randomUUID().toString(),
+                    approvalId = approvalId,
                     sellerId = sellerId,
                     counterpartyName = counterpartyName,
                     approverUserId = approverUserId,
@@ -472,7 +475,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
                     requestedAt = nowStamp()
                 ).toEntity(initiatorUserId = fromUserId)
             )
-            return ApprovalOutcome.SentForApproval
+            return ApprovalOutcome.SentForApproval(approvalId)
         }
 
         // No app (UNCLAIMED): SMS-OTP case, mocked true → write immediately.

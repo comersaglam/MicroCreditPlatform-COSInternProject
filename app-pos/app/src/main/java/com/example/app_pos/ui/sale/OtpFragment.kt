@@ -17,6 +17,7 @@ import com.example.app_pos.R
 import com.example.app_pos.model.Repository
 import com.example.app_pos.databinding.FragmentOtpBinding
 import com.example.app_pos.model.ClaimStatus
+import com.example.app_pos.pgw.PgwBridge
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.util.toTlString
 import kotlinx.coroutines.launch
@@ -59,6 +60,7 @@ class OtpFragment : Fragment() {
         binding.otpPrompt.text = getString(R.string.otp_prompt, phone)
         binding.btnVerify.setOnClickListener { onVerify() }
         observeStatus()
+        observeGatewayRequests()
         // Resolve hasApp (a suspend lookup) first, then kick off the request once.
         if (savedInstanceState == null) {
             viewLifecycleOwner.lifecycleScope.launch {
@@ -119,7 +121,55 @@ class OtpFragment : Fragment() {
                     Toast.LENGTH_LONG
                 ).show()
             }
+            // The request is with the customer. The verify button stays disabled: there is
+            // nothing left for the merchant to do here except wait or back out, and an
+            // enabled button would invite a second request for the same sale.
+            OtpStatus.AWAITING_APPROVAL -> {
+                statusText.visibility = View.VISIBLE
+                statusText.setText(R.string.otp_awaiting_approval)
+                btnVerify.isEnabled = false
+            }
+            // The customer said no. The gateway is told the sale failed, so it does not
+            // print a slip for a debt that was refused.
+            OtpStatus.REJECTED -> {
+                statusText.visibility = View.GONE
+                btnVerify.isEnabled = false
+                Toast.makeText(requireContext(), R.string.msg_approval_rejected, Toast.LENGTH_LONG)
+                    .show()
+                finishHandoff(success = false)
+            }
+            // No signal, so nobody could be asked and nothing was written anywhere. The
+            // merchant can retry the moment there is a connection.
+            OtpStatus.APPROVAL_UNREACHABLE -> {
+                statusText.visibility = View.GONE
+                btnVerify.isEnabled = true
+                Toast.makeText(
+                    requireContext(),
+                    R.string.msg_approval_unreachable,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             OtpStatus.DONE -> Unit // handled in the write callback
+        }
+    }
+
+    /**
+     * Fires the gateway request a completed payment asks for (path 2).
+     *
+     * Collected here rather than in the ViewModel because starting an activity needs a
+     * Context, and the data layer must not hold one.
+     */
+    private fun observeGatewayRequests() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.collectAtGateway.collect { amountMinor ->
+                    amountMinor ?: return@collect
+                    if (!PgwBridge.collectPayment(requireContext(), amountMinor)) {
+                        Toast.makeText(requireContext(), R.string.msg_pgw_missing, Toast.LENGTH_LONG)
+                            .show()
+                    }
+                }
+            }
         }
     }
 
@@ -149,11 +199,24 @@ class OtpFragment : Fragment() {
             TransactionType.PAYMENT -> getString(R.string.msg_payment_written, name, amount.toTlString())
         }
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
-        // A DEBT may have come from the payment app (hand back to it); a PAYMENT
-        // always started inside app-pos, so it never hands back. If we don't
-        // finish, go to the dashboard.
+        finishHandoff(success = true, type = type)
+    }
+
+    /**
+     * Ends the sale, telling the payment gateway what happened when it started this.
+     *
+     * The result is what the gateway is waiting on: it launched us for a veresiye and
+     * cannot decide whether to print a slip until it hears back. Reporting success for a
+     * refused approval would print a receipt for a debt nobody agreed to, which is the
+     * whole reason this now carries an outcome rather than just closing.
+     *
+     * A PAYMENT never hands back — it always started inside app-pos, so there is nobody
+     * waiting — and lands on the dashboard instead.
+     */
+    private fun finishHandoff(success: Boolean, type: TransactionType = TransactionType.DEBT) {
         val isHandoffFlow = type == TransactionType.DEBT
-        val finished = (activity as? MainActivity)?.finishCreditHandoff(isHandoffFlow) ?: false
+        val finished =
+            (activity as? MainActivity)?.finishCreditHandoff(isHandoffFlow, success) ?: false
         if (!finished) {
             findNavController().navigate(R.id.action_global_dashboard)
         }

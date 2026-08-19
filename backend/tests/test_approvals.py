@@ -380,3 +380,41 @@ def test_a_request_approved_reaches_the_buyers_debt_list(client, owner_auth, buy
         for r in client.get("/me/debts", headers=buyer_auth).json()
     }["u_owner"]
     assert after == before + 3000
+
+
+# --- reading one approval back (the initiator waiting at the till) ---
+
+
+def test_the_initiator_can_read_the_approval_they_raised(client, owner_auth):
+    """
+    The inbox cannot answer this: it lists what is addressed to YOU, and the party that
+    raised a request never decides it. A till holding a sale open would otherwise have no
+    way to learn the customer's answer.
+    """
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()["approval_id"]
+
+    response = client.get(f"/approvals/{approval_id}", headers=owner_auth)
+    assert response.status_code == 200
+    assert response.json()["status"] == "PENDING"
+
+
+def test_the_status_moves_once_the_counterparty_answers(client, owner_auth, buyer_auth):
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()["approval_id"]
+
+    client.post(f"/approvals/{approval_id}/approve", headers=buyer_auth)
+
+    body = client.get(f"/approvals/{approval_id}", headers=owner_auth).json()
+    assert body["status"] == "APPROVED"
+
+
+def test_a_stranger_cannot_read_an_approval(client, owner_auth, market_auth):
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()["approval_id"]
+
+    response = client.get(f"/approvals/{approval_id}", headers=market_auth)
+    assert response.status_code == 403

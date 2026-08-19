@@ -31,7 +31,8 @@ fun approvalCreateDto(
     type: TransactionType,
     description: String?,
     initiatorRole: String,
-    targetUserId: String
+    targetUserId: String,
+    origin: String
 ): ApprovalCreateDto = ApprovalCreateDto(
     sellerId = sellerId,
     customerId = customerId,
@@ -39,7 +40,11 @@ fun approvalCreateDto(
     type = type.name,
     description = description,
     initiatorRole = initiatorRole,
-    targetUserId = targetUserId
+    targetUserId = targetUserId,
+    // Required rather than defaulted: which device raised the request decides whether the
+    // server queues gateway work, and a wrong default would print a duplicate receipt in
+    // one direction or drop one entirely in the other. Each caller states it.
+    origin = origin
 )
 
 /**

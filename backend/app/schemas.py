@@ -214,6 +214,9 @@ class Approval(BaseModel):
     type: str
     description: str | None = None
     channel: str
+    # Which device raised this (POS or PHONE). On the wire so a mirrored card carries the
+    # same fact the server decides on, rather than the client guessing it back.
+    origin: str
     status: str
     requested_at: IsoUtc
     # Moves on every status change, unlike requested_at. IsoUtc like every other timestamp
@@ -233,6 +236,47 @@ class ApprovalCreate(BaseModel):
     # come from the token. The router still verifies it -- see routers/approvals.py.
     initiator_role: str
     target_user_id: str
+
+    # Which DEVICE raised this: "POS" or "PHONE". It decides whether approving should
+    # leave gateway work behind. A terminal is already standing in front of the gateway
+    # and fires the intent itself, so queueing a job for it would hand the same receipt
+    # over twice. Defaults to PHONE because that is what every existing client sends --
+    # app-mobile has no notion of this field, and its requests are phone-raised.
+    origin: str = "PHONE"
+
+
+# --- pgw job ---
+
+
+class PgwJob(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: str
+    seller_id: str
+    # RECEIPT (print a slip for an entry already booked) or COLLECT (open the gateway to
+    # take money). The terminal branches on this to decide WHICH intent it fires.
+    kind: str
+    transaction_id: str | None = None
+    customer_id: str
+    amount_minor: int
+    # The gateway's orderBody as a JSON string, passed through untouched. Deliberately not
+    # parsed into a model here: it is the PGW's contract, not ours, and re-shaping it on
+    # the way through is how a field quietly goes missing.
+    order_body: str | None = None
+    status: str
+    created_at: IsoUtc
+    updated_at: IsoUtc
+
+
+class PgwJobCreate(BaseModel):
+    # COLLECT only. RECEIPT jobs are raised by the server alongside the entry they
+    # accompany, never asked for -- see routers/pgw_jobs.py.
+    kind: str
+    customer_id: str
+    amount_minor: int = Field(ge=0)
+
+    # No seller_id: a terminal is addressed by the token, so nobody can queue work onto
+    # another shop's till.
 
 
 # --- error ---

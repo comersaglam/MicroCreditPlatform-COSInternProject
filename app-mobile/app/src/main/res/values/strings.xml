@@ -101,6 +101,8 @@
     <string name="approval_written">Deftere yazıldı</string>
     <string name="approval_no_record">Bu dükkanla kaydınız yok, gönderilemedi</string>
     <string name="approval_queued_offline">İnternet yok — cihaza kaydedildi, bağlanınca gönderilecek</string>
+    <!-- Nothing was written anywhere: the counterparty could not be asked at all. -->
+    <string name="approval_unreachable">Sunucuya ulaşılamadı — kayıt yazılmadı</string>
     <string name="approval_failed">Gönderilemedi, tekrar deneyin</string>
 
     <!-- Answering an approval. The two "stale" cases are not user errors: the card should

@@ -158,6 +158,13 @@ class Approval(Base):
     type: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     channel: Mapped[str] = mapped_column(String, nullable=False)
+
+    # Which kind of device raised this: POS or PHONE. Stored rather than inferred at
+    # decision time, because by then the fact is gone -- and it decides whether approving
+    # leaves gateway work behind. A terminal-raised request hands its own intent over; a
+    # phone-raised one has nobody at the gateway, so the server must queue the job.
+    origin: Mapped[str] = mapped_column(String, nullable=False)
+
     status: Mapped[str] = mapped_column(String, nullable=False)
     requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -172,3 +179,54 @@ class Approval(Base):
     )
 
     __table_args__ = (Index("idx_approvals_target", "target_user_id", "status"),)
+
+
+class PgwJob(Base):
+    """
+    Work waiting for a POS terminal to hand on to the payment gateway.
+
+    The server cannot reach a terminal -- it sits behind NAT with no push channel -- so
+    anything the POS must DO on the server's behalf has to be left somewhere it will come
+    and look. That is this table: the terminal polls it and acts on what it finds.
+
+    Kept apart from `approvals` because the two answer different questions. An approval
+    asks "who must decide this?"; a job asks "who must deliver it, and have they?". The
+    second half is what makes a separate table necessary: without a delivered flag a
+    reinstalled terminal would print every receipt in its history a second time.
+
+    Rows are not deleted once delivered. The trail of what was handed to the gateway is
+    worth as much as the ledger it accompanies, and it follows the same rule the
+    approvals table already sets.
+    """
+
+    __tablename__ = "pgw_jobs"
+
+    job_id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    # Whose terminal collects this. The POS polls with its own token, so this is the only
+    # thing that routes a job to the right shop.
+    seller_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.user_id"), nullable=False
+    )
+
+    # RECEIPT -> print a slip for an entry already in the ledger (path 3).
+    # COLLECT -> open the gateway to take money at the terminal (paths 4 and 5).
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+
+    # Which ledger entry this accompanies. Null for COLLECT: there the money has not been
+    # taken yet, so no entry exists to point at.
+    transaction_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    customer_id: Mapped[str] = mapped_column(String, nullable=False)
+    amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+    # The gateway's orderBody, verbatim, as it will be handed over. Built here rather than
+    # on the device so every terminal sends the same shape for the same job.
+    order_body: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    status: Mapped[str] = mapped_column(String, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (Index("idx_pgw_jobs_seller", "seller_id", "status"),)

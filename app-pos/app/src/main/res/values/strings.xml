@@ -71,6 +71,13 @@
          a connection. Says what to do rather than blaming the number or the merchant. -->
     <string name="msg_customer_unreachable">Sunucuya ulaşılamadı — yeni müşteri kaydı için bağlantı gerekiyor</string>
 
+    <!-- Path 1: the veresiye is with the customer and the till is waiting for their answer. -->
+    <string name="otp_awaiting_approval">Müşteri onayı bekleniyor…</string>
+    <string name="msg_approval_rejected">Müşteri veresiyeyi onaylamadı — hiçbir kayıt yazılmadı</string>
+    <string name="msg_approval_unreachable">Sunucuya ulaşılamadı — müşteri onayı alınamadığı için veresiye yazılmadı</string>
+    <!-- The payment gateway is not installed on this device (development machines). -->
+    <string name="msg_pgw_missing">Ödeme uygulaması bulunamadı</string>
+
     <!-- Sale flow cancel guard -->
     <string name="cancel_dialog_title">İşlemi iptal et</string>
     <string name="cancel_dialog_message">Bu işlemi iptal etmek istiyor musunuz? Girdiğiniz bilgiler kaybolacak.</string>

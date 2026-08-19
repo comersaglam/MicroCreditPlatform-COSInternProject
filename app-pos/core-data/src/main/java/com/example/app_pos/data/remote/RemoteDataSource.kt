@@ -1,7 +1,10 @@
 package com.example.app_pos.data.remote
 
+import com.example.app_pos.model.ApprovalStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.PgwJob
+import com.example.app_pos.model.PgwJobKind
 import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
@@ -12,12 +15,15 @@ import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
 import com.example.app_pos.network.api.LedgerApi
+import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.SyncApi
 import com.example.app_pos.network.api.UserApi
 import com.example.app_pos.network.apiCall
 import com.example.app_pos.network.dto.ApprovalDto
+import com.example.app_pos.network.dto.ApprovalSendResultDto
 import com.example.app_pos.network.dto.OtpRequestDto
 import com.example.app_pos.network.dto.OtpVerifyDto
+import com.example.app_pos.network.dto.PgwJobCreateDto
 import com.example.app_pos.network.dto.RefreshDto
 import com.example.app_pos.network.dto.SellerDebtDto
 import com.example.app_pos.network.dto.SessionDto
@@ -28,6 +34,7 @@ import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.dto.UserPatchDto
 import com.example.app_pos.network.mapper.approvalCreateDto
 import com.example.app_pos.network.mapper.customerCreateDto
+import com.example.app_pos.network.mapper.statusOrNull
 import com.example.app_pos.network.mapper.toBecomeSellerDto
 import com.example.app_pos.network.mapper.toCreateDto
 import com.example.app_pos.network.mapper.toDomain
@@ -50,13 +57,8 @@ import javax.inject.Singleton
  *     retry rule.
  *  2. **DTOs stop here.** Callers get `User`/`Customer`/`Transaction`, never a `*Dto`,
  *     so wire-shape churn cannot leak into the repository or the ViewModels. The few
- *     exceptions are forward-phase calls with no domain type yet (approvals, sync), which
- *     return their DTO on purpose rather than inventing a model nothing consumes.
- *
- * NOTHING CALLS THIS YET. It is written now so phase 8 (the outbox drain) is a wiring job
- * rather than a design one, and so app-mobile can copy the module wholesale — which is
- * also why all seven APIs are wrapped even though app-pos itself has no buyer or approval
- * screens today.
+ *     exceptions are forward-phase calls with no domain type yet (sync), which return
+ *     their DTO on purpose rather than inventing a model nothing consumes.
  *
  * sellerId never appears in a request: the server derives it from the bearer token, and
  * trusting a body field for ownership is exactly the hole the contract closes.
@@ -69,6 +71,7 @@ class RemoteDataSource @Inject constructor(
     private val ledgerApi: LedgerApi,
     private val buyerApi: BuyerApi,
     private val approvalApi: ApprovalApi,
+    private val pgwJobApi: PgwJobApi,
     private val syncApi: SyncApi,
     // apiCall parses the error envelope with it, so the same Moshi that decodes responses
     // also decodes failures — one configuration, not two.
@@ -178,9 +181,14 @@ class RemoteDataSource @Inject constructor(
         apiCall(moshi) { buyerApi.balance(sellerId).balanceMinor }
 
     // --- approvals -----------------------------------------------------------
-    // app-pos can send today but renders no inbox, so there is no domain approval type to
-    // map onto yet; these return the DTO until one exists (see ApprovalMapper's note).
 
+    /**
+     * Sends an entry for the counterparty's approval.
+     *
+     * Answers with [ApprovalSendResultDto] because the endpoint has two shapes: a raised
+     * approval when the customer holds the app, an already-written entry when they do
+     * not. The caller must tell them apart — they mean opposite things at the till.
+     */
     suspend fun sendForApproval(
         sellerId: String,
         customerId: String,
@@ -188,8 +196,9 @@ class RemoteDataSource @Inject constructor(
         type: TransactionType,
         description: String?,
         initiatorRole: String,
-        targetUserId: String
-    ): ApiResult<ApprovalDto> =
+        targetUserId: String,
+        origin: String
+    ): ApiResult<ApprovalSendResultDto> =
         apiCall(moshi) {
             approvalApi.send(
                 approvalCreateDto(
@@ -199,13 +208,49 @@ class RemoteDataSource @Inject constructor(
                     type = type,
                     description = description,
                     initiatorRole = initiatorRole,
-                    targetUserId = targetUserId
+                    targetUserId = targetUserId,
+                    origin = origin
                 )
             )
         }
 
     suspend fun pendingApprovals(): ApiResult<List<ApprovalDto>> =
         apiCall(moshi) { approvalApi.pending() }
+
+    /**
+     * The status of an approval this shop RAISED — how a waiting sale learns the answer.
+     *
+     * Returns null for a status this build does not recognise, which keeps the caller
+     * waiting rather than resolving an unknown value into a decision.
+     */
+    suspend fun approvalById(approvalId: String): ApiResult<ApprovalStatus?> =
+        apiCall(moshi) { approvalApi.byId(approvalId).statusOrNull() }
+
+    // --- payment-gateway jobs -------------------------------------------------
+
+    /** Work waiting for this terminal to hand to the gateway. */
+    suspend fun pgwJobs(): ApiResult<List<PgwJob>> =
+        apiCall(moshi) { pgwJobApi.pending().toDomainList() }
+
+    /** Says a job reached the gateway. Idempotent server-side — see [PgwJobApi.ack]. */
+    suspend fun ackPgwJob(jobId: String): ApiResult<Unit> =
+        apiCall(moshi) { pgwJobApi.ack(jobId) }
+
+    /** Queues work for this seller's own till (path 4). */
+    suspend fun createPgwJob(
+        kind: PgwJobKind,
+        customerId: String,
+        amountMinor: Long
+    ): ApiResult<PgwJob?> =
+        apiCall(moshi) {
+            pgwJobApi.create(
+                PgwJobCreateDto(
+                    kind = kind.name,
+                    customerId = customerId,
+                    amountMinor = amountMinor
+                )
+            ).toDomainOrNull()
+        }
 
     /** Approving is what writes the ledger entry on this path. */
     suspend fun approve(approvalId: String): ApiResult<Transaction?> =

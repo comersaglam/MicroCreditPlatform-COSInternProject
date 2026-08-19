@@ -4,6 +4,9 @@ import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.local.LocalSource
 import com.example.app_pos.model.CustomerCreateOutcome
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.ApprovalStatus
+import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
@@ -113,6 +116,17 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
 
     override suspend fun rejectPending(approvalId: String): DecisionOutcome =
         DecisionOutcome.Unreachable
+
+    override suspend fun requestApproval(
+        sellerId: String,
+        customerId: String,
+        amountMinor: Long,
+        type: TransactionType,
+        description: String,
+        origin: String
+    ): ApprovalOutcome = ApprovalOutcome.Unreachable
+
+    override suspend fun approvalStatus(approvalId: String): ApprovalStatus? = null
 
     override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
 

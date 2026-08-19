@@ -18,6 +18,7 @@ from sqlalchemy import select
 
 from .. import models, schemas
 from ..deps import CurrentUser, DbSession
+from ..pgw import KIND_COLLECT, KIND_RECEIPT, queue_job, receipt_order_body
 from ..security import api_error
 from ..serializers import transaction_out
 
@@ -25,6 +26,12 @@ router = APIRouter(tags=["approvals"])
 
 _VALID_TYPES = {"DEBT", "PAYMENT"}
 _VALID_STATUSES = {"PENDING", "APPROVED", "REJECTED"}
+
+# Where the request was raised. Only PHONE leaves gateway work behind: a POS is already
+# in front of the gateway and hands its own intent over.
+ORIGIN_POS = "POS"
+ORIGIN_PHONE = "PHONE"
+_VALID_ORIGINS = {ORIGIN_POS, ORIGIN_PHONE}
 
 # Not a status a row can hold -- it means "do not filter at all", which is why it is kept
 # apart from the set above rather than added to it.
@@ -44,6 +51,7 @@ def _approval_out(approval: models.Approval) -> schemas.Approval:
         type=approval.type,
         description=approval.description,
         channel=approval.channel,
+        origin=approval.origin,
         status=approval.status,
         requested_at=approval.requested_at,
         updated_at=approval.updated_at,
@@ -94,6 +102,9 @@ def send_for_approval(
 
     if body.initiator_role not in {"BUYER", "SELLER"}:
         raise api_error(400, "invalid_role", "initiator_role must be BUYER or SELLER")
+
+    if body.origin not in _VALID_ORIGINS:
+        raise api_error(400, "invalid_origin", "origin must be POS or PHONE")
 
     # Plan §0.3. seller_id is in the body because a BUYER may start this, and then it
     # cannot come from the token. That makes it the one field an attacker could aim at,
@@ -154,6 +165,9 @@ def send_for_approval(
         type=body.type,
         description=body.description,
         channel="APP_PUSH",
+        # Kept from the request: by the time somebody decides this, the device that raised
+        # it is long gone, and whether to queue gateway work depends on which it was.
+        origin=body.origin,
         status="PENDING",
         requested_at=raised_at,
         # Same instant as requested_at: a row that has only just been raised has not
@@ -206,6 +220,31 @@ def pending_approvals(
     return [_approval_out(approval) for approval in rows]
 
 
+@router.get("/approvals/{approval_id}")
+def approval_by_id(
+    approval_id: str, current_user: CurrentUser, db: DbSession
+) -> schemas.Approval:
+    """
+    One approval, for the side WAITING on it.
+
+    The inbox endpoint cannot answer this. It returns what is addressed to you, and the
+    party that raised a request is by definition not the one who decides it -- so a till
+    holding a sale open has no way to learn the customer's answer from that list.
+
+    Readable by either end, and by nobody else: the initiator needs it to close the sale,
+    the target already sees it in their inbox, and a third party has no business knowing
+    what somebody owes.
+    """
+    approval = db.get(models.Approval, approval_id)
+    if approval is None:
+        raise api_error(404, "approval_not_found", "No such approval")
+
+    if current_user.user_id not in {approval.initiator_user_id, approval.target_user_id}:
+        raise api_error(403, "forbidden", "This approval is not yours")
+
+    return _approval_out(approval)
+
+
 def _decide(db: DbSession, approval_id: str, user: models.User) -> models.Approval:
     """Load a pending approval this user is entitled to decide, or raise."""
     approval = db.get(models.Approval, approval_id)
@@ -250,9 +289,55 @@ def approve(
     )
     approval.status = "APPROVED"
     approval.updated_at = datetime.now(UTC)
+
+    _queue_terminal_work(db, approval, transaction)
+
     db.commit()
 
     return transaction_out(transaction)
+
+
+def _queue_terminal_work(
+    db: DbSession, approval: models.Approval, transaction: models.Transaction
+) -> None:
+    """
+    Leave the gateway half of this approval for the seller's terminal.
+
+    Only approvals raised on a PHONE reach here with work to do. A sale that started at
+    the terminal is already standing in front of the gateway and hands the intent over
+    itself; queueing a job for it would fire the same intent twice.
+
+    Which job depends on what was agreed, and the two are not interchangeable:
+      * DEBT approved (path 3)    -> RECEIPT, a slip for money already booked.
+      * PAYMENT approved (path 5) -> COLLECT, the gateway opens to TAKE money by card.
+
+    Added to the caller's session, committed by them: the job and the ledger entry that
+    justifies it must land together or not at all.
+    """
+    if approval.origin != ORIGIN_PHONE:
+        return
+
+    if approval.type == "DEBT":
+        queue_job(
+            db,
+            seller_id=approval.seller_id,
+            kind=KIND_RECEIPT,
+            customer_id=approval.customer_id,
+            amount_minor=approval.amount_minor,
+            transaction_id=transaction.transaction_id,
+            order_body=receipt_order_body(approval.amount_minor),
+        )
+    else:
+        # No orderBody: the terminal opens the gateway for a card payment rather than
+        # printing a slip, and the gateway builds its own basket for that.
+        queue_job(
+            db,
+            seller_id=approval.seller_id,
+            kind=KIND_COLLECT,
+            customer_id=approval.customer_id,
+            amount_minor=approval.amount_minor,
+            transaction_id=transaction.transaction_id,
+        )
 
 
 @router.post("/approvals/{approval_id}/reject", status_code=status.HTTP_204_NO_CONTENT)

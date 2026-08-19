@@ -119,6 +119,34 @@ def test_create_404s_for_an_unknown_customer(client, owner_auth):
     assert response.json()["error"]["code"] == "customer_not_found"
 
 
+def test_create_rejects_a_customer_outside_this_sellers_book(client, owner_auth):
+    """
+    seller_id coming from the token stops writing into ANOTHER book. This is the mirror
+    image: booking a stranger into your OWN. m1 is u_market's record for u1, and u_owner
+    has never charged them -- without this check the entry would surface in that person's
+    /me/debts as a debt to a shop they have never visited.
+    """
+    response = _post(client, owner_auth, _entry(customer_id="m1"))
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "not_in_book"
+
+
+def test_a_customer_just_added_can_be_charged_immediately(client, owner_auth):
+    """
+    Book membership is ledger-OR-created_by, and the second half is what makes this work:
+    a customer with no entries yet would otherwise belong to no book and be unchargeable
+    on the very screen that just created them.
+    """
+    customer_id = client.post(
+        "/customers",
+        headers=owner_auth,
+        json={"display_name": "Yeni Müşteri", "phone": "+905557778899"},
+    ).json()["customer_id"]
+
+    response = _post(client, owner_auth, _entry(customer_id=customer_id))
+    assert response.status_code == 201
+
+
 # --- idempotency: the contract the outbox depends on ---
 
 

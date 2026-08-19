@@ -8,6 +8,8 @@ import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.mapper.toCreateDto
 import com.squareup.moshi.Moshi
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.ApprovalStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.SellerInfo
@@ -15,17 +17,22 @@ import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.PendingApproval
+import com.example.app_pos.model.PgwDispatcher
+import com.example.app_pos.model.PgwJob
+import com.example.app_pos.model.PgwJobKind
 import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.network.ApiResult
 import com.example.app_pos.network.isRetryable
 import com.example.app_pos.network.auth.TokenStore
 import com.example.app_pos.network.dto.UserDto
 import com.example.app_pos.network.mapper.toDomain
+import com.example.app_pos.network.mapper.toDomainOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -63,7 +70,7 @@ class OfflineFirstRepository @Inject constructor(
     private val pullEngine: PullEngine,
     private val tokens: TokenStore,
     moshi: Moshi
-) : Repository {
+) : Repository, PgwDispatcher {
 
     // Serialises the queued request body. Held here rather than built per write: adapter
     // creation is reflection-backed work that would otherwise repeat on every sale.
@@ -339,6 +346,116 @@ class OfflineFirstRepository @Inject constructor(
     }
 
     /**
+     * Sends an entry for the customer's approval. See [Repository.requestApproval].
+     *
+     * Deliberately NOT offline-tolerant, and this is the one place app-pos departs from
+     * the offline-first rule it follows everywhere else. The point of the gate is that the
+     * customer agrees; with no signal nobody can be asked, and writing the entry anyway
+     * would be the very unilateral booking the gate exists to prevent. So an unreachable
+     * server stops the sale instead of quietly completing it.
+     *
+     * Nothing is mirrored locally on the 201 branch either — the pending card belongs to
+     * the CUSTOMER's inbox, not this shop's, and a copy here would show the till a request
+     * it is not being asked to answer.
+     */
+    override suspend fun requestApproval(
+        sellerId: String,
+        customerId: String,
+        amountMinor: Long,
+        type: TransactionType,
+        description: String,
+        origin: String
+    ): ApprovalOutcome {
+        // Who must answer. Null means the customer holds no account, which the server
+        // reads as the SMS-OTP branch and writes immediately.
+        val targetUserId = local.findCustomerById(sellerId, customerId)?.claimedByUserId
+
+        val result = remote.sendForApproval(
+            sellerId = sellerId,
+            customerId = customerId,
+            amountMinor = amountMinor,
+            type = type,
+            description = description,
+            // The till is always the shop side of this line.
+            initiatorRole = ROLE_SELLER,
+            targetUserId = targetUserId.orEmpty(),
+            origin = origin
+        )
+
+        return when (result) {
+            is ApiResult.Success -> {
+                val approval = result.data.asApproval()
+                val transaction = result.data.asTransaction()
+                when {
+                    // Raised: the ledger is untouched until the customer answers, so the
+                    // sale waits. The id travels back so the screen can poll for it.
+                    approval != null -> ApprovalOutcome.SentForApproval(approval.approvalId)
+
+                    // Nobody could tap approve, so the server booked it. Mirror WITHOUT
+                    // queueing — the server already holds this entry, and the outbox would
+                    // deliver a second copy of it.
+                    transaction != null -> {
+                        transaction.toDomainOrNull()?.let { local.addTransaction(it) }
+                        ApprovalOutcome.WrittenImmediately
+                    }
+
+                    // A 2xx we cannot read. Treat as failed rather than inventing a write.
+                    else -> ApprovalOutcome.Failed()
+                }
+            }
+
+            // No signal: the customer cannot be asked, so nothing is written anywhere.
+            is ApiResult.NetworkError -> ApprovalOutcome.Unreachable
+
+            is ApiResult.ApiError -> ApprovalOutcome.Failed(result.message)
+            is ApiResult.UnexpectedError -> ApprovalOutcome.Failed()
+        }
+    }
+
+    // --- payment-gateway dispatch (PgwDispatcher) ----------------------------
+
+    /**
+     * Work waiting for this till. See [PgwDispatcher.pendingJobs].
+     *
+     * An unreachable server answers the empty list, same as "nothing to do". The two are
+     * genuinely equivalent to the caller — fire no intent — and the jobs are safe on the
+     * server, so the next poll picks them up. This is the one place where collapsing
+     * "unreachable" into "empty" is right, and it is right because NOTHING IS DELETED here:
+     * the rule it would otherwise break (silence must not wipe local rows) has nothing to
+     * act on, since jobs are never stored on the device.
+     */
+    override suspend fun pendingJobs(): List<PgwJob> =
+        when (val result = remote.pgwJobs()) {
+            is ApiResult.Success -> result.data
+            else -> emptyList()
+        }
+
+    override suspend fun acknowledge(jobId: String) {
+        // Failures are deliberately swallowed: the job stays PENDING and comes back on the
+        // next poll, which fires the intent again. That is the safe direction — the
+        // alternative ordering loses receipts outright.
+        remote.ackPgwJob(jobId)
+    }
+
+    override suspend fun queueCollect(customerId: String, amountMinor: Long): Boolean =
+        remote.createPgwJob(PgwJobKind.COLLECT, customerId, amountMinor) is ApiResult.Success
+
+    /**
+     * Asks the server what became of a raised approval. See [Repository.approvalStatus].
+     *
+     * Reads the server directly rather than the local table: the row lives in the
+     * CUSTOMER's inbox and this device never stored a copy of it, so there is nothing
+     * local to observe.
+     */
+    override suspend fun approvalStatus(approvalId: String): ApprovalStatus? =
+        when (val result = remote.approvalById(approvalId)) {
+            is ApiResult.Success -> result.data
+            // Unreachable or refused: unknown, not decided. The caller keeps waiting,
+            // which is the only safe reading while a receipt is pending at the gateway.
+            else -> null
+        }
+
+    /**
      * Approves on the SERVER, which is what writes the ledger entry on this path, then
      * mirrors the result locally.
      *
@@ -435,6 +552,11 @@ class OfflineFirstRepository @Inject constructor(
      */
 
     private companion object {
+        // Which side of the approval line this device is. A terminal is always the shop --
+        // there is no buyer-initiated path from a till -- so unlike app-mobile, which
+        // carries both roles in one account, this never has to be decided at runtime.
+        const val ROLE_SELLER = "SELLER"
+
         // Error codes the sign-in flow branches on, exactly as the contract spells them.
         const val CODE_USER_NOT_FOUND = "user_not_found"
         const val CODE_INVALID_CODE = "invalid_code"

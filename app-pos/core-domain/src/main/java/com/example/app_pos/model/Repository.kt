@@ -82,6 +82,45 @@ interface Repository {
      */
     suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody? = null)
 
+    // --- approvals (outgoing: what this shop asks the customer to agree to) ---
+
+    /**
+     * Sends an entry for the customer's approval — the gate a veresiye now passes through.
+     *
+     * Until this existed the terminal wrote straight to the ledger and the OTP screen in
+     * front of it verified nothing (`OtpService.verifyOtp` returned an unconditional true).
+     * So the rule the whole design rests on — that a shopkeeper cannot book debt against
+     * somebody unilaterally — held on the phone and not at the till, which is where almost
+     * every veresiye is actually written.
+     *
+     * The SERVER decides what happens: a pending approval when the customer holds the app,
+     * or an immediate write when they do not (the SMS-OTP branch). The returned
+     * [ApprovalOutcome] says which — the caller must not assume, because at the till the
+     * difference decides whether the sale can be closed now or has to wait for an answer.
+     *
+     * [origin] tells the server this came from a TERMINAL, which is what stops it queueing
+     * gateway work: this device is already in front of the PGW and hands its own intent
+     * over. Phone-raised requests need the server to leave that work behind instead.
+     */
+    suspend fun requestApproval(
+        sellerId: String,
+        customerId: String,
+        amountMinor: Long,
+        type: TransactionType,
+        description: String,
+        origin: String = ORIGIN_POS
+    ): ApprovalOutcome
+
+    /**
+     * Whether an approval this shop raised has been answered yet.
+     *
+     * Polled while the sale waits at the till. Returns null when the row is unknown —
+     * which is not the same as "still pending": a decision made elsewhere can drop the row
+     * from the inbox entirely, and a caller that read those two as the same thing would
+     * wait forever on a sale that was already settled.
+     */
+    suspend fun approvalStatus(approvalId: String): ApprovalStatus?
+
     // --- approvals (the incoming inbox: what is waiting on THIS shop's decision) ---
 
     /**

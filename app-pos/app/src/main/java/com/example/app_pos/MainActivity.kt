@@ -5,6 +5,9 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.core.os.bundleOf
 import androidx.navigation.NavController
 import androidx.navigation.fragment.NavHostFragment
@@ -14,8 +17,10 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import com.example.app_pos.data.OrderBodyParser
 import com.example.app_pos.databinding.ActivityMainBinding
 import com.example.app_pos.model.Repository
+import com.example.app_pos.pgw.PgwJobRunner
 import com.example.app_pos.ui.dashboard.DashboardFragment
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -41,6 +46,12 @@ class MainActivity : AppCompatActivity() {
      * see a ready repository.
      */
     @Inject lateinit var repo: Repository
+
+    /**
+     * Delivers server-queued work to the payment gateway. Injected here because a job can
+     * arrive while any screen is open — it belongs to the terminal, not to a screen.
+     */
+    @Inject lateinit var pgwJobRunner: PgwJobRunner
 
     /** True when opened from the payment app; drives the finish-back behaviour. */
     private var isCreditHandoff = false
@@ -95,6 +106,27 @@ class MainActivity : AppCompatActivity() {
         // would push a duplicate sale-flow screen.
         if (savedInstanceState == null) {
             handleIntent(intent)
+        }
+
+        collectGatewayJobs()
+    }
+
+    /**
+     * Collects work the server left for this terminal and fires it at the payment gateway.
+     *
+     * Lives on the Activity rather than on any one screen because a job can arrive at any
+     * moment — the sale that produced it happened on somebody's PHONE (paths 3, 4 and 5),
+     * and which tab the merchant happens to be looking at is irrelevant to it.
+     *
+     * Scoped to STARTED, so polling stops when the terminal is backgrounded. That is
+     * deliberate: launching a payment screen out of a pocketed device would be alarming,
+     * and nothing is lost by waiting — an undelivered job stays PENDING on the server.
+     */
+    private fun collectGatewayJobs() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                pgwJobRunner.poll(this@MainActivity)
+            }
         }
     }
 
@@ -199,8 +231,13 @@ class MainActivity : AppCompatActivity() {
      * flag was what wrongly sent payments back to the payment app (and crashed
      * when it wasn't running).
      */
-    fun finishCreditHandoff(isHandoffFlow: Boolean): Boolean {
+    fun finishCreditHandoff(isHandoffFlow: Boolean, success: Boolean = true): Boolean {
         if (isCreditHandoff && isHandoffFlow) {
+            // What the gateway is actually waiting for. It launched us to find out whether
+            // the veresiye was agreed, and prints its slip on the answer — so a refused
+            // approval must come back as CANCELED, not as a silent close that the gateway
+            // would have no way to distinguish from success.
+            setResult(if (success) RESULT_OK else RESULT_CANCELED)
             finish()
             return true
         }

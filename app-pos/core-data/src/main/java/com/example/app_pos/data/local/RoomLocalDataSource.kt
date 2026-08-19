@@ -9,6 +9,8 @@ import com.example.app_pos.data.db.toBasketEntity
 import com.example.app_pos.data.db.toDomain
 import com.example.app_pos.data.db.toEntity
 import com.example.app_pos.data.db.toItemEntities
+import com.example.app_pos.model.ApprovalOutcome
+import com.example.app_pos.model.ApprovalStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.DecisionOutcome
@@ -23,6 +25,7 @@ import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.model.balanceOf
 import kotlinx.coroutines.flow.Flow
@@ -281,6 +284,27 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
 
     override suspend fun rejectPending(approvalId: String): DecisionOutcome =
         DecisionOutcome.Unreachable
+
+    /**
+     * Raising a request is not something storage can do, and this one does not even have a
+     * degraded local form.
+     *
+     * The other fallbacks here answer "not now"; this answers "not ever, on this device".
+     * The whole point of the gate is that the CUSTOMER agrees, so a local write would be
+     * exactly the unilateral booking it exists to prevent — the composing repository sends
+     * it to the server or stops the sale.
+     */
+    override suspend fun requestApproval(
+        sellerId: String,
+        customerId: String,
+        amountMinor: Long,
+        type: TransactionType,
+        description: String,
+        origin: String
+    ): ApprovalOutcome = ApprovalOutcome.Unreachable
+
+    /** The row lives in the counterparty's inbox; this device never stored a copy. */
+    override suspend fun approvalStatus(approvalId: String): ApprovalStatus? = null
 
     /** Storage cannot pull — there is no network here. See [syncNow] for the same shape. */
     override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable

@@ -1,6 +1,7 @@
 package com.example.app_pos.data
 
 import com.example.app_pos.network.api.ApprovalApi
+import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
@@ -238,6 +239,7 @@ class OfflineFirstSessionTest {
             ledgerApi = retrofit.create(LedgerApi::class.java),
             buyerApi = retrofit.create(BuyerApi::class.java),
             approvalApi = retrofit.create(ApprovalApi::class.java),
+            pgwJobApi = retrofit.create(PgwJobApi::class.java),
             syncApi = retrofit.create(SyncApi::class.java),
             moshi = moshi
         )

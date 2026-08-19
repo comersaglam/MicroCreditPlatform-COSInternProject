@@ -64,6 +64,16 @@ def owner_auth(owner_token) -> dict[str, str]:
 
 
 @pytest.fixture
+def market_auth(client) -> dict[str, str]:
+    """u_market -- the SECOND shop, for anything that must not cross book boundaries."""
+    response = client.post(
+        "/auth/otp/verify", json={"phone": "+905553334455", "code": "123456"}
+    )
+    assert response.status_code == 200
+    return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
+@pytest.fixture
 def buyer_auth(client) -> dict[str, str]:
     """u1 -- a plain buyer, with records in both shops' books (c1 and m1)."""
     response = client.post(

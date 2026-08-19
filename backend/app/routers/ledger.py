@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from .. import models, schemas
 from ..deps import CurrentUser, DbSession
-from ..ledger import balance_of
+from ..ledger import balance_of, is_in_book
 from ..security import api_error
 from ..serializers import transaction_out
 
@@ -93,6 +93,14 @@ def create_transaction(
     customer = db.get(models.Customer, body.customer_id)
     if customer is None:
         raise api_error(404, "customer_not_found", "No such customer")
+
+    # The customer must be in THIS seller's book. seller_id coming from the token already
+    # stops writing into somebody else's ledger, but on its own it allows the mirror
+    # image: booking an entry against a stranger -- a customer_id belonging to another
+    # shop's book -- into your own. The row would then surface in that person's /me/debts
+    # as a debt to a shop they have never visited.
+    if not is_in_book(db, current_user.user_id, body.customer_id):
+        raise api_error(403, "not_in_book", "This customer is not in your book")
 
     basket_id = _write_basket(db, body.basket) if body.basket else None
 

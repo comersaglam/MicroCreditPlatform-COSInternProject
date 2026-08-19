@@ -194,7 +194,8 @@ class RemoteDataSource @Inject constructor(
         type: TransactionType,
         description: String?,
         initiatorRole: String,
-        targetUserId: String
+        targetUserId: String,
+        origin: String
     ): ApiResult<ApprovalSendResultDto> =
         apiCall(moshi) {
             approvalApi.send(
@@ -205,7 +206,8 @@ class RemoteDataSource @Inject constructor(
                     type = type,
                     description = description,
                     initiatorRole = initiatorRole,
-                    targetUserId = targetUserId
+                    targetUserId = targetUserId,
+                    origin = origin
                 )
             )
         }
