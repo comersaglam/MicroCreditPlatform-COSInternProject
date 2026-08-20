@@ -1,10 +1,14 @@
 # Ertelenenler — nereye kadar getirdik, neyi bıraktık
 
-> **Bu dosya ne işe yarar:** Aşağıdakilerin hepsi **bilinçli** karardı, hiçbiri unutulmuş iş
+> **Bu dosya ne işe yarar:** §A–§I'nin hepsi **bilinçli** karardı, hiçbiri unutulmuş iş
 > değil. Ama altı ay sonra koda bakan (sen dahil) "burası neden yarım?" diye soracak. Cevaplar
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
-> Son güncelleme: 2026-08-19, Tur 41 (onay yollarının yeniden tanımı) sonrası.
+> ⚠️ **Tek istisna [§J](#j-yol-1in-sepeti-hiç-kaydedilmiyor--açık-bug--tur-42)** — o bilinçli
+> bir erteleme değil, **gerçek bir bug**: PGW'den gelen sepet hiç kaydedilmiyor, düzeltmesi
+> Tur 42'ye bırakıldı.
+>
+> Son güncelleme: 2026-08-20, sepet bug'ının teşhisi (§J) sonrası.
 > Kalıcı adım günlüğü: [progress.md](progress.md). Uygulama planı ve §0 kararları:
 > [faz5-backend-plan.md](faz5-backend-plan.md). Kararların gerekçesi:
 > [architecture-pos.md](architecture-pos.md), [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md).
@@ -59,7 +63,7 @@ POS'un `?role=SELLER` filtresi ve telefonun filtresiz kutusu.
 **Kalan iş:** §H.1'de listeli (OTP, UNCLAIMED için SMS-OTP, PGW handshake, yol 1 timeout)
 + cihaz testinden çıkan iki not: **§C.3.1** (logout 401 log gürültüsü) ve **§F.5** (pullBook
 N+1). İkisi de kullanıcı kararıyla ertelendi: *"sunuma az kaldı, kozmetik yerlere
-odaklanacağız."*
+odaklanacağız."* **Ayrıca §J: sepet bug'ı (açık, Tur 42).**
 
 ---
 
@@ -769,3 +773,83 @@ tezgâhta pratik değil. Kodda `TODO(gib-document-no)`.
 `paymentItems` + `type:17` gönderiyor ve **doğru çalışıyor** — fişi bastıran zaten o.
 Kullanıcı kapsamı açıkça *"yol 2'ye özel"* çizdi. Fiş yolu da yeni alanları isterse
 (`customerInfo`, `infoReceiptInfo`) hem Kotlin hem Python tarafı güncellenmeli.
+
+---
+
+## J. Yol 1'in sepeti hiç kaydedilmiyor  🐞 **AÇIK BUG — Tur 42**
+
+> Bu bölüm §A–§I'den **farklı**: oradakiler bilinçli ertelemeler, bu **gerçek bir hata**.
+> 2026-08-20'de DB sorgusuyla bulundu — Ayşe Demir'in (`c2`) 35,00 TL'lik veresiyesinin
+> sepeti soruldu, `basket_id` NULL çıktı. Sonra tüm tablo tarandı: **`baskets` 0 satır,
+> `basket_items` 0 satır.** Yani PGW'den intent'le gelen hiçbir sepet bugüne kadar
+> kaydedilmemiş.
+
+### J.1 Teşhis: zincirin İLK halkası bağlı değil
+
+**`SaleViewModel.setOrderBody()` hiçbir yerden çağrılmıyor.** Yazan yok, sadece okuyan var —
+setter ölü. Boru hattının geri kalanı **baştan sona doğru yazılmış ve çalışır durumda**:
+
+| # | Nerede | Ne oluyor |
+|---|---|---|
+| 1 | [`MainActivity.kt:158-162`](../app-pos/app/src/main/java/com/example/app_pos/MainActivity.kt) | orderBody JSON alınıp parse ediliyor, ama sadece `.totalMinor()` bundle'a konuyor — **parse edilmiş `OrderBody` nesnesi burada çöpe gidiyor** |
+| 2 | [`KeypadFragment.kt:79`](../app-pos/app/src/main/java/com/example/app_pos/ui/sale/KeypadFragment.kt) | `setAmount(args.amountMinor)` var, yanında `setOrderBody(...)` **yok** (zaten elinde de yok — bundle'da sadece tutar) |
+| 3 | [`SaleViewModel.kt:51`](../app-pos/app/src/main/java/com/example/app_pos/ui/sale/SaleViewModel.kt) | `orderBody` ölene kadar **`null`** |
+| 4 | [`OtpFragment.kt:197`](../app-pos/app/src/main/java/com/example/app_pos/ui/sale/OtpFragment.kt) | `orderBody = saleViewModel.orderBody` → yani **null gönderiyor** |
+| 5 | [`ledger.py:105`](../backend/app/routers/ledger.py) | `if body.basket` → false → `_write_basket` **hiç çağrılmıyor** |
+
+`OrderBodyParser`, `OfflineFirstRepository.addTransaction(tx, orderBody)`, `TransactionMapper`
+(`basket = orderBody?.toDto()`), `TransactionCreateDto.basket`, backend `_write_basket`
+(idempotent, aynı commit'te) — **hepsi doğru**. Eksik olan tek şey 1. ve 2. adım arasındaki bağ.
+
+**Aynı kopukluk ikinci yolda da var:** [`MainActivity.onLoginSucceeded`](../app-pos/app/src/main/java/com/example/app_pos/MainActivity.kt)
+(`:271`) `pendingHandoffOrderBody`'yi parse edip yine sadece tutarını alıyor. Yani giriş
+detourundan geçen handoff'ta da sepet düşüyor — düzeltme **iki çağrı noktasını da** kapsamalı.
+
+### J.2 Neden fark edilmedi
+
+`setOrderBody`'nin yorumu şunu diyor: *"Held so the write step can persist the basket + its
+items later (**phase 3**)"*. Yani setter bilinçli olarak **ileriye dönük** bırakılmış. Sonra
+alt katmanlar (repo → DTO → mapper → backend) sırayla tamamlanmış, ama geri dönülüp bu son
+halka bağlanmamış. Klasik [[replace-source-before-removing-it]] deseninin diğer yüzü:
+**tüketici hazır, kaynak bağlanmamış** → sistem hatasız şekilde boş çalışıyor.
+
+Testlerin yakalayamama sebebi de bu: `TransactionMapperTest` ve `LedgerApiTest` mapper'a
+orderBody'yi **kendileri veriyor**, yani 3. adımdan sonrasını test ediyorlar. Kopukluk
+1↔2 arasında, hiçbir testin geçmediği yerde.
+
+### J.3 Muhtemel düzeltme
+
+Nav bundle'a tutarın **yanında ham JSON'u da** koyup, `KeypadFragment.routeByEntry()` içinde
+`setAmount`'ın hemen yanında parse edip `setOrderBody` çağırmak. Üç dosya:
+
+1. **`nav_graph.xml`** → `keypadFragment`'a `<argument android:name="orderBody"
+   app:argType="string" android:defaultValue="" />` (mevcut `amountMinor`/`payCustomer*`
+   argümanlarının yanına, `:53` civarı)
+2. **`MainActivity`** → **iki yerde** (`handleIntent` ve `onLoginSucceeded`) bundle'a
+   `"orderBody" to orderBody` ekle
+3. **`KeypadFragment.routeByEntry()`** → DEBT dalında
+   `saleViewModel.setOrderBody(OrderBodyParser.parse(args.orderBody))`
+
+**Neden bundle, neden Activity'den doğrudan değil:** `SaleViewModel` `saleFlow` nested
+graph'ına scope'lu (`navGraphViewModels(R.id.saleFlow)`), Activity ona erişemez. Ayrıca nav
+argümanı process-death'e dayanıklı — `pendingHandoffOrderBody`'nin `onSaveInstanceState`'te
+saklanmasının sebebiyle aynı gerekçe.
+
+**Doğrulama (kod değil, DB):** düzeltmeden sonra mock-pos'tan bir handoff geçir, sonra
+
+```bash
+docker exec backend-db-1 psql -U veresiye -d veresiye -c "
+SELECT t.transaction_id, t.basket_id, i.name, i.price_minor, i.quantity
+FROM transactions t LEFT JOIN basket_items i ON i.basket_id = t.basket_id
+WHERE t.basket_id IS NOT NULL ORDER BY t.created_at DESC;"
+```
+
+Bugün bu sorgu **0 satır** dönüyor; düzeltmenin ölçütü ilk kez satır dönmesi.
+[[verify-running-artifact-not-source]] gereği: `assembleDebug` + yeniden kurulum şart,
+`compileDebugKotlin` yetmez.
+
+### J.4 Kapsam notu — geçmiş veri kurtarılamaz
+
+Şimdiye kadar yazılmış veresiyelerin sepetleri **kalıcı olarak kayıp**: JSON hiçbir yere
+yazılmadı, ne outbox payload'ında ne Room'da. `transactions` append-only olduğu için geriye
+dönük `basket_id` doldurmak da yok. Düzeltme yalnız **bundan sonraki** satışlar için geçerli.
