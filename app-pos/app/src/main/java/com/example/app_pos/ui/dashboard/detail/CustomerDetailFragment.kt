@@ -167,8 +167,7 @@ class CustomerDetailFragment : Fragment() {
                     val opened = PgwBridge.collectPayment(
                         context = requireContext(),
                         amountMinor = request.amountMinor,
-                        customerName = request.customerName,
-                        customerPhone = request.customerPhone
+                        customerName = request.customerName
                     )
                     if (!opened) {
                         Toast.makeText(requireContext(), R.string.msg_pgw_missing, Toast.LENGTH_LONG)

@@ -728,7 +728,7 @@ uyduruldu (`taxFreeAmount` + `customerInfo` + `infoReceiptInfo`, `paymentItems` 
 
 ### I.1 Yol 4/5'te müşteri bilgisi yerelden okunuyor  ⚠️ AÇIK
 
-Sunucu `pgw_jobs` işini yalnız `customer_id` ile gönderiyor — ad ve telefon şemada yok
+Sunucu `pgw_jobs` işini yalnız `customer_id` ile gönderiyor — müşteri adı şemada yok
 ([schemas.py](../backend/app/schemas.py) `PgwJob`,
 [pgw_jobs.py](../backend/app/routers/pgw_jobs.py) `_job_out`). Kullanıcı kararı: **backend'e
 dokunma**, terminal kendi defterinden baksın.
@@ -741,14 +741,19 @@ gönderilmeyen ödemeden iyidir) ama fişte müşteri görünmez. Yol 2'de bu ri
 zaten ekranda açık.
 
 **Kalıcı çözüm:** `schemas.PgwJob` + `_job_out()` + `PgwJobDto` + `PgwJobMapper` + domain
-`PgwJob`'a `customer_name` / `customer_phone` eklemek (Python + 3 Kotlin dosyası).
+`PgwJob`'a `customer_name` eklemek (Python + 3 Kotlin dosyası).
 
-### I.2 `taxID` alanına telefon numarası yazılıyor  ⚠️ AÇIK
+### I.2 `taxID` sabit bir placeholder  ⚠️ AÇIK
 
-Referans şema `customerInfo.taxID` bekliyor (örnekte `11111111111`). Elimizde ne vergi no
-ne TC no var — sistem müşteriyi **telefonla** tanıyor. Kullanıcı kararı: telefonu gönder.
-Alan adı ile içeriği **uyuşmuyor**; gerçek entegrasyonda ya gerçek kimlik toplanmalı ya
-alan hiç gönderilmemeli. Kodda `TODO(taxid)`.
+Referans şema `customerInfo.taxID` bekliyor. Elimizde ne vergi no ne TC no var — sistem
+müşteriyi **telefonla** tanıyor. Gönderilen değer referans örnekteki sabit:
+`11111111111` (`PgwBridge.PLACEHOLDER_TAX_ID`). Yani **fişte her müşteri aynı kimlikle**
+görünür. Gerçek entegrasyonda ya gerçek kimlik toplanmalı ya alan hiç gönderilmemeli.
+Kodda `TODO(taxid)`.
+
+> Ara karar notu: önce telefon numarası yazılmıştı (elimizdeki tek gerçek kimlik), ama alan
+> adı ile içeriğin uyuşmaması sabit placeholder'a çevrildi. `customerInfo` artık **yalnız
+> ada** bağlı: ad varsa blok gider, yoksa hiç gitmez.
 
 ### I.3 `documentNo` uydurma  ⚠️ AÇIK
 

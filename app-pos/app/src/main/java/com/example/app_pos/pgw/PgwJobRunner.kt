@@ -63,12 +63,11 @@ class PgwJobRunner @Inject constructor(
 
             // Money NOT yet taken — open the gateway so a card can be charged.
             //
-            // The job carries only a customer id; the server does not send the name or
-            // phone the gateway request wants, so they are read from this terminal's own
-            // book. A customer that has not synced here yet resolves to null and the
-            // request goes out unnamed — deliberately, because a payment nobody can name is
-            // still a payment, while a payment never sent is a sale lost. Tracked in
-            // docs/deferred.md.
+            // The job carries only a customer id; the server does not send the name the
+            // gateway request wants, so it is read from this terminal's own book. A customer
+            // that has not synced here yet resolves to null and the request goes out unnamed
+            // — deliberately, because a payment nobody can name is still a payment, while a
+            // payment never sent is a sale lost. Tracked in docs/deferred.md §I.1.
             PgwJobKind.COLLECT -> {
                 val customer = repo.currentSellerId()?.let { sellerId ->
                     repo.findCustomerById(sellerId, job.customerId)
@@ -76,8 +75,7 @@ class PgwJobRunner @Inject constructor(
                 PgwBridge.collectPayment(
                     context = context,
                     amountMinor = job.amountMinor,
-                    customerName = customer?.displayName,
-                    customerPhone = customer?.phone
+                    customerName = customer?.displayName
                 )
             }
         }

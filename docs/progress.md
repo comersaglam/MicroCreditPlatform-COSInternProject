@@ -3029,14 +3029,15 @@ ve doğru çalışıyor; fişi bastıran zaten o.
   bağımlılık yok. Müşteri henüz senkron değilse `null` → `customerInfo` hiç eklenmez, ödeme
   yine gider. Risk `deferred.md §I.1`'de.
 
-`customerInfo` **ya tam ya hiç**: adı olup kimliği olmayan bir blok fişte tamamlanmış gibi
-görünür, eksik olduğu belli olmaz.
+**İki bilinçli uydurma** (`deferred.md §I.2`, `§I.3`): `taxID` sabit `11111111111`
+placeholder'ı (vergi/TC no elimizde yok, sistem müşteriyi telefonla tanıyor — yani fişte
+her müşteri aynı kimlikle görünür) ve `documentNo` `GIB<yıl><epoch>` olarak üretiliyor —
+gerçek GİB numarası değil. Sayaç saklanmıyor: ardışıklık gerekmiyordu, kalıcı sayaç ise
+yeniden kurulumu ve terminaller arası tekilliği çözmek zorunda kalırdı.
 
-**İki bilinçli uydurma** (`deferred.md §I.2`, `§I.3`): `taxID` alanına **telefon** yazılıyor
-(vergi/TC no elimizde yok, sistem müşteriyi telefonla tanıyor) ve `documentNo` `GIB<yıl>
-<epoch>` olarak üretiliyor — gerçek GİB numarası değil. Sayaç saklanmıyor: ardışıklık
-gerekmiyordu, kalıcı sayaç ise yeniden kurulumu ve terminaller arası tekilliği çözmek
-zorunda kalırdı.
+Ara karar: `taxID`'ye önce **telefon** yazılmıştı — elimizdeki tek gerçek kimlik — ama alan
+adıyla içeriğin uyuşmaması nedeniyle sabit placeholder'a çevrildi. Sonuçta `customerInfo`
+artık **yalnız ada** bağlı: ad varsa blok gider, yoksa hiç gitmez.
 
 **Doğrulama.** `assembleDebug` yeşil. Üretilen JSON **çalıştırılarak** doğrulandı (kodu
 okuyarak değil): `paymentItems` yok, `taxFreeAmount` dolu, bilgi eksikken `customerInfo`

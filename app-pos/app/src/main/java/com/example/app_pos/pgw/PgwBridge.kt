@@ -47,6 +47,13 @@ object PgwBridge {
     private const val DOCUMENT_TYPE_RECEIPT = 9002
 
     /**
+     * Stands in for customerInfo.taxID, which the gateway requires and this app cannot
+     * supply: customers are identified here by phone number, and no tax or national id is
+     * ever collected. The same placeholder the integration example uses. See TODO(taxid).
+     */
+    private const val PLACEHOLDER_TAX_ID = "11111111111"
+
+    /**
      * Asks the gateway to print a slip for an entry already in the ledger (paths 1 and 3).
      *
      * [orderBody] is passed through verbatim when the server supplied one — it is the
@@ -62,18 +69,16 @@ object PgwBridge {
      * Distinct from [printReceipt] and not interchangeable with it: one records money
      * already agreed, the other charges a card.
      *
-     * [customerName] and [customerPhone] are optional: when either is missing the
-     * customerInfo block is left out entirely rather than sent half-filled. Path 4/5 reads
-     * them from the local book, and a customer that has not synced to this terminal yet
-     * simply cannot be named — sending the payment without a name is better than not
-     * sending it at all.
+     * [customerName] is optional: without it the customerInfo block is left out entirely.
+     * Path 4/5 reads the name from the local book, and a customer that has not synced to
+     * this terminal yet simply cannot be named — sending the payment unnamed is better than
+     * not sending it at all.
      */
     fun collectPayment(
         context: Context,
         amountMinor: Long,
-        customerName: String? = null,
-        customerPhone: String? = null
-    ): Boolean = launch(context, paymentOrderBody(amountMinor, customerName, customerPhone))
+        customerName: String? = null
+    ): Boolean = launch(context, paymentOrderBody(amountMinor, customerName))
 
     /**
      * Starts the gateway with a request.
@@ -135,27 +140,21 @@ object PgwBridge {
      *
      * documentType stays 9002, as in the reference request.
      */
-    private fun paymentOrderBody(
-        amountMinor: Long,
-        customerName: String?,
-        customerPhone: String?
-    ): String =
+    private fun paymentOrderBody(amountMinor: Long, customerName: String?): String =
         JSONObject().apply {
             put("basketID", UUID.randomUUID().toString())
             put("documentType", DOCUMENT_TYPE_RECEIPT)
 
-            // All or nothing: a customerInfo with a name but no id (or the reverse) is worse
-            // than none, because it looks complete on the receipt.
-            if (!customerName.isNullOrBlank() && !customerPhone.isNullOrBlank()) {
+            if (!customerName.isNullOrBlank()) {
                 put(
                     "customerInfo",
                     JSONObject().apply {
                         put("name", customerName)
-                        // TODO(taxid): the field wants a tax/national id and we hold neither,
-                        //  so the phone number stands in — it is the only identity this app
-                        //  actually has for a customer. Noted in docs/deferred.md; a real
-                        //  integration must either collect the real id or leave this out.
-                        put("taxID", "11111111111")
+                        // TODO(taxid): the gateway wants a tax/national id and this app holds
+                        //  neither — it identifies a customer by phone number. A placeholder
+                        //  stands in so the block validates. Noted in docs/deferred.md; a real
+                        //  integration must collect the real id or drop the field.
+                        put("taxID", PLACEHOLDER_TAX_ID)
                     }
                 )
             }

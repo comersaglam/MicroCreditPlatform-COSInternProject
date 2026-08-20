@@ -35,14 +35,12 @@ enum class TransactionFilter { ALL, DEBT, PAYMENT }
 /**
  * One payment to hand to the gateway: the amount, and who it is from.
  *
- * The customer is nullable because the gateway request is worth sending without a name —
- * `PgwBridge` leaves the customerInfo block out entirely when either half is missing,
- * rather than sending it half-filled.
+ * The name is nullable because the gateway request is worth sending without one —
+ * `PgwBridge` leaves the customerInfo block out entirely rather than naming nobody.
  */
 data class GatewayCollect(
     val amountMinor: Long,
-    val customerName: String?,
-    val customerPhone: String?
+    val customerName: String?
 )
 
 /**
@@ -68,9 +66,9 @@ class CustomerDetailViewModel @Inject constructor(
      * second time — the exact bug the payment path cannot afford. extraBufferCapacity keeps
      * the non-suspending emit from dropping the event when nothing is collecting yet.
      *
-     * The customer travels WITH the event rather than being read off [phone] at the call
-     * site. [phone] is a suspend DB read exposed with an empty initial value, so a dialog
-     * confirmed quickly would find it still empty and the gateway request would go out
+     * The customer travels WITH the event rather than being read off a StateFlow at the
+     * call site: those are suspend DB reads exposed with an empty initial value, so a dialog
+     * confirmed quickly would find one still empty and the gateway request would go out
      * unnamed — silently, which is the worst kind.
      */
     private val _collectAtGateway = MutableSharedFlow<GatewayCollect>(extraBufferCapacity = 1)
@@ -172,11 +170,7 @@ class CustomerDetailViewModel @Inject constructor(
             // from being woken only to fail.
             syncScheduler.syncNow()
             _collectAtGateway.emit(
-                GatewayCollect(
-                    amountMinor = amountMinor,
-                    customerName = customer?.displayName,
-                    customerPhone = customer?.phone
-                )
+                GatewayCollect(amountMinor = amountMinor, customerName = customer?.displayName)
             )
         }
     }
