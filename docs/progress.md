@@ -2923,3 +2923,139 @@ kapıyı atladı.
 
 **Sıradaki:** OTP'nin gerçekleştirilmesi (kullanıcı kararı: sunuma kadar mock), UNCLAIMED
 için SMS-OTP onayı (§H'de tartışılacak madde), PGW handshake, yol 1 timeout, FCM.
+
+---
+
+### 2026-08-20 — Tur 42: yol 2 kısaldı — POS keypad'i ve OTP ekranı kaldırıldı
+
+Kullanıcının isteği: *"pos'tan ödeme al (tutar gir ve pgw'ye yönlendir) — pgw'ye ilet fiş
+için, aynı zamanda server'a gönder db'ye kaydetsin diye."*
+
+**Yol 2, dört ekran uzunluğundaydı.** Müşteri detayı → `[Ödeme Al]` → POS'un kendi keypad
+ekranı → Confirm → OTP → ancak ondan sonra PGW. Artık: müşteri detayı → tutar diyaloğu →
+yaz + PGW. Üç ekran gitti.
+
+| | Önce | Sonra |
+|---|---|---|
+| Tutar | `KeypadFragment` (tam ekran) | tek alanlı diyalog |
+| Özet | `ConfirmFragment` | — |
+| Onay | `OtpFragment` (kod gir) | — |
+| PGW | en sonda | tutar onaylanır onaylanmaz |
+
+**Üç ekranın ikisi zaten iş yapmıyordu.** OTP ekranı Tur 41'de tespit edilen sorunun
+kalıntısıydı: `OtpService.verifyOtp` gövdesi `delay(300); return true` — yani kapı değil,
+animasyon. Yol 2'de bunun *doğru* olması ise ayrı bir konu: bu yolda onay zaten **olmamalı**.
+Tur 41 tablosundaki gerekçe aynen geçerli — kapı bir tarafın diğerine **tek taraflı kayıt
+açmasını** engeller, tahsilat bunun tersidir (para dükkâna geliyor) ve müşteri **kartını
+PGW'ye uzatarak** onaylar. Tezgâhta ikinci bir onay istemek, aynı kişiden aynı işlem için
+iki kez izin istemekti.
+
+**app-mobile bu deseni zaten kullanıyordu.** Satıcı tarafında yazma Tur 19'dan beri
+"[Ödeme Al] → tutar popup'ı", keypad/saleFlow yok
+([architecture-pos.md, Flow B md.8](architecture-pos.md)). Yani POS bu turda **yeni bir
+desen icat etmedi**, iki app arasındaki tutarsızlığı kapattı — aynı iş, aynı roldeki
+kullanıcı için iki farklı uzunlukta akıştı.
+
+**Yeni giriş noktası** `CustomerDetailFragment.showCollectAmountDialog`. Tutar **lira**
+girilip kuruşa burada çevriliyor; `BigDecimal`, `Double` değil — `55,55 * 100` ikili
+kayan noktada **5554** kuruş verir. Hem virgül hem nokta kabul ediliyor: terminalin
+`numberDecimal` klavyesi nokta sunuyor, Türkçe virgül yazıyor, ve kullanıcının **fiilen
+yazdığı** ayracı reddetmek uydurma bir hata olurdu.
+
+**`SharedFlow`, `StateFlow` değil** — ve bu, kopyalanmaması gereken bir fark.
+`OtpViewModel.collectAtGateway` bir `StateFlow<Long?>`; orada sorun çıkarmıyor çünkü ekran
+hemen kapanıyor. Burada ekran **açık kalıyor**: `StateFlow` olsaydı, kullanıcı PGW'den geri
+döndüğünde son değer yeniden yayılır ve **kart ikinci kez çekilirdi**. Bu bir durum değil,
+bir **olay**. `extraBufferCapacity = 1`, henüz kimse dinlemiyorken `tryEmit`'in olayı
+düşürmesini engelliyor.
+
+**Sıra: önce yaz, sonra PGW.** `repo.addTransaction` → `syncScheduler.syncNow()` →
+`collectAtGateway`. Yerel yazma önce geliyor, yani sinyalsiz tezgâh da tahsilatı kaydediyor
+(offline-first korunuyor); sunucuya iletim WorkManager'ın işi, çünkü o hem bu ViewModel'den
+hem de uygulamanın kapatılmasından uzun yaşıyor. Intent'i **Fragment** atıyor: activity
+başlatmak Context ister, veri katmanı Context tutmamalı — `OtpFragment`'taki mevcut ayrımın
+aynısı.
+
+**Silinmeyen ölü kod (bilinçli).** `saleFlow`'un PAYMENT yarısı — `KeypadFragment`'ın
+PAYMENT dalı, `ConfirmFragment`, `OtpViewModel.collectPayment`, `nav_graph`'taki
+`action_global_pay` ve `payCustomer*` argümanları — artık **ulaşılamaz**, ama duruyor.
+Demo öncesi geniş silme riskli ve istenen şey akışın değişmesiydi, mimarinin sökülmesi
+değil. [KeypadFragment.kt:61](../app-pos/app/src/main/java/com/example/app_pos/ui/sale/KeypadFragment.kt)
+üzerine neden orada durduğu ve **topluca** silinmesi gerektiği yazıldı — parça parça
+silinirse yol 1 de kırılır, çünkü aynı grafiği paylaşıyorlar.
+
+`CustomerDetailFragment.phone` alanı ise silindi: yalnızca yazılıyor, hiç okunmuyordu.
+Telefonu isteyen taraf OTP ekranıydı. Ekrandaki gösterim (`binding.detailPhone`) duruyor.
+
+**Yol 1'e dokunulmadı.** Veresiye hâlâ `saleFlow`'dan geçiyor, hâlâ müşteri onayını
+bekliyor, `setResult` ile PGW'ye cevap veriyor. Değişen **yalnız** yol 2'nin giriş noktası.
+
+**Cihaz testi: gerçek PGW isteği REDDETTİ — orderBody şeması yanlışmış.** İlk kurulumda
+gerçek terminal *"sepet tutarı 0 olamaz"* dedi, ve kullanıcının ikinci gözlemi daha da
+belirleyiciydi: gönderdiğimiz body ile PGW **doğrudan fiş yazıyordu**, oysa istenen **ödeme
+ekranına geçmesi**. İki hata tek kökten:
+
+```
+GÖNDERDİĞİMİZ  {"basketID":…,"documentType":9002,"paymentItems":[{"amount":N,"type":1}]}
+OLMASI GEREKEN {"basketID":…,"documentType":9002,"customerInfo":{…},
+                "infoReceiptInfo":{…},"taxFreeAmount":N}
+```
+
+1. **`paymentItems`'ın VARLIĞI fişi bastırıyor.** Kalemler gateway için "şunu bas"
+   talimatı; ödeme ekranı istiyorsak hiç gönderilmemeli. `type:1` ("ordinary payment")
+   sandığımız şey yanlış katmandaydı — belge tipi zaten `documentType`.
+2. **Tutar hiçbir yerde taşınmıyordu.** `paymentItems` çıkınca tutarı taşıyan tek alan
+   `taxFreeAmount`, ve o hiç gönderilmiyordu → gateway'in gördüğü sepet **sıfırdı**.
+
+`taxFreeAmount`, `customerInfo`, `infoReceiptInfo`, `documentNo`, `documentDate`, `taxID`
+alanlarının **hiçbiri** kod tabanında yoktu (repo geneli grep ile doğrulandı).
+
+**Tek düzeltme, üç yol.** `PgwBridge.collectPayment` yol **2, 4 ve 5**'in ortak fonksiyonu
+(kullanıcı: *"yol 4 ve 5'te de tutar girip ödeme alıyoruz, bu kodu kullansınlar"*), yani
+şema düzeltmesi üçünü birden kapsadı. **Fiş yolu dokunulmadı** — `printReceipt` /
+`receiptOrderBody` / backend `receipt_order_body` hâlâ `paymentItems` + `type:17` gönderiyor
+ve doğru çalışıyor; fişi bastıran zaten o.
+
+**Müşteri bilgisi iki yoldan geliyor, ikisi de tuzaklıydı:**
+
+- **Yol 2** — Fragment'ta `viewModel.phone.value` okumak **yarış** açıyordu: `phone`,
+  `stateIn(initialValue = "")` ile asenkron bir suspend DB okumasından besleniyor, popup
+  hızlıca onaylanırsa telefon hâlâ boş olurdu ve `customerInfo` **sessizce** eksik giderdi.
+  Bunun yerine ViewModel müşteriyi `collectPayment()` içinde **taze** okuyup olay yüküne
+  koyuyor (`GatewayCollect`).
+- **Yol 4/5** — sunucu job ile yalnız `customer_id` gönderiyor. Kullanıcı kararı: backend'e
+  dokunma, terminal kendi Room'undan baksın. `PgwJobRunner`'a `Repository` enjekte edildi;
+  `PgwDispatcher` ile **aynı** `OfflineFirstRepository` singleton'ı olduğu için döngüsel
+  bağımlılık yok. Müşteri henüz senkron değilse `null` → `customerInfo` hiç eklenmez, ödeme
+  yine gider. Risk `deferred.md §I.1`'de.
+
+`customerInfo` **ya tam ya hiç**: adı olup kimliği olmayan bir blok fişte tamamlanmış gibi
+görünür, eksik olduğu belli olmaz.
+
+**İki bilinçli uydurma** (`deferred.md §I.2`, `§I.3`): `taxID` alanına **telefon** yazılıyor
+(vergi/TC no elimizde yok, sistem müşteriyi telefonla tanıyor) ve `documentNo` `GIB<yıl>
+<epoch>` olarak üretiliyor — gerçek GİB numarası değil. Sayaç saklanmıyor: ardışıklık
+gerekmiyordu, kalıcı sayaç ise yeniden kurulumu ve terminaller arası tekilliği çözmek
+zorunda kalırdı.
+
+**Doğrulama.** `assembleDebug` yeşil. Üretilen JSON **çalıştırılarak** doğrulandı (kodu
+okuyarak değil): `paymentItems` yok, `taxFreeAmount` dolu, bilgi eksikken `customerInfo`
+hiç eklenmiyor. APK dex'i grep'lendi — `taxFreeAmount`, `customerInfo`, `infoReceiptInfo`,
+`documentNo`, `taxID` ve `GIB` var; `paymentItems` **1 kez** (fiş yolu, doğru).
+
+**CİHAZDA DOĞRULANMADI:** asıl test gerçek PGW'de — hatayı veren o, mock-pos şema kontrolü
+yapmıyor. Beklenen: "sepet tutarı 0 olamaz" yok, fiş basılmıyor, **ödeme ekranı** geliyor.
+
+**Yan iş — `~/.zshrc`.** İki cihaza paralel kurulum için build fonksiyonları elden geçti:
+bütün `adb` çağrıları artık `-s <serial>` taşıyor (iki cihaz bağlıyken `adb install`
+*"more than one device"* ile patlıyordu, daha kötüsü `adb reverse` sessizce yanlış cihaza
+kurulabiliyordu), ve `--wifi` artık **doğrulanıyor**: backend LAN adresinden cevap veriyor
+mu, telefonun `wlan0` adresi var mı, ve telefonun **içinden** `curl` ile o adrese TCP
+açılıyor mu. Üçüncüsü **AP isolation'ı** yakalayan tek testtir (ilk ikisi geçerken o
+patlar). Biri başarısızsa Gradle hiç çalışmıyor — yanlış host'u gömülü bir APK kurulmuyor.
+
+**Öğrenilen:** **Bir ekranın var olması, bir şeyi doğruladığı anlamına gelmez.** OTP ekranı
+yol 2'de iki kez yanlıştı: hem hiçbir şeyi doğrulamıyordu (Tur 41), hem de doğrulasaydı
+bile **yanlış sorunun kapısı** olurdu. Tur 41 kapının **eksik olduğu** yeri bulmuştu; bu tur
+kapının **fazladan durduğu** yeri kaldırdı. İkisi aynı hatanın iki yüzü: kapıların nereye
+ait olduğunu akışın kendisi değil, **kimin neye rıza verdiği** belirler.

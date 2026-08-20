@@ -4,6 +4,8 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.viewModels
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
@@ -11,15 +13,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.core.os.bundleOf
-import androidx.navigation.Navigation
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_pos.R
+import com.example.app_pos.databinding.DialogCollectAmountBinding
 import com.example.app_pos.databinding.FragmentCustomerDetailBinding
+import com.example.app_pos.pgw.PgwBridge
 import com.example.app_pos.util.toTlString
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
+import java.math.BigDecimal
+import java.math.RoundingMode
 
 /**
  * Third screen: one customer's ledger history and current balance.
@@ -38,9 +43,6 @@ class CustomerDetailFragment : Fragment() {
     private val viewModel: CustomerDetailViewModel by viewModels()
 
     private val adapter = TransactionAdapter()
-
-    // Latest phone from the ViewModel, kept for the pay handoff. Collected below.
-    private var phone: String = ""
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -62,42 +64,118 @@ class CustomerDetailFragment : Fragment() {
         observePhone()
         observeBalance()
         observeTransactions()
+        observeGatewayRequests()
     }
 
-    /** The phone is a suspend lookup now, exposed by the ViewModel as a Flow. Keep the
-     *  latest for the pay handoff and show it as it arrives. */
+    /** The phone is a suspend lookup, exposed by the ViewModel as a Flow; shown as it
+     *  arrives. Nothing is kept for the pay path any more — that used to carry the number
+     *  into the OTP screen, which this flow no longer has. */
     private fun observePhone() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.phone.collect {
-                    phone = it
-                    binding.detailPhone.text = it
-                }
+                viewModel.phone.collect { binding.detailPhone.text = it }
             }
         }
     }
 
     /**
-     * Opens the sale flow as a PAYMENT for this customer.
+     * Path 2 — TAHSİLAT. Asks for the amount and goes straight to the gateway.
      *
-     * The keypad lives in the OUTER nav graph (the dashboard has its own inner
-     * one), so we navigate through the activity's host. We target the destination
-     * directly with a Bundle rather than a global action: a global action to a
-     * nested destination couldn't be resolved from dashboardFragment and crashed.
-     * Phone travels as the identity the OTP step needs.
+     * This used to enter saleFlow, which meant the till's own keypad screen, then confirm,
+     * then an OTP screen, and only then the gateway. Those three screens are gone: the
+     * customer approves this payment by presenting their card AT the gateway, so a second
+     * approval at the till was ceremony — and the OTP step verified nothing, accepting any
+     * code. What remains is the one question the gateway cannot answer for us, the amount.
+     *
+     * The veresiye path (path 1) still goes through saleFlow and still waits for the
+     * customer's approval; only the payment entry point changed.
      */
     private fun setupPayButton() {
-        binding.btnPay.setOnClickListener {
-            // Enter saleFlow (which starts at the keypad); args are forwarded to
-            // its start destination. amountMinor is omitted (0) so the keypad
-            // stays open for a payment.
-            val payArgs = bundleOf(
-                "payCustomerId" to args.customerId,
-                "payCustomerName" to args.customerName,
-                "payCustomerPhone" to phone
-            )
-            Navigation.findNavController(requireActivity(), R.id.navHostFragment)
-                .navigate(R.id.action_global_pay, payArgs)
+        binding.btnPay.setOnClickListener { showCollectAmountDialog() }
+    }
+
+    /**
+     * One field, one button: the amount, then the gateway.
+     *
+     * The input is read in LİRA and converted to kuruş here, because that is what the
+     * merchant types on a terminal and what the field's decimal keyboard offers. Everything
+     * below this line is minor units, as the rest of the ledger is.
+     */
+    private fun showCollectAmountDialog() {
+        val dialogBinding = DialogCollectAmountBinding.inflate(layoutInflater)
+        val dialog = MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.collect_dialog_title)
+            .setView(dialogBinding.root)
+            .setNegativeButton(R.string.confirm_cancel, null)
+            .setPositiveButton(R.string.collect_dialog_confirm, null)
+            .create()
+
+        // The positive button is wired AFTER show() so a bad amount can keep the dialog
+        // open; the default listener dismisses no matter what the field holds.
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val amountMinor = parseAmountMinor(dialogBinding.collectAmountInput.text?.toString())
+                if (amountMinor == null || amountMinor <= 0L) {
+                    dialogBinding.collectAmountLayout.error =
+                        getString(R.string.msg_enter_amount)
+                    return@setOnClickListener
+                }
+                dialog.dismiss()
+                viewModel.collectPayment(amountMinor)
+            }
+        }
+        dialog.show()
+    }
+
+    /**
+     * Lira text to kuruş, or null when it is not a usable amount.
+     *
+     * Both separators are accepted: the terminal's keyboard offers a dot while Turkish
+     * writes a comma, and rejecting the one the merchant actually typed would be an
+     * invented failure. BigDecimal rather than Double — money scaled by a binary float is
+     * how a 55,55 becomes 5554 kuruş.
+     */
+    private fun parseAmountMinor(text: String?): Long? {
+        val normalized = text?.trim()?.replace(',', '.').orEmpty()
+        if (normalized.isEmpty()) return null
+        return try {
+            BigDecimal(normalized).movePointRight(2).setScale(0, RoundingMode.HALF_UP).toLong()
+        } catch (_: NumberFormatException) {
+            null
+        }
+    }
+
+    /**
+     * Fires the gateway request once the payment is in the ledger.
+     *
+     * Collected here rather than in the ViewModel because starting an activity needs a
+     * Context, and the data layer must not hold one — the same split OtpFragment uses.
+     */
+    private fun observeGatewayRequests() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.collectAtGateway.collect { request ->
+                    Toast.makeText(
+                        requireContext(),
+                        getString(
+                            R.string.msg_payment_written,
+                            request.customerName ?: args.customerName,
+                            request.amountMinor.toTlString()
+                        ),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    val opened = PgwBridge.collectPayment(
+                        context = requireContext(),
+                        amountMinor = request.amountMinor,
+                        customerName = request.customerName,
+                        customerPhone = request.customerPhone
+                    )
+                    if (!opened) {
+                        Toast.makeText(requireContext(), R.string.msg_pgw_missing, Toast.LENGTH_LONG)
+                            .show()
+                    }
+                }
+            }
         }
     }
 

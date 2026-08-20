@@ -78,6 +78,14 @@
     <!-- The payment gateway is not installed on this device (development machines). -->
     <string name="msg_pgw_missing">Ödeme uygulaması bulunamadı</string>
 
+    <!--
+      Path 2: collect a payment straight from the customer's screen. One dialog asks the
+      amount, then the gateway takes the card — no keypad screen, no OTP.
+    -->
+    <string name="collect_dialog_title">Ödeme Al</string>
+    <string name="collect_dialog_hint">Tutar (TL)</string>
+    <string name="collect_dialog_confirm">Ödemeye Geç</string>
+
     <!-- Sale flow cancel guard -->
     <string name="cancel_dialog_title">İşlemi iptal et</string>
     <string name="cancel_dialog_message">Bu işlemi iptal etmek istiyor musunuz? Girdiğiniz bilgiler kaybolacak.</string>

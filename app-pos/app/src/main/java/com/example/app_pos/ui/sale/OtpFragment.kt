@@ -164,7 +164,14 @@ class OtpFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.collectAtGateway.collect { amountMinor ->
                     amountMinor ?: return@collect
-                    if (!PgwBridge.collectPayment(requireContext(), amountMinor)) {
+                    val selected = saleViewModel.selectedCustomer.value
+                    val opened = PgwBridge.collectPayment(
+                        context = requireContext(),
+                        amountMinor = amountMinor,
+                        customerName = selected?.displayName,
+                        customerPhone = selected?.phone
+                    )
+                    if (!opened) {
                         Toast.makeText(requireContext(), R.string.msg_pgw_missing, Toast.LENGTH_LONG)
                             .show()
                     }

@@ -256,38 +256,57 @@ Yukarısı backend hedefidir; şu an mock ama gerçek mimariyle:
 > yalnızca "app var (CLAIMED) / yok (UNCLAIMED)". Yeni müşteri: müşteri-seçme
 > ekranında isim yaz → **telefon ekranı** (numara, benzersiz) → onay.
 >
-> **OTP onayı (her yazma/ödeme için):** satıcı keyfî borç yazamasın diye her
-> DEBT/PAYMENT müşteri onayından geçer. `OtpService.requestOtp/verifyOtp` — şimdilik
-> MOCK (backend yok, her kod geçer); imzalar sabit, backend gelince (FAZ 4/5) içleri
-> değişir. app'li müşteride onay app-push, app'siz'de SMS OTP (kodda ayrık, ikisi
-> mock). **Yazma yalnızca OTP başarılı olunca** olur (tek nokta: OtpViewModel).
+> **Müşteri onayı — yalnızca DEBT için (Tur 41 + 42):** satıcı keyfî **borç** yazamasın
+> diye her DEBT müşteri onayından geçer (`requestApproval` → sunucu → polling). **PAYMENT
+> onaydan geçmez** ve bu bir eksiklik değil: kapı bir tarafın diğerine tek taraflı **kayıt
+> açmasını** engeller, tahsilatta para dükkâna gelir ve müşteri kartını PGW'ye uzatarak
+> onaylar.
 >
-> **Ödeme (PAYMENT) akışı:** müşteri detayında **[Ödeme Al]** → saleFlow → **keypad**
-> (tutar) → onay → OTP → PAYMENT hareketi. Veresiye ile aynı onay+OTP+yazma
-> pipeline'ını paylaşır (`SaleViewModel.txType`).
+> ⚠️ **`OtpService` artık kullanılmıyor.** Gövdesi `delay(300); return true` idi — yani
+> hiçbir şey doğrulamıyordu (Tur 41 bulgusu). Gerçek kapı `requestApproval`; OTP ekranı
+> yol 2'den Tur 42'de kaldırıldı, yol 1'de zaten yerini onay-bekleme ekranına bırakmıştı.
+>
+> **Ödeme (PAYMENT) akışı — Tur 42'de saleFlow'dan ÇIKARILDI:** müşteri detayında
+> **[Ödeme Al]** → **tutar diyaloğu** → ledger'a yaz + PGW'yi çağır. Keypad, onay ve OTP
+> ekranları kaldırıldı. Gerekçe: bu yolda para **dükkâna geliyor**, yani onay kapısının
+> engellediği "tek taraflı kayıt açma" durumu yok, ve müşteri **kartını PGW'ye uzatarak**
+> onaylıyor — tezgâhta ikinci bir onay, aynı kişiden aynı işlem için iki kez izin istemekti.
+> Artık veresiye ile pipeline paylaşmıyor: giriş `CustomerDetailFragment`
+> (`showCollectAmountDialog` + `CustomerDetailViewModel.collectPayment`).
 >
 > **saleFlow giriş mimarisi (nav_graph):** saleFlow bir nested graph'tır; Navigation
 > kuralı gereği dışarıdan yalnızca `startDestination`'ına girilebilir. `startDestination
-> = keypadFragment` — keypad ORTAK GİRİŞ KAPISI. İki akış kapıda `amountMinor`'a göre
-> ayrışır (`KeypadFragment.routeByEntry`): **DEBT** (mock-pos, `amountMinor>0`) keypad'i
-> atlayıp müşteri-seçmeye geçer (`popUpTo` ile keypad geçmişten silinir); **PAYMENT**
-> (`amountMinor==0`, müşteri belli) keypad'de kalıp tutarı aldırır. Bu, "iç node'a
-> doğrudan navigate → crash" tuzağını çözen yapıdır.
+> = keypadFragment`. Kapıda `amountMinor`'a göre ayrışma (`KeypadFragment.routeByEntry`)
+> hâlâ kodda, ama **artık yalnızca DEBT giriyor**: mock-pos'tan `amountMinor>0` gelir,
+> keypad tutarı görüp müşteri-seçmeye forward eder (`popUpTo` ile keypad geçmişten
+> silinir). PAYMENT dalı (`amountMinor==0`) **ulaşılamaz ölü kod** — `ConfirmFragment`'ın
+> PAYMENT yarısı, `OtpViewModel.collectPayment` ve `action_global_pay` ile birlikte
+> **topluca** silinmeli; parça parça silinirse aynı grafiği paylaşan yol 1 kırılır.
 
-**Flow A — POS (veresiye DEBT / ödeme PAYMENT, ortak pipeline):**
-1. Her ikisi de saleFlow'un giriş kapısı **keypadFragment**'tan girer:
-   **DEBT** — (ödeme app'inde) tutar → VERESİYE → app-pos (intent, `amountMinor>0`) →
-   keypad tutarı görüp müşteri-seçmeye forward eder (keypad atlanır).
-   **PAYMENT** — müşteri detayı → [Ödeme Al] (`amountMinor==0`, müşteri belli) → keypad
-   açık kalır, tutar girilir.
+**Flow A — POS veresiye (DEBT). Tur 42'den beri saleFlow'a giren TEK akış:**
+1. saleFlow'un giriş kapısı **keypadFragment**'tan girer: (ödeme app'inde) tutar →
+   VERESİYE → app-pos (intent, `amountMinor>0`) → keypad tutarı görüp müşteri-seçmeye
+   forward eder (keypad atlanır).
 2. Müşteri: listeden seç (numara hazır) **veya** yeni → **telefon ekranı** (benzersiz
    numara). *(QR/NFC credential devri hâlâ TBD, FAZ 8.)*
-3. **Onay ekranı** (müşteri, tutar, mevcut + işlem sonrası bakiye — DEBT +, PAYMENT −).
-4. **[Onaya Gönder]** → **OTP ekranı** (müşteri onayı; mock true) →
-5. onay başarılı → append-only ledger'a **DEBT/PAYMENT hareketi** (UUID = idempotency;
-   yeni müşteriyse önce kayıt oluşturulur) → bitiş **akış türüne bağlı**: DEBT +
-   handoff ise `finish` (mock-pos'a dön), aksi halde (PAYMENT veya bağımsız) dashboard.
-   *(Faz 1'de yazım FakeRepository'ye; Faz 3'te Room + outbox, Faz 4'te Sync POST.)*
+3. **Onay ekranı** (müşteri, tutar, mevcut + işlem sonrası bakiye).
+4. **[Onaya Gönder]** → müşterinin onayı beklenir (`requestApproval` + polling; Tur 41) →
+5. onay başarılı → **sunucu** ledger'a DEBT hareketini yazar → `setResult(OK)` ile
+   mock-pos'a dönülür (fiş kesilir). Reddedilirse `setResult(CANCELED)`, hiçbir kayıt yok.
+
+**Flow A2 — POS tahsilat (PAYMENT). saleFlow'u KULLANMAZ (Tur 42):**
+1. Müşteri detayı → **[Ödeme Al]** → tutar diyaloğu (lira girilir, `BigDecimal` ile
+   kuruşa çevrilir; virgül ve nokta ikisi de kabul).
+2. Ledger'a **PAYMENT hareketi** yazılır (yerel önce = offline-first korunur), outbox'a
+   düşer, `syncNow()` ile sunucuya iletilir.
+3. **PGW çağrılır** (`PgwBridge.collectPayment`) — müşteri kartını uzatır. Onay ekranı yok,
+   OTP yok. orderBody şekli (Tur 42'de gerçek terminalin reddi üzerine düzeltildi):
+   `basketID` + `documentType:9002` + `customerInfo{name, taxID}` + `infoReceiptInfo{
+   documentDate, documentNo}` + `taxFreeAmount`. ⚠️ **`paymentItems` GÖNDERİLMEZ** — varlığı
+   gateway'e "fişi bas" demek, oysa ödeme ekranı isteniyor; tutarı taşıyan alan
+   `taxFreeAmount`'tır. Fiş yolu (`printReceipt`) bunun tersi: `paymentItems` + `type:17`.
+   Müşteri bilgisi yol 2'de ekrandan, yol 4/5'te yerel defterden okunur (yoksa blok hiç
+   eklenmez — `deferred.md §I`).
 6. Esnaf alacaklarını ledger'dan görür; **satışta yanlış geri = "iptal edilsin mi?"**
    onayı (girilen bilgi kazara kaybolmasın). Müşteri detayında **geri oku** listeye döner.
 

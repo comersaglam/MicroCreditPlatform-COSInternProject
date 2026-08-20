@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.app_pos.model.PgwDispatcher
 import com.example.app_pos.model.PgwJob
 import com.example.app_pos.model.PgwJobKind
+import com.example.app_pos.model.Repository
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -24,7 +25,12 @@ import javax.inject.Singleton
  * receipt entirely, which is not. At-least-once is the right way round here.
  */
 @Singleton
-class PgwJobRunner @Inject constructor(private val dispatcher: PgwDispatcher) {
+class PgwJobRunner @Inject constructor(
+    private val dispatcher: PgwDispatcher,
+    // Same OfflineFirstRepository instance the dispatcher is — it implements both — so this
+    // adds a lookup, not a second data source.
+    private val repo: Repository
+) {
 
     /**
      * Polls for work until the caller's scope is cancelled.
@@ -56,7 +62,24 @@ class PgwJobRunner @Inject constructor(private val dispatcher: PgwDispatcher) {
                 PgwBridge.printReceipt(context, job.amountMinor, job.orderBody)
 
             // Money NOT yet taken — open the gateway so a card can be charged.
-            PgwJobKind.COLLECT -> PgwBridge.collectPayment(context, job.amountMinor)
+            //
+            // The job carries only a customer id; the server does not send the name or
+            // phone the gateway request wants, so they are read from this terminal's own
+            // book. A customer that has not synced here yet resolves to null and the
+            // request goes out unnamed — deliberately, because a payment nobody can name is
+            // still a payment, while a payment never sent is a sale lost. Tracked in
+            // docs/deferred.md.
+            PgwJobKind.COLLECT -> {
+                val customer = repo.currentSellerId()?.let { sellerId ->
+                    repo.findCustomerById(sellerId, job.customerId)
+                }
+                PgwBridge.collectPayment(
+                    context = context,
+                    amountMinor = job.amountMinor,
+                    customerName = customer?.displayName,
+                    customerPhone = customer?.phone
+                )
+            }
         }
 
         if (delivered) dispatcher.acknowledge(job.jobId)

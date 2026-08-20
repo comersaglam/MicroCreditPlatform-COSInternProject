@@ -64,6 +64,14 @@ class KeypadFragment : Fragment() {
      *    to customer select; the keypad is skipped. Returns true (leaving).
      *  - amount 0 => PAYMENT for a known customer: seed the flow and stay on the
      *    keypad so the merchant keys the amount in. Returns false.
+     *
+     * NOTE: nothing enters this flow as a PAYMENT any more. Path 2 was moved off saleFlow
+     * onto the customer's detail screen (CustomerDetailFragment.showCollectAmountDialog),
+     * which asks the amount in one dialog and calls the gateway directly — the keypad,
+     * confirm and OTP screens were ceremony for a payment the customer approves with their
+     * card. The branch is kept because the flow's PAYMENT half (confirm's summary,
+     * OtpViewModel.collectPayment) is still wired and a second payment entry point may want
+     * it; delete all of it together, not piecemeal.
      */
     private fun routeByEntry(): Boolean {
         return if (args.amountMinor > 0L) {

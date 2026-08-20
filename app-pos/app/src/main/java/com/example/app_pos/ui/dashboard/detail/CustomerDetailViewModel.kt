@@ -6,21 +6,44 @@ import androidx.lifecycle.SavedStateHandle
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
+import com.example.app_pos.sync.SyncScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
+import java.util.UUID
 import javax.inject.Inject
 
 /** Which ledger entries the history should show. */
 enum class TransactionFilter { ALL, DEBT, PAYMENT }
+
+/**
+ * One payment to hand to the gateway: the amount, and who it is from.
+ *
+ * The customer is nullable because the gateway request is worth sending without a name —
+ * `PgwBridge` leaves the customerInfo block out entirely when either half is missing,
+ * rather than sending it half-filled.
+ */
+data class GatewayCollect(
+    val amountMinor: Long,
+    val customerName: String?,
+    val customerPhone: String?
+)
 
 /**
  * Ledger history for one customer.
@@ -33,8 +56,25 @@ enum class TransactionFilter { ALL, DEBT, PAYMENT }
 @HiltViewModel
 class CustomerDetailViewModel @Inject constructor(
     private val repo: Repository,
+    private val syncScheduler: SyncScheduler,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    /**
+     * Payments the gateway should now collect.
+     *
+     * A SharedFlow rather than a StateFlow: this is an event, not a state. A StateFlow would
+     * replay its last value to a fragment returning from the gateway and charge the card a
+     * second time — the exact bug the payment path cannot afford. extraBufferCapacity keeps
+     * the non-suspending emit from dropping the event when nothing is collecting yet.
+     *
+     * The customer travels WITH the event rather than being read off [phone] at the call
+     * site. [phone] is a suspend DB read exposed with an empty initial value, so a dialog
+     * confirmed quickly would find it still empty and the gateway request would go out
+     * unnamed — silently, which is the worst kind.
+     */
+    private val _collectAtGateway = MutableSharedFlow<GatewayCollect>(extraBufferCapacity = 1)
+    val collectAtGateway: SharedFlow<GatewayCollect> = _collectAtGateway.asSharedFlow()
 
     // Navigation puts the destination's arguments into the SavedStateHandle under their
     // declared names, so the nav arg arrives without a hand-written factory — and survives
@@ -88,5 +128,67 @@ class CustomerDetailViewModel @Inject constructor(
 
     fun onFilterChanged(newFilter: TransactionFilter) {
         filter.value = newFilter
+    }
+
+    /**
+     * Path 2 — TAHSİLAT, taken straight from this screen.
+     *
+     * The amount used to be keyed into the sale flow's own keypad and then walked through
+     * confirm and an OTP screen before the gateway was ever called. All three screens were
+     * ceremony: the money is being handed TO the shop, so there is nothing to book against
+     * the customer without their consent, and the customer approves by presenting their card
+     * AT the gateway. The OTP step in particular verified nothing — it accepted any code.
+     *
+     * So the entry is written and the gateway is asked to take the payment, in that order.
+     * The write comes first and locally, which keeps this half offline-first: a till with no
+     * signal still records the payment, and [SyncScheduler] delivers it when there is a
+     * connection. The gateway call itself is fired by the fragment — starting an activity
+     * needs a Context, which a ViewModel must not hold — so this only reports the amount.
+     *
+     * TODO(pgw-handshake): the gateway's answer is still not awaited; the intent going out
+     *  IS the confirmation, exactly as in OtpViewModel.collectPayment. Unchanged here.
+     */
+    fun collectPayment(amountMinor: Long) {
+        viewModelScope.launch {
+            // The login gate guarantees a signed-in seller; the null check is defensive.
+            val sellerId = repo.currentSellerId() ?: return@launch
+            // Read the customer fresh instead of trusting the [phone] StateFlow, whose first
+            // value arrives asynchronously — see the note on _collectAtGateway.
+            val customer = repo.findCustomerById(sellerId, customerId)
+            repo.addTransaction(
+                Transaction(
+                    transactionId = UUID.randomUUID().toString(),
+                    sellerId = sellerId,
+                    customerId = customerId,
+                    amountMinor = amountMinor,
+                    type = TransactionType.PAYMENT,
+                    description = "Ödeme",
+                    createdAt = createdAtFormat().format(Date())
+                )
+            )
+            // Stored locally, so the gateway can be called and the screen can move on. The
+            // push to the server is WorkManager's job: it outlives this ViewModel and the
+            // app being swiped away, and its network constraint keeps an offline device
+            // from being woken only to fail.
+            syncScheduler.syncNow()
+            _collectAtGateway.emit(
+                GatewayCollect(
+                    amountMinor = amountMinor,
+                    customerName = customer?.displayName,
+                    customerPhone = customer?.phone
+                )
+            )
+        }
+    }
+
+    private companion object {
+        /**
+         * ISO-8601 UTC — the format the wire contract uses and the DAOs sort on. A new
+         * formatter per call because SimpleDateFormat is not thread-safe.
+         */
+        fun createdAtFormat(): SimpleDateFormat =
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
     }
 }

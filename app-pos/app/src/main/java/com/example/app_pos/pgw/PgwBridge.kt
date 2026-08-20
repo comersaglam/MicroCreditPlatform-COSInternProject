@@ -5,6 +5,9 @@ import android.content.Context
 import android.content.Intent
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -57,11 +60,20 @@ object PgwBridge {
      * Opens the gateway to TAKE money by card (paths 2, 4 and 5).
      *
      * Distinct from [printReceipt] and not interchangeable with it: one records money
-     * already agreed, the other charges a card. The gateway builds its own basket for a
-     * payment, so nothing is handed over but the amount.
+     * already agreed, the other charges a card.
+     *
+     * [customerName] and [customerPhone] are optional: when either is missing the
+     * customerInfo block is left out entirely rather than sent half-filled. Path 4/5 reads
+     * them from the local book, and a customer that has not synced to this terminal yet
+     * simply cannot be named — sending the payment without a name is better than not
+     * sending it at all.
      */
-    fun collectPayment(context: Context, amountMinor: Long): Boolean =
-        launch(context, paymentOrderBody(amountMinor))
+    fun collectPayment(
+        context: Context,
+        amountMinor: Long,
+        customerName: String? = null,
+        customerPhone: String? = null
+    ): Boolean = launch(context, paymentOrderBody(amountMinor, customerName, customerPhone))
 
     /**
      * Starts the gateway with a request.
@@ -87,17 +99,13 @@ object PgwBridge {
         }
     }
 
-    /** A credit slip, in the gateway's shape. Mirrors backend/app/pgw.py::receipt_order_body. */
-    private fun receiptOrderBody(amountMinor: Long): String =
-        orderBody(amountMinor, ITEM_TYPE_CREDIT)
-
     /**
-     * A card payment. Item type 1 is the gateway's ordinary payment, as in the integration
-     * example — the same envelope as a receipt, with a different item type.
+     * A credit slip, in the gateway's shape. Mirrors backend/app/pgw.py::receipt_order_body.
+     *
+     * This one DOES carry paymentItems, and that is exactly what makes it a slip: the
+     * gateway prints what the items describe instead of opening its payment screen.
      */
-    private fun paymentOrderBody(amountMinor: Long): String = orderBody(amountMinor, itemType = 1)
-
-    private fun orderBody(amountMinor: Long, itemType: Int): String =
+    private fun receiptOrderBody(amountMinor: Long): String =
         JSONObject().apply {
             // The gateway keys its request on the basket id, so two requests must never
             // share one. Minted per call rather than reused.
@@ -108,9 +116,78 @@ object PgwBridge {
                 JSONArray().put(
                     JSONObject().apply {
                         put("amount", amountMinor)
-                        put("type", itemType)
+                        put("type", ITEM_TYPE_CREDIT)
                     }
                 )
             )
         }.toString()
+
+    /**
+     * A card payment, in the shape the gateway's integration example uses.
+     *
+     * Two things here are the fix for a real terminal rejecting our earlier request with
+     * "sepet tutarı 0 olamaz":
+     *
+     *  - NO paymentItems. Sending them made the gateway print a slip immediately instead of
+     *    opening its payment screen — the items ARE the instruction to print.
+     *  - The amount travels in taxFreeAmount. With paymentItems gone this is the only field
+     *    carrying it, and its absence was the zero the gateway complained about.
+     *
+     * documentType stays 9002, as in the reference request.
+     */
+    private fun paymentOrderBody(
+        amountMinor: Long,
+        customerName: String?,
+        customerPhone: String?
+    ): String =
+        JSONObject().apply {
+            put("basketID", UUID.randomUUID().toString())
+            put("documentType", DOCUMENT_TYPE_RECEIPT)
+
+            // All or nothing: a customerInfo with a name but no id (or the reverse) is worse
+            // than none, because it looks complete on the receipt.
+            if (!customerName.isNullOrBlank() && !customerPhone.isNullOrBlank()) {
+                put(
+                    "customerInfo",
+                    JSONObject().apply {
+                        put("name", customerName)
+                        // TODO(taxid): the field wants a tax/national id and we hold neither,
+                        //  so the phone number stands in — it is the only identity this app
+                        //  actually has for a customer. Noted in docs/deferred.md; a real
+                        //  integration must either collect the real id or leave this out.
+                        put("taxID", "11111111111")
+                    }
+                )
+            }
+
+            put(
+                "infoReceiptInfo",
+                JSONObject().apply {
+                    put("documentDate", documentDateFormat().format(Date()))
+                    put("documentNo", documentNo())
+                }
+            )
+
+            put("taxFreeAmount", amountMinor)
+        }.toString()
+
+    /** dd-MM-yyyy, the format the gateway's reference request uses. */
+    private fun documentDateFormat(): SimpleDateFormat =
+        SimpleDateFormat("dd-MM-yyyy", Locale.ROOT)
+
+    /**
+     * A document number in the reference request's shape (GIB + year + digits).
+     *
+     * Derived from the clock rather than a stored counter: nothing here needs the numbers to
+     * be consecutive, and a counter would have to survive reinstalls and stay unique across
+     * terminals to be worth its complexity. Two receipts inside the same second would
+     * collide, which does not happen at a till.
+     *
+     * TODO(gib-document-no): this is NOT a real GİB document number — a real integration
+     *  gets it from the gateway or the fiscal unit. Noted in docs/deferred.md.
+     */
+    private fun documentNo(): String {
+        val year = SimpleDateFormat("yyyy", Locale.ROOT).format(Date())
+        return "GIB$year${System.currentTimeMillis() / 1000}"
+    }
 }

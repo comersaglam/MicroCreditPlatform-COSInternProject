@@ -716,3 +716,51 @@ kendi task'ında koşuyordu ve Android bunu **anında `RESULT_CANCELED`** ile ce
 Yol 1'in tamamı bu sonuca dayandığı için `singleTop` + `taskAffinity=""`'ye geçildi.
 ⚠️ Bu manifest satırı **yol 1'in çalışması için şart**; "sadece bir launchMode" diye
 değiştirilirse kabul edilen ve reddedilen her satış PGW'ye aynı görünür.
+
+---
+
+## I. Tahsilat orderBody'si — Tur 42'de kalan üç açık
+
+Gerçek PGW tahsilat isteğimizi *"sepet tutarı 0 olamaz"* ile reddetti ve `paymentItems`
+gönderdiğimizde **doğrudan fiş basıyordu**. Şema kullanıcının verdiği referans isteğe
+uyduruldu (`taxFreeAmount` + `customerInfo` + `infoReceiptInfo`, `paymentItems` YOK).
+Üç noktası eksik kaldı:
+
+### I.1 Yol 4/5'te müşteri bilgisi yerelden okunuyor  ⚠️ AÇIK
+
+Sunucu `pgw_jobs` işini yalnız `customer_id` ile gönderiyor — ad ve telefon şemada yok
+([schemas.py](../backend/app/schemas.py) `PgwJob`,
+[pgw_jobs.py](../backend/app/routers/pgw_jobs.py) `_job_out`). Kullanıcı kararı: **backend'e
+dokunma**, terminal kendi defterinden baksın.
+[`PgwJobRunner`](../app-pos/app/src/main/java/com/example/app_pos/pgw/PgwJobRunner.kt) artık
+`findCustomerById` ile Room'dan okuyor.
+
+⚠️ **Risk:** müşteri o terminale **henüz senkron olmadıysa** lookup `null` döner ve
+`customerInfo` **hiç gönderilmez**. Ödeme yine gider (bilinçli: adsız ödeme, hiç
+gönderilmeyen ödemeden iyidir) ama fişte müşteri görünmez. Yol 2'de bu risk yok — müşteri
+zaten ekranda açık.
+
+**Kalıcı çözüm:** `schemas.PgwJob` + `_job_out()` + `PgwJobDto` + `PgwJobMapper` + domain
+`PgwJob`'a `customer_name` / `customer_phone` eklemek (Python + 3 Kotlin dosyası).
+
+### I.2 `taxID` alanına telefon numarası yazılıyor  ⚠️ AÇIK
+
+Referans şema `customerInfo.taxID` bekliyor (örnekte `11111111111`). Elimizde ne vergi no
+ne TC no var — sistem müşteriyi **telefonla** tanıyor. Kullanıcı kararı: telefonu gönder.
+Alan adı ile içeriği **uyuşmuyor**; gerçek entegrasyonda ya gerçek kimlik toplanmalı ya
+alan hiç gönderilmemeli. Kodda `TODO(taxid)`.
+
+### I.3 `documentNo` uydurma  ⚠️ AÇIK
+
+`GIB<yıl><epoch saniye>` üretiliyor (ör. `GIB20261787211670`). **Gerçek bir GİB belge
+numarası değil** — gerçek entegrasyonda gateway'den ya da mali birimden gelir. Sayaç
+saklanmıyor (kullanıcı kararı): ardışıklık gerekmiyordu, ve kalıcı sayaç yeniden kurulumu
+ve terminaller arası tekilliği çözmek zorunda kalırdı. Aynı saniyede iki fiş çakışır —
+tezgâhta pratik değil. Kodda `TODO(gib-document-no)`.
+
+### I.4 Fiş yolu ESKİ şemada kaldı — bilinçli
+
+`printReceipt` / `receiptOrderBody` ve backend'in `receipt_order_body`'si hâlâ
+`paymentItems` + `type:17` gönderiyor ve **doğru çalışıyor** — fişi bastıran zaten o.
+Kullanıcı kapsamı açıkça *"yol 2'ye özel"* çizdi. Fiş yolu da yeni alanları isterse
+(`customerInfo`, `infoReceiptInfo`) hem Kotlin hem Python tarafı güncellenmeli.
