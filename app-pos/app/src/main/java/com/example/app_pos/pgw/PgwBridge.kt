@@ -43,8 +43,14 @@ object PgwBridge {
      */
     private const val ITEM_TYPE_CREDIT = 17
 
-    /** The document type the integration example uses for this receipt class. */
+    /** The document type the integration example uses for a card payment. */
     private const val DOCUMENT_TYPE_RECEIPT = 9002
+
+    /**
+     * What a credit slip is filed as. The real terminal rejected 9002 for this class of
+     * request; the reference body the integration sent back uses 0.
+     */
+    private const val DOCUMENT_TYPE_CREDIT_SALE = 0
 
     /**
      * Stands in for customerInfo.taxID, which the gateway requires and this app cannot
@@ -59,6 +65,11 @@ object PgwBridge {
      * [orderBody] is passed through verbatim when the server supplied one — it is the
      * gateway's contract, and re-shaping it here is how a field they require quietly goes
      * missing. One is built locally only when there is none to pass on.
+     *
+     * That pass-through is also why this takes no customer name: on path 3 the server has
+     * already put customerInfo inside the string, resolved from the book it holds in full.
+     * Reading the name from this terminal's copy instead would leave it out for a customer
+     * that has not synced here yet.
      */
     fun printReceipt(context: Context, amountMinor: Long, orderBody: String? = null): Boolean =
         launch(context, orderBody ?: receiptOrderBody(amountMinor))
@@ -105,17 +116,27 @@ object PgwBridge {
     }
 
     /**
-     * A credit slip, in the gateway's shape. Mirrors backend/app/pgw.py::receipt_order_body.
+     * A credit slip, in the gateway's shape. Mirrors backend/app/pgw.py::receipt_order_body,
+     * and the two must be changed together — nothing compares them at build time.
      *
      * This one DOES carry paymentItems, and that is exactly what makes it a slip: the
      * gateway prints what the items describe instead of opening its payment screen.
+     * `items` is sent empty rather than omitted, because the key is part of the shape the
+     * gateway validates.
+     *
+     * Reached only when the server supplied no orderBody. On path 3 it always does, so
+     * this is a fallback — and it prints UNNAMED, because the customer's name is something
+     * only the server reliably knows (see printReceipt).
      */
     private fun receiptOrderBody(amountMinor: Long): String =
         JSONObject().apply {
             // The gateway keys its request on the basket id, so two requests must never
             // share one. Minted per call rather than reused.
             put("basketID", UUID.randomUUID().toString())
-            put("documentType", DOCUMENT_TYPE_RECEIPT)
+            put("createInvoice", false)
+            put("documentType", DOCUMENT_TYPE_CREDIT_SALE)
+            put("isVoid", false)
+            put("items", JSONArray())
             put(
                 "paymentItems",
                 JSONArray().put(

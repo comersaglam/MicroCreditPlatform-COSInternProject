@@ -342,6 +342,11 @@ def _queue_terminal_work(
         return
 
     if approval.type == "DEBT":
+        # The slip has to name the customer, and the name is resolved HERE rather than at
+        # the till: the terminal reads its book locally, so a customer who has not synced
+        # to it yet would print unnamed (docs/deferred.md section I.1). The server always
+        # knows. It travels inside order_body, so no column and no migration.
+        customer = db.get(models.Customer, approval.customer_id)
         queue_job(
             db,
             seller_id=approval.seller_id,
@@ -349,7 +354,10 @@ def _queue_terminal_work(
             customer_id=approval.customer_id,
             amount_minor=approval.amount_minor,
             transaction_id=transaction.transaction_id,
-            order_body=receipt_order_body(approval.amount_minor),
+            order_body=receipt_order_body(
+                approval.amount_minor,
+                customer_name=customer.display_name if customer else None,
+            ),
         )
     else:
         # No orderBody: the terminal opens the gateway for a card payment rather than

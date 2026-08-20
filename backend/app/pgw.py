@@ -34,28 +34,57 @@ STATUS_DELIVERED = "DELIVERED"
 # read without a lookup.
 PAYMENT_ITEM_TYPE_CREDIT = 17
 
-# The document type the integration example uses for this receipt class.
+# The document type the integration example uses for a card payment.
 DOCUMENT_TYPE_RECEIPT = 9002
 
+# What a credit slip is filed as. The real terminal rejected 9002 for this class of
+# request; the reference body the integration sent back uses 0.
+DOCUMENT_TYPE_CREDIT_SALE = 0
 
-def receipt_order_body(amount_minor: int, basket_id: str | None = None) -> str:
+
+def receipt_order_body(
+    amount_minor: int,
+    customer_name: str | None = None,
+    basket_id: str | None = None,
+) -> str:
     """
     The orderBody for a credit receipt, in the gateway's shape.
 
     `paymentItems[].type` is 17: that is what marks the slip as a veresiye rather than a
     card payment, and it is the one field that makes this a receipt request at all.
 
+    The gateway refuses a slip it cannot name a customer on, so `customerInfo` travels
+    whenever we know who the debt belongs to. It is left out entirely when we do not --
+    an account may genuinely have no display name, and an empty name would fail the same
+    check while looking like an answer.
+
+    `items` is sent empty rather than omitted. The key is part of the shape the gateway
+    validates, and keeping it here means connecting the real basket later (docs/deferred.md
+    section J) changes only what is inside it, never the shape around it.
+
     A basket id is minted when the caller has none, because the gateway keys the request
     on it -- two receipts sharing an id would be one receipt to them.
     """
+    body: dict[str, object] = {
+        "basketID": basket_id or str(uuid.uuid4()),
+        "createInvoice": False,
+        "documentType": DOCUMENT_TYPE_CREDIT_SALE,
+        "isVoid": False,
+        "items": [],
+        "paymentItems": [
+            {"amount": amount_minor, "type": PAYMENT_ITEM_TYPE_CREDIT}
+        ],
+    }
+
+    # TODO(taxid): the gateway's payment path also carries customerInfo.taxID. It is not
+    #  sent here: nothing asked for it on this path, and the placeholder the payment path
+    #  uses puts the SAME identity on every slip (docs/deferred.md section I.2). If the
+    #  gateway starts rejecting the block without it, add it -- do not copy the debt.
+    if customer_name:
+        body["customerInfo"] = {"name": customer_name}
+
     return json.dumps(
-        {
-            "basketID": basket_id or str(uuid.uuid4()),
-            "documentType": DOCUMENT_TYPE_RECEIPT,
-            "paymentItems": [
-                {"amount": amount_minor, "type": PAYMENT_ITEM_TYPE_CREDIT}
-            ],
-        },
+        body,
         # Compact and key-ordered so the same job always serialises identically -- a test
         # can compare the string, and a log line stays diffable.
         separators=(",", ":"),

@@ -8,6 +8,8 @@ idempotent -- the terminal fires the intent first and acks second, so a lost res
 leaves it retrying an ack for work it really did deliver.
 """
 
+import json
+
 from app import models
 
 
@@ -51,6 +53,51 @@ def test_approving_a_phone_raised_debt_queues_a_receipt(
     assert jobs[0]["customer_id"] == "c1"
     # The slip needs an orderBody; the gateway keys its receipt on it.
     assert '"type":17' in jobs[0]["order_body"]
+
+
+def test_the_receipt_body_matches_the_gateway_shape(client, owner_auth, buyer_auth):
+    """
+    Asserted field by field because a real terminal refused the earlier shape, and the
+    substring check above would have passed for every version it refused: the document
+    type was wrong, `items` was missing, and no customer was named.
+    """
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()["approval_id"]
+
+    _approve_as_buyer(client, buyer_auth, approval_id)
+
+    jobs = client.get("/pgw-jobs", headers=owner_auth).json()
+    body = json.loads(jobs[0]["order_body"])
+
+    assert body["documentType"] == 0        # 9002 was rejected for this class
+    assert body["items"] == []              # key present, filled in once baskets are wired
+    assert body["paymentItems"] == [{"amount": 5000, "type": 17}]
+    assert body["customerInfo"] == {"name": "Ahmet Yılmaz"}
+    assert body["createInvoice"] is False
+    assert body["isVoid"] is False
+    assert body["basketID"]
+
+
+def test_a_nameless_customer_gets_no_customerInfo(
+    client, owner_auth, buyer_auth, db_session
+):
+    """
+    An account may genuinely have no display name (registration leaves it empty). Sending
+    customerInfo with an empty name would fail the gateway's check while looking like an
+    answer, so the block is left out entirely.
+    """
+    db_session.get(models.Customer, "c1").display_name = ""
+    db_session.commit()
+
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()["approval_id"]
+
+    _approve_as_buyer(client, buyer_auth, approval_id)
+
+    jobs = client.get("/pgw-jobs", headers=owner_auth).json()
+    assert "customerInfo" not in json.loads(jobs[0]["order_body"])
 
 
 def test_approving_a_pos_raised_sale_queues_nothing(client, owner_auth, buyer_auth):

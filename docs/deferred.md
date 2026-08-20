@@ -723,12 +723,15 @@ değiştirilirse kabul edilen ve reddedilen her satış PGW'ye aynı görünür.
 
 ---
 
-## I. Tahsilat orderBody'si — Tur 42'de kalan üç açık
+## I. PGW orderBody'leri — üç açık kaldı (I.4 kapandı)
 
 Gerçek PGW tahsilat isteğimizi *"sepet tutarı 0 olamaz"* ile reddetti ve `paymentItems`
 gönderdiğimizde **doğrudan fiş basıyordu**. Şema kullanıcının verdiği referans isteğe
 uyduruldu (`taxFreeAmount` + `customerInfo` + `infoReceiptInfo`, `paymentItems` YOK).
-Üç noktası eksik kaldı:
+Üç noktası eksik kaldı.
+
+Sonra aynı şey **fiş yolunun başına da geldi** (yol 3, *"müşteri bilgisi gerekli"*) ve
+**§I.4 kapandı** — ama I.1/I.2/I.3 açık duruyor:
 
 ### I.1 Yol 4/5'te müşteri bilgisi yerelden okunuyor  ⚠️ AÇIK
 
@@ -767,12 +770,48 @@ saklanmıyor (kullanıcı kararı): ardışıklık gerekmiyordu, ve kalıcı say
 ve terminaller arası tekilliği çözmek zorunda kalırdı. Aynı saniyede iki fiş çakışır —
 tezgâhta pratik değil. Kodda `TODO(gib-document-no)`.
 
-### I.4 Fiş yolu ESKİ şemada kaldı — bilinçli
+### ~~I.4 Fiş yolu ESKİ şemada kaldı~~  ✅ KAPANDI (2026-08-20)
 
-`printReceipt` / `receiptOrderBody` ve backend'in `receipt_order_body`'si hâlâ
-`paymentItems` + `type:17` gönderiyor ve **doğru çalışıyor** — fişi bastıran zaten o.
-Kullanıcı kapsamı açıkça *"yol 2'ye özel"* çizdi. Fiş yolu da yeni alanları isterse
-(`customerInfo`, `infoReceiptInfo`) hem Kotlin hem Python tarafı güncellenmeli.
+Kullanıcı kapsamı önce *"yol 2'ye özel"* çizmişti; sonra gerçek terminal **yol 3'ü de
+reddetti** (*"müşteri bilgisi gerekli"*), ve fiş yolu da referans şemaya taşındı.
+
+Gönderdiğimiz eski gövde ↓ ve gateway'in beklediği ↓ arasındaki **üç fark** kapatıldı:
+
+| Alan | Eski | Yeni |
+|---|---|---|
+| `documentType` | `9002` | **`0`** — 9002 bu belge sınıfı için reddediliyordu |
+| `items` | anahtar **yok** | **`[]`** — anahtar şemanın parçası; §J bağlanınca sadece *içi* dolacak |
+| `customerInfo` | yok | **`{"name": …}`** — sunucu dolduruyor |
+
+`paymentItems` + `type:17` **aynen kaldı** (referans gövdede de var, fişi veresiye yapan
+alan o). `9002` sabiti de silinmedi — `paymentOrderBody` (yol 2, COLLECT) onu kullanmaya
+devam ediyor ve o yol çalışıyor. İki sabit yan yana:
+`DOCUMENT_TYPE_RECEIPT = 9002` / `DOCUMENT_TYPE_CREDIT_SALE = 0`.
+
+**Müşteri adını neden SUNUCU koyuyor:** §I.1'in yol 4/5 için tarif ettiği "terminal kendi
+defterinden baksın" deseni burada **yanlış olurdu** — o desenin bilinen riski (müşteri o
+terminale henüz senkron olmadıysa ad hiç gitmez) fişi gateway'e **reddettirirdi**, oysa
+COLLECT'te sadece adsız bir ödeme demekti. Sunucu defterin tamamını biliyor. Ad
+`order_body` string'inin **içine** giriyor: `pgw_jobs`'a kolon eklenmedi, migration yok.
+§I.1 yol 4/5 için **açık kalmaya devam ediyor**.
+
+**`taxID` bilinçli olarak GÖNDERİLMİYOR** (§I.2 bu yola kopyalanmadı): referans gövdede
+`customerInfo` hiç yoktu, yani gateway'in bu yolda `taxID` istediğine dair kanıt da yok.
+Sabit placeholder (`11111111111`) fişte her müşteriyi aynı kimlikle gösteriyor — ikinci
+bir yola taşımak borcu büyütürdü. Gateway şikâyet ederse `pgw.py`'de tek satır.
+Kodda `TODO(taxid)`.
+
+**Kotlin tarafı da güncellendi ama işlevsel değil:** yol 3'te JSON'u sunucu üretiyor,
+terminal `order_body`'yi **parse etmeden aynen geçiriyor**
+([`PgwJobDto.orderBody`](../app-pos/core-network/src/main/java/com/example/app_pos/network/dto/PgwJobDto.kt) String'tir).
+`PgwBridge.receiptOrderBody` yalnızca `order_body == null` iken çalışan bir **yedek** —
+yine de aynı şekle getirildi ki iki taraf ayrışmasın (ikisini karşılaştıran test yok,
+bağ sadece bir doc yorumu).
+
+**Test boşluğu da kapandı:** eski tek assert `'"type":17'` substring'iydi ve bu bug'ın
+**hiçbirini** yakalayamazdı. Artık `order_body` parse edilip alan alan doğrulanıyor
+(`test_the_receipt_body_matches_the_gateway_shape`), artı adsız müşteri için
+`customerInfo` hiç gitmemeli testi. 183 pytest.
 
 ---
 
