@@ -1,0 +1,51 @@
+{
+  // This repo holds ~27k files on disk but only ~500 are tracked sources.
+  // The rest are Gradle/Python build artifacts. VSCode's file watcher does NOT
+  // read .gitignore, so without these excludes it watches all of them.
+
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/.gradle/**": true,
+    "**/.kotlin/**": true,
+    "**/.cxx/**": true,
+    "**/.idea/**": true,
+    "**/.venv/**": true,
+    "**/venv/**": true,
+    "**/__pycache__/**": true,
+    "**/.pytest_cache/**": true,
+    "**/node_modules/**": true
+  },
+
+  "search.exclude": {
+    "**/build": true,
+    "**/.gradle": true,
+    "**/.kotlin": true,
+    "**/.cxx": true,
+    "**/.idea": true,
+    "**/.venv": true,
+    "**/venv": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  },
+  "search.followSymlinks": false,
+
+  "files.exclude": {
+    "**/build": true,
+    "**/.gradle": true,
+    "**/.kotlin": true,
+    "**/.cxx": true,
+    "**/.idea": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true
+  },
+
+  // Pylance: keep .venv analyzable so imports still resolve, but skip build output.
+  "python.analysis.diagnosticMode": "openFilesOnly",
+  "python.analysis.exclude": [
+    "**/build/**",
+    "**/.gradle/**",
+    "**/node_modules/**"
+  ],
+
+  "files.trimTrailingWhitespace": false
+}
