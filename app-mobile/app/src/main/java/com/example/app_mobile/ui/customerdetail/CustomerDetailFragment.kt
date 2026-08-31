@@ -67,6 +67,7 @@ class CustomerDetailFragment : Fragment() {
         binding.btnPay.setOnClickListener { showAmountDialog(TransactionType.PAYMENT) }
         observePhone()
         observeBalance()
+        observeCardExtras()
         observeTransactions()
     }
 
@@ -153,12 +154,53 @@ class CustomerDetailFragment : Fragment() {
     }
 
     private fun observeBalance() {
+        // How a kuruş amount becomes text. Handed to the view rather than formatted here,
+        // because the count-up needs to render every intermediate value the same way.
+        binding.detailBalance.format = { it.toTlString() }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.balanceMinor.collect { balance ->
-                    binding.detailBalance.text = balance.toTlString()
-                    val colorRes = if (balance > 0) R.color.balance_due else R.color.payment_received
-                    binding.detailBalance.setTextColor(requireContext().getColor(colorRes))
+                    // Three states, not two. Zero used to take the "payment received"
+                    // green and announce an event that had not happened (§G.2); it is
+                    // neutral, because nothing is outstanding either way.
+                    val (top, bottom) = when {
+                        balance > 0 -> R.color.debt_grad_top to R.color.debt_grad_bottom
+                        balance < 0 -> R.color.credit_grad_top to R.color.credit_grad_bottom
+                        else -> R.color.neutral_grad_top to R.color.neutral_grad_bottom
+                    }
+                    binding.detailBalance.setGradientColors(
+                        requireContext().getColor(top),
+                        requireContext().getColor(bottom),
+                    )
+                    binding.detailBalance.setAmount(balance)
+                }
+            }
+        }
+    }
+
+    /**
+     * The two ornaments on the focus card: the trend line, and what part of the balance
+     * inflation put there.
+     */
+    private fun observeCardExtras() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.balanceSeries.collect { binding.balanceSpark.values = it }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.indexationMinor.collect { indexation ->
+                    // Hidden rather than shown as zero: a debt made entirely of goods has
+                    // no inflation story, and a "0,00 TL of this is inflation" line would
+                    // raise a question where there is none.
+                    binding.detailIndexationNote.visibility =
+                        if (indexation > 0) View.VISIBLE else View.GONE
+                    if (indexation > 0) {
+                        binding.detailIndexationNote.text =
+                            getString(R.string.detail_indexation_note, indexation.toTlString())
+                    }
                 }
             }
         }

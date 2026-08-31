@@ -3,6 +3,7 @@ package com.example.app_mobile.ui.sellerdetail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
+import com.example.app_mobile.util.BalanceSeries
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -91,6 +92,25 @@ class SellerDetailViewModel @Inject constructor(
                     TransactionType.PAYMENT -> -tx.amountMinor
                 }
             }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    /**
+     * The last twelve closing balances, for the sparkline. Built from ALL entries, not
+     * the filtered list: what someone owes does not trend differently because the screen
+     * is currently showing only payments.
+     */
+    val balanceSeries: StateFlow<List<Long>> =
+        allTransactions.map { BalanceSeries.monthly(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * How much of the balance is indexation rather than goods. Summed from the rows
+     * already on screen rather than fetched from /breakdown -- one number from two
+     * sources is one number that can disagree with itself.
+     */
+    val indexationMinor: StateFlow<Long> =
+        allTransactions.map { txs ->
+            txs.filter { it.type == TransactionType.INDEXATION }.sumOf { it.amountMinor }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     fun onFilterChanged(newFilter: TransactionFilter) {

@@ -65,6 +65,7 @@ class SellerDetailFragment : Fragment() {
         binding.btnPay.setOnClickListener { showPayDialog() }
         observeShopPhone()
         observeBalance()
+        observeCardExtras()
         observeTransactions()
     }
 
@@ -139,6 +140,8 @@ class SellerDetailFragment : Fragment() {
      * owed, what the shop owes back after an overpayment, or simply nothing outstanding.
      */
     private fun observeBalance() {
+        binding.detailBalance.format = { it.toTlString() }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.balanceMinor.collect { balance ->
@@ -149,19 +152,43 @@ class SellerDetailFragment : Fragment() {
                     }
                     binding.detailBalanceLabel.setText(labelRes)
 
-                    // Magnitude only: the direction is in the label now, and a minus sign
-                    // under a "what I owe" heading reads as a negative debt.
-                    binding.detailBalance.text = abs(balance).toTlString()
-
-                    val colorRes = when {
-                        balance > 0 -> R.color.balance_due
+                    val (top, bottom) = when {
+                        balance > 0 -> R.color.debt_grad_top to R.color.debt_grad_bottom
                         // Nothing outstanding is not an event. Zero used to take the same
                         // green as a fresh payment, announcing something that did not
                         // happen; a neutral colour just states the fact.
-                        balance == 0L -> R.color.balance_settled
-                        else -> R.color.payment_received
+                        balance == 0L -> R.color.neutral_grad_top to R.color.neutral_grad_bottom
+                        else -> R.color.credit_grad_top to R.color.credit_grad_bottom
                     }
-                    binding.detailBalance.setTextColor(requireContext().getColor(colorRes))
+                    binding.detailBalance.setGradientColors(
+                        requireContext().getColor(top),
+                        requireContext().getColor(bottom),
+                    )
+
+                    // Magnitude only: the direction is in the label now, and a minus sign
+                    // under a "what I owe" heading reads as a negative debt.
+                    binding.detailBalance.setAmount(abs(balance))
+                }
+            }
+        }
+    }
+
+    /** The trend line and the inflation share — the focus card's two ornaments. */
+    private fun observeCardExtras() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.balanceSeries.collect { binding.balanceSpark.values = it }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.indexationMinor.collect { indexation ->
+                    binding.detailIndexationNote.visibility =
+                        if (indexation > 0) View.VISIBLE else View.GONE
+                    if (indexation > 0) {
+                        binding.detailIndexationNote.text =
+                            getString(R.string.detail_indexation_note, indexation.toTlString())
+                    }
                 }
             }
         }

@@ -1,19 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- One ledger entry: description + timestamp on the left, signed amount right. -->
+<!--
+  One ledger entry: description and timestamp on the left, signed amount on the right.
+
+  A plain row on a hairline, not a card. The focus card above carries the emphasis on
+  this screen; wrapping every row in its own surface would flatten that distinction and
+  make a long history read as a stack of boxes.
+
+  The vertical padding is LARGER than before (14dp, was 12dp) even though the type got
+  smaller. Shrinking text without opening the space around it just produces something
+  cramped.
+-->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="12dp">
+    android:paddingHorizontal="@dimen/screen_edge"
+    android:paddingVertical="@dimen/row_vertical">
 
     <TextView
         android:id="@+id/txDescription"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textSize="15sp"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
         app:layout_constraintEnd_toStartOf="@id/txAmount"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -23,20 +33,24 @@
         android:id="@+id/txDate"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="12sp"
+        android:layout_marginTop="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
         app:layout_constraintEnd_toStartOf="@id/txAmount"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/txDescription"
         tools:text="20.07.2026 09:15" />
 
+    <!--
+      Medium weight, not bold. At this size bold made every row shout its number and the
+      eye had nowhere to rest while scrolling; medium separates the figure from the label
+      without competing with the balance on the card above.
+    -->
     <TextView
         android:id="@+id/txAmount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:layout_marginStart="@dimen/space_3"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"

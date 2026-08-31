@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What this buyer owes one shop: the mirror of the customer detail screen, seen from the
+  other side of the counter.
+
+  A FOCUS CARD screen (theme B-a). Same structure as fragment_customer_detail, and
+  deliberately so: the same account viewed by either party should be recognisably the
+  same screen.
+-->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -10,10 +18,9 @@
         android:id="@+id/detailShopName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
-        android:textSize="22sp"
-        android:textStyle="bold"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Title"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -30,51 +37,98 @@
         android:id="@+id/detailShopPhone"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="2dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_1"
         android:background="?attr/selectableItemBackground"
-        android:drawablePadding="6dp"
-        android:paddingVertical="4dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
+        android:drawablePadding="@dimen/space_2"
+        android:paddingVertical="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        android:textSize="13sp"
         app:drawableStartCompat="@android:drawable/ic_menu_call"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/detailShopName"
         tools:text="Dükkan telefonu: +902121112233" />
 
+    <View
+        android:id="@+id/balanceCard"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_3"
+        android:background="@drawable/bg_card_focus"
+        app:layout_constraintBottom_toBottomOf="@id/balanceSpark"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/detailBalanceLabel" />
+
+    <View
+        android:id="@+id/balanceStripe"
+        android:layout_width="@dimen/stripe_width"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_card_stripe"
+        app:layout_constraintBottom_toBottomOf="@id/balanceCard"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
+        app:layout_constraintTop_toTopOf="@id/balanceCard" />
+
     <TextView
         android:id="@+id/detailBalanceLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_6"
         android:text="@string/detail_balance_label"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
-        app:layout_constraintStart_toStartOf="parent"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
         app:layout_constraintTop_toBottomOf="@id/detailShopPhone" />
 
-    <TextView
+    <com.example.app_mobile.view.MoneyText
         android:id="@+id/detailBalance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Display"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
         app:layout_constraintTop_toBottomOf="@id/detailBalanceLabel"
-        tools:text="40,00 TL" />
+        tools:text="143,64 TL" />
+
+    <TextView
+        android:id="@+id/detailIndexationNote"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginEnd="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/balanceCard"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
+        app:layout_constraintTop_toBottomOf="@id/detailBalance"
+        tools:text="Bunun 3,64 TL'si enflasyon farkı"
+        tools:visibility="visible" />
+
+    <com.example.app_mobile.view.SparklineView
+        android:id="@+id/balanceSpark"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/sparkline_height"
+        android:layout_marginHorizontal="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_3"
+        android:layout_marginBottom="@dimen/space_4"
+        app:layout_constraintEnd_toEndOf="@id/balanceCard"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
+        app:layout_constraintTop_toBottomOf="@id/detailIndexationNote" />
 
     <com.google.android.material.chip.ChipGroup
         android:id="@+id/txFilterGroup"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_4"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/detailBalance"
+        app:layout_constraintTop_toBottomOf="@id/balanceCard"
         app:selectionRequired="true"
         app:singleSelection="true">
 
@@ -105,7 +159,7 @@
         android:id="@+id/transactionList"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_2"
         app:layout_constraintBottom_toTopOf="@id/btnPay"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -118,6 +172,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/detail_empty"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/transactionList"
         app:layout_constraintEnd_toEndOf="parent"
@@ -128,12 +184,12 @@
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnPay"
         android:layout_width="0dp"
-        android:layout_height="56dp"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="16dp"
+        android:layout_height="@dimen/button_height"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_3"
+        android:layout_marginBottom="@dimen/space_4"
         android:text="@string/detail_pay_button"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Button"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />

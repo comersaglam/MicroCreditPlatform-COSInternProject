@@ -88,6 +88,9 @@
     <!-- Seller: customer detail + write actions -->
     <string name="customer_detail_title">Müşteri</string>
     <string name="current_balance">Güncel bakiye</string>
+    <!-- Shown under a balance only when indexation actually contributed to it. Names the
+         inflation share so the figure above never looks larger than what was bought. -->
+    <string name="detail_indexation_note">Bunun %1$s\'si enflasyon farkı</string>
     <string name="detail_write_debt">Veresiye Yaz</string>
     <string name="detail_take_payment">Ödeme Al</string>
     <string name="detail_approval_sent">Onaya gönderildi</string>
