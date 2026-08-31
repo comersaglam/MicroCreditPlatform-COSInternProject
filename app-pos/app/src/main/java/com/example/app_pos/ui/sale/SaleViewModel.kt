@@ -44,9 +44,12 @@ class SaleViewModel : ViewModel() {
 
     /**
      * The basket handed over by the PGW (mock-pos), if this sale came from a
-     * payment-app handoff. Null for a PAYMENT keyed in on the in-app keypad. Held
-     * so the write step can persist the basket + its items later (phase 3); the
-     * money-only default carries a single synthetic item, so this stays optional.
+     * payment-app handoff. Null for a PAYMENT keyed in on the in-app keypad.
+     *
+     * Set by KeypadFragment from the nav argument, and read at the write step, which
+     * persists the basket and its items alongside the entry. Those two ends were written
+     * long before anything joined them: for several turns this was set by nobody, so every
+     * handoff booked money-only and no basket was ever stored (docs/deferred.md J).
      */
     var orderBody: OrderBody? = null
         private set

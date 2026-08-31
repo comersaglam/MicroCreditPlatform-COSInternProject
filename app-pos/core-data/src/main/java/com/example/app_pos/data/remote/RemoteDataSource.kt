@@ -197,7 +197,8 @@ class RemoteDataSource @Inject constructor(
         description: String?,
         initiatorRole: String,
         targetUserId: String,
-        origin: String
+        origin: String,
+        orderBody: OrderBody? = null
     ): ApiResult<ApprovalSendResultDto> =
         apiCall(moshi) {
             approvalApi.send(
@@ -209,7 +210,11 @@ class RemoteDataSource @Inject constructor(
                     description = description,
                     initiatorRole = initiatorRole,
                     targetUserId = targetUserId,
-                    origin = origin
+                    origin = origin,
+                    // Only a gateway handoff has one. It has to ride along with the
+                    // request: this endpoint is the only thing path 1 calls, so a basket
+                    // left out here never reaches the server at all.
+                    orderBody = orderBody
                 )
             )
         }

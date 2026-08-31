@@ -365,7 +365,8 @@ class OfflineFirstRepository @Inject constructor(
         amountMinor: Long,
         type: TransactionType,
         description: String,
-        origin: String
+        origin: String,
+        orderBody: OrderBody?
     ): ApprovalOutcome {
         // Who must answer. Null means the customer holds no account, which the server
         // reads as the SMS-OTP branch and writes immediately.
@@ -380,7 +381,11 @@ class OfflineFirstRepository @Inject constructor(
             // The till is always the shop side of this line.
             initiatorRole = ROLE_SELLER,
             targetUserId = targetUserId.orEmpty(),
-            origin = origin
+            origin = origin,
+            // Sent even though nothing is written locally on the 201 branch: the server
+            // holds it on the approval row until somebody decides, and puts it on the
+            // entry then. Nothing here would have anywhere to keep it in the meantime.
+            orderBody = orderBody
         )
 
         return when (result) {

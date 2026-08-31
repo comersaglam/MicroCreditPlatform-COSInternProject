@@ -91,7 +91,8 @@ open class FakeSyncRepository(
         amountMinor: Long,
         type: TransactionType,
         description: String,
-        origin: String
+        origin: String,
+        orderBody: OrderBody?
     ): ApprovalOutcome = ApprovalOutcome.Unreachable
 
     override suspend fun approvalStatus(approvalId: String): ApprovalStatus? = null

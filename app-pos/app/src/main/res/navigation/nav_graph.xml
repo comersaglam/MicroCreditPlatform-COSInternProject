@@ -54,6 +54,16 @@
             <argument android:name="payCustomerId" app:argType="string" android:defaultValue="" />
             <argument android:name="payCustomerName" app:argType="string" android:defaultValue="" />
             <argument android:name="payCustomerPhone" app:argType="string" android:defaultValue="" />
+            <!--
+              The gateway's basket, as the raw JSON it arrived in. It travels beside the
+              amount rather than in place of it: the amount is what every screen of the
+              flow works with, and the basket is only needed again at the write step.
+
+              A nav argument rather than a field on the Activity, because SaleViewModel is
+              scoped to this nested graph and the Activity cannot reach it — and because an
+              argument survives process death, which a field would not.
+            -->
+            <argument android:name="orderBody" app:argType="string" android:defaultValue="" />
 
             <action
                 android:id="@+id/action_keypad_to_confirm"

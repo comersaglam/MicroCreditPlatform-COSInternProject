@@ -61,5 +61,16 @@ data class ApprovalCreateDto(
      * leaves gateway work behind — a terminal is already in front of the PGW and fires
      * its own intent, so a job queued for it would hand the same receipt over twice.
      */
-    @param:Json(name = "origin") val origin: String
+    @param:Json(name = "origin") val origin: String,
+
+    /**
+     * What the gateway handed over, when this sale started there. Null for a money-only
+     * entry, which is most of them.
+     *
+     * It travels on the REQUEST rather than being collected when somebody approves,
+     * because by then the handoff that carried it is long over and the decision can be
+     * hours later — the same reason [origin] is sent up front. The server stores it on the
+     * approval row and moves it onto the ledger entry at the moment the sale is agreed.
+     */
+    @param:Json(name = "basket") val basket: OrderBodyDto? = null
 )

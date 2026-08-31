@@ -153,13 +153,24 @@ class MainActivity : AppCompatActivity() {
     private fun handleIntent(intent: Intent) {
         isCreditHandoff = intent.action == ACTION_CREDIT
         if (isCreditHandoff) {
-            // The extra is now the PGW's orderBody JSON. Parse it to the basket
-            // total; the amount then flows through the sale flow exactly as before.
+            // The extra is the PGW's orderBody JSON. Parsed here for the total, and passed
+            // on UNPARSED as well: the sale flow needs the items at the write step, and
+            // for a long time only the total made it past this line -- so every basket the
+            // gateway handed over was dropped here (docs/deferred.md J).
             val orderBody = intent.getStringExtra(EXTRA_ORDER_BODY)
             val amountMinor = OrderBodyParser.parse(orderBody)?.totalMinor() ?: 0L
             if (repo.isSessionValid()) {
                 // Signed in: straight to the sale flow, as before.
-                navController.navigate(R.id.saleFlow, bundleOf("amountMinor" to amountMinor))
+                // Empty rather than null for a missing body: the nav argument is a
+                // non-null String (it has a default), and a null in the bundle would
+                // throw when the fragment reads it.
+                navController.navigate(
+                    R.id.saleFlow,
+                    bundleOf(
+                        "amountMinor" to amountMinor,
+                        "orderBody" to orderBody.orEmpty()
+                    )
+                )
             } else {
                 // Not signed in: hold the orderBody and require login first. The gate
                 // is already the start destination on a cold start; if a CREDIT
@@ -269,9 +280,12 @@ class MainActivity : AppCompatActivity() {
         val orderBody = pendingHandoffOrderBody ?: return false
         pendingHandoffOrderBody = null
         val amount = OrderBodyParser.parse(orderBody)?.totalMinor() ?: 0L
+        // The basket travels through the login detour too. Carrying it in only the direct
+        // branch above would lose the items for exactly the sales that had to sign in
+        // first -- a difference nothing on screen would show.
         navController.navigate(
             R.id.action_global_saleflow_after_login,
-            bundleOf("amountMinor" to amount)
+            bundleOf("amountMinor" to amount, "orderBody" to orderBody)
         )
         return true
     }

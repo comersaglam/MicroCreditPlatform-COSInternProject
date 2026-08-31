@@ -300,7 +300,8 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         amountMinor: Long,
         type: TransactionType,
         description: String,
-        origin: String
+        origin: String,
+        orderBody: OrderBody?
     ): ApprovalOutcome = ApprovalOutcome.Unreachable
 
     /** The row lives in the counterparty's inbox; this device never stored a copy. */

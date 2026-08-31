@@ -1,6 +1,7 @@
 package com.example.app_pos.network.mapper
 
 import com.example.app_pos.model.ApprovalStatus
+import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.network.dto.ApprovalCreateDto
 import com.example.app_pos.network.dto.ApprovalDto
@@ -29,7 +30,8 @@ fun approvalCreateDto(
     description: String?,
     initiatorRole: String,
     targetUserId: String,
-    origin: String
+    origin: String,
+    orderBody: OrderBody? = null
 ): ApprovalCreateDto = ApprovalCreateDto(
     sellerId = sellerId,
     customerId = customerId,
@@ -41,7 +43,11 @@ fun approvalCreateDto(
     // Required rather than defaulted: which device raised the request decides whether the
     // server queues gateway work, and a wrong default would print a duplicate receipt in
     // one direction or drop one entirely in the other. Each caller states it.
-    origin = origin
+    origin = origin,
+    // Defaulted, unlike origin: a request with no basket is the ordinary case, not a
+    // caller that forgot. Reuses the same toDto() the direct-write path uses, so a basket
+    // is shaped identically whichever way it reaches the server.
+    basket = orderBody?.toDto()
 )
 
 /**

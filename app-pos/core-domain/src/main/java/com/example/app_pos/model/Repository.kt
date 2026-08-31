@@ -101,6 +101,10 @@ interface Repository {
      * [origin] tells the server this came from a TERMINAL, which is what stops it queueing
      * gateway work: this device is already in front of the PGW and hands its own intent
      * over. Phone-raised requests need the server to leave that work behind instead.
+     *
+     * [orderBody] is the basket the gateway handed over, for a sale that started there;
+     * null for a money-only entry. It has to travel with the REQUEST: this is the only
+     * call path 1 makes, so a basket omitted here is one the ledger never sees.
      */
     suspend fun requestApproval(
         sellerId: String,
@@ -108,7 +112,8 @@ interface Repository {
         amountMinor: Long,
         type: TransactionType,
         description: String,
-        origin: String = ORIGIN_POS
+        origin: String = ORIGIN_POS,
+        orderBody: OrderBody? = null
     ): ApprovalOutcome
 
     /**

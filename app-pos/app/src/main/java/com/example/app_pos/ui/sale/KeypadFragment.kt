@@ -13,6 +13,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.navigation.navGraphViewModels
 import com.example.app_pos.R
+import com.example.app_pos.data.OrderBodyParser
 import com.example.app_pos.databinding.FragmentKeypadBinding
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.util.toTlString
@@ -77,6 +78,11 @@ class KeypadFragment : Fragment() {
         return if (args.amountMinor > 0L) {
             saleViewModel.setTxType(TransactionType.DEBT)
             saleViewModel.setAmount(args.amountMinor)
+            // Beside the amount, because they came out of the same handoff: the total the
+            // flow spends and the items it was made of. Parsed here rather than in the
+            // Activity because SaleViewModel is scoped to this graph, which the Activity
+            // cannot reach. Null when the handoff carried no usable basket.
+            saleViewModel.setOrderBody(OrderBodyParser.parse(args.orderBody))
             findNavController().navigate(R.id.action_keypad_to_customerSelect)
             true
         } else {

@@ -162,7 +162,7 @@ class OtpViewModel @Inject constructor(
             when (type) {
                 // Path 1 — VERESİYE. The customer has to agree before anything is booked.
                 TransactionType.DEBT ->
-                    sendForApproval(sellerId, customerId, amountMinor, onWritten)
+                    sendForApproval(sellerId, customerId, amountMinor, orderBody, onWritten)
 
                 // Path 2 — TAHSİLAT. No gate, and that is not an omission: the money is
                 // being handed to the shop, so there is nothing to book against the
@@ -193,6 +193,7 @@ class OtpViewModel @Inject constructor(
         sellerId: String,
         customerId: String,
         amountMinor: Long,
+        orderBody: OrderBody?,
         onWritten: () -> Unit
     ) {
         val outcome = repo.requestApproval(
@@ -200,7 +201,11 @@ class OtpViewModel @Inject constructor(
             customerId = customerId,
             amountMinor = amountMinor,
             type = TransactionType.DEBT,
-            description = descriptionFor(TransactionType.DEBT)
+            description = descriptionFor(TransactionType.DEBT),
+            // The gateway's basket. This is the ONLY call path 1 makes, so leaving it out
+            // here is what kept every handed-off basket out of the ledger: the entry is
+            // written by the server when the customer approves, not by addTransaction.
+            orderBody = orderBody
         )
 
         when (outcome) {
