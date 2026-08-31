@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tur 44 — Tema draftı 4</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   TUR 44 — TEMA DRAFTI, 4. TUR
+
+   B kaldı. İki değişiklik deneniyor:
+     1) Yazı ağırlıkları inceltildi (aynı font, daha hafif)
+     2) Üç farklı gradyan/efekt yaklaşımı
+
+   ⚠️ FONT AĞIRLIĞI — ANDROID KISITI
+   minSdk = 24, ama `android:fontWeight` API 28+. Yani 24-27 arası cihazlarda
+   çalışmaz. Çözüm: fontFamily ile hazır aileleri kullanmak (API 16'dan beri):
+       sans-serif-thin    (100)  → çok ince, küçük boyutta okunmaz
+       sans-serif-light   (300)  → BUNU kullanıyoruz
+       sans-serif         (400)
+       sans-serif-medium  (500)
+   Draft'ta 300/400 ağırlıklar bu ailelere karşılık geliyor.
+
+   ⚠️ İNCE YAZININ SINIRI: 300 ağırlık 14sp altında zayıflıyor, özellikle
+   düşük yoğunluklu ekranda. O yüzden ince olan sadece BÜYÜK metin: isim,
+   bakiye. Liste satırları ve etiketler normal kalıyor.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand: #2151F3;  --brand-light: #5B87FF;
+  --bg: #0B0D12;     --surface: #14171F;  --surface-2: #1B1F29;  --line: #262B36;
+  --text: #E8EAF0;   --text-dim: #8B92A4;
+  --debt: #FF6B6B;   --paid: #22C55E;     --index: #C77A7A;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-sm:8px; --r-md:14px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  background:#06070A; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding:var(--sp-5); display:flex; flex-wrap:wrap; gap:var(--sp-6);
+  justify-content:center; align-items:flex-start;
+}
+.phone { width:360px; min-height:720px; background:var(--bg); border-radius:28px;
+         border:1px solid #1E222C; overflow:hidden; display:flex; flex-direction:column; }
+.label { width:360px; margin-bottom:var(--sp-3); font-size:13px; color:var(--text-dim); line-height:1.55; }
+.label b { color:var(--brand-light); font-size:15px; display:block; margin-bottom:2px; }
+.label i { color:#6B7280; font-style:normal; }
+.col { display:flex; flex-direction:column; align-items:center; }
+
+.bar { display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-4) var(--sp-4) var(--sp-2); }
+.bar .back { color:var(--text-dim); font-size:20px; line-height:1; }
+.bar .who { font-size:13px; color:var(--text-dim); }
+
+/* ── Ortak: inceltilmiş tipografi ───────────────────────────────────────── */
+.head { padding:var(--sp-2) var(--sp-4) var(--sp-3); }
+/* 600 → 300. XML: android:fontFamily="sans-serif-light" */
+.name { font-size:22px; font-weight:300; letter-spacing:-.2px; }
+.phone-no { font-size:13px; color:var(--text-dim); margin-top:3px; font-weight:400; }
+
+.bal-label { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-dim); font-weight:400; }
+/* 400 → 200/300. Büyük olduğu için ince kalabiliyor. */
+.bal { font-size:36px; font-weight:200; letter-spacing:-1.2px; margin-top:var(--sp-2);
+       font-variant-numeric:tabular-nums; line-height:1; }
+.bal small { font-size:18px; font-weight:300; color:var(--text-dim); margin-left:3px; }
+.sub { font-size:12px; color:var(--text-dim); margin-top:10px; font-weight:400; }
+.sub .up { color:var(--index); }
+.sub .more { color:var(--brand-light); }
+
+.chips { display:flex; gap:var(--sp-2); padding:0 var(--sp-4) var(--sp-3); }
+.chip { font-size:12px; padding:6px 14px; border-radius:999px; border:1px solid var(--line);
+        color:var(--text-dim); font-weight:400; }
+.chip.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+
+.list { flex:1; }
+.list .row { display:flex; align-items:center; justify-content:space-between; padding:13px var(--sp-4); }
+.list .row + .row { border-top:1px solid var(--line); }
+/* Liste satırı NORMAL ağırlıkta: 300 burada zayıflıyor. */
+.desc { font-size:14px; font-weight:400; }
+.date { font-size:11px; color:var(--text-dim); margin-top:2px; font-weight:400; }
+/* Tutar 600 → 500: hâlâ ayırt ediliyor ama bağırmıyor. */
+.amt { font-size:15px; font-weight:500; font-variant-numeric:tabular-nums; }
+.amt.debt{color:var(--debt)} .amt.paid{color:var(--paid)} .amt.index{color:var(--index)}
+
+.btns { display:flex; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4) var(--sp-4); }
+.btn { flex:1; height:48px; border-radius:var(--r-md); display:flex; align-items:center;
+       justify-content:center; font-size:14px; font-weight:500; }
+.btn.ghost { background:var(--surface-2); color:var(--text); }
+.btn.solid { background:var(--brand); color:#fff; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B-a — "Derinlik"
+
+   Gradyan kartın İÇİNDE, yukarıdan aşağı: üst kenar biraz aydınlık, alt
+   kenar zeminle birleşiyor. Kart zeminden yükseliyormuş gibi durur ama
+   gölge kullanılmadı — koyu temada gölge görünmez, sadece bulanıklık yapar.
+
+   Sol kenardaki marka şeridi de gradyan: üstte tam renk, altta sönümlü.
+   XML: <shape><gradient> — iki drawable, sıfır ek maliyet.
+   ═══════════════════════════════════════════════════════════════════════ */
+.ba .card {
+  margin:var(--sp-3) var(--sp-4) var(--sp-4); padding:20px 20px var(--sp-4);
+  border-radius:var(--r-md);
+  /* Dikey gradyan: üst kenar açık, alt kenar zemine yakın */
+  background:linear-gradient(180deg, #1A1E28 0%, #14171F 45%, #0F1219 100%);
+  border:1px solid var(--line);
+  position:relative; overflow:hidden;
+}
+/* Sol şerit, sönümlenen. XML: 3dp genişlikte View + <gradient angle="270"> */
+.ba .card .stripe {
+  position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(180deg, var(--brand) 0%, rgba(33,81,243,.25) 100%);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B-b — "Işık"
+
+   Kartın sol üst köşesinden yayılan çok soluk bir marka ışığı. Radyal
+   gradyan, %6 opaklıkta — bakınca fark edilmiyor ama kart "canlı" duruyor.
+   Neon değil: parlama kartın DIŞINA taşmıyor.
+
+   XML: radial <gradient> bir shape drawable içinde. Tek dosya.
+   ⚠️ Çok abartılırsa "AI slop" görüntüsü olur; %6 sınırında tutuldu.
+   ═══════════════════════════════════════════════════════════════════════ */
+.bb .card {
+  margin:var(--sp-3) var(--sp-4) var(--sp-4); padding:20px 20px var(--sp-4);
+  border-radius:var(--r-md);
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(33,81,243,.16) 0%, rgba(33,81,243,0) 60%),
+    linear-gradient(180deg, var(--surface) 0%, #11141B 100%);
+  border:1px solid var(--line);
+  border-left:3px solid var(--brand);
+}
+/* Bakiye rakamı da gradyanlı: üstte tam renk, altta hafif soluk.
+   XML: LinearGradient shader + Paint, TextView'a setShader — ~5 satır. */
+.bb .bal {
+  background:linear-gradient(180deg, #FF8585 0%, #E05555 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B-c — "Çizgi"
+
+   Gradyan yok denecek kadar az. Onun yerine kartın üst kenarında 1px'lik
+   yatay bir marka çizgisi, soldan sağa sönümleniyor. Ve sparkline'ın
+   dolgusu daha güçlü — tek "efekt" orası.
+
+   En sakin olanı. Efekt eklemek yerine VAR OLAN çizgileri güçlendiriyor.
+   ═══════════════════════════════════════════════════════════════════════ */
+.bc .card {
+  margin:var(--sp-3) var(--sp-4) var(--sp-4); padding:20px 20px var(--sp-4);
+  border-radius:var(--r-md);
+  background:var(--surface); border:1px solid var(--line);
+  position:relative; overflow:hidden;
+}
+/* Üst kenar çizgisi. XML: 1dp yükseklikte View + yatay <gradient>. */
+.bc .card .edge {
+  position:absolute; top:0; left:0; right:0; height:1px;
+  background:linear-gradient(90deg, var(--brand) 0%, rgba(33,81,243,.35) 40%, transparent 85%);
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ B-a ══════════ -->
+<div class="col">
+  <div class="label"><b>B-a — Derinlik</b>Kartın içinde dikey gradyan: üst kenar aydınlık, alt kenar zeminle birleşiyor. Sol şerit de sönümleniyor.<br><i>Gölge kullanılmadı — koyu temada gölge görünmez, sadece bulanıklık yapar.</i></div>
+  <div class="phone ba">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card">
+      <div class="stripe"></div>
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal" style="color:var(--debt)">2.616,00<small>₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="ga" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".30"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#ga)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+      <div class="row"><div><div class="desc">Peynir, zeytin</div><div class="date">11 Tem · 09:05</div></div><div class="amt debt">+340,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ══════════ B-b ══════════ -->
+<div class="col">
+  <div class="label"><b>B-b — Işık</b>Sol üst köşeden yayılan çok soluk marka ışığı (%16 → 0). Bakiye rakamı da gradyanlı: üstte açık, altta koyu.<br><i>Parlama kartın dışına taşmıyor — neon değil, iç aydınlanma.</i></div>
+  <div class="phone bb">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card">
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal">2.616,00<small style="color:var(--text-dim)">₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".30"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#gb)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+      <div class="row"><div><div class="desc">Peynir, zeytin</div><div class="date">11 Tem · 09:05</div></div><div class="amt debt">+340,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ══════════ B-c ══════════ -->
+<div class="col">
+  <div class="label"><b>B-c — Çizgi</b>Gradyan neredeyse yok. Kartın üst kenarında 1px marka çizgisi, soldan sağa sönümleniyor. Sol şerit kaldırıldı.<br><i>Efekt eklemek yerine var olan çizgileri güçlendiriyor. En sakin olanı.</i></div>
+  <div class="phone bc">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card">
+      <div class="edge"></div>
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal" style="color:var(--debt)">2.616,00<small>₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".38"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#gc)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+      <div class="row"><div><div class="desc">Peynir, zeytin</div><div class="date">11 Tem · 09:05</div></div><div class="amt debt">+340,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+</body>
+</html>
