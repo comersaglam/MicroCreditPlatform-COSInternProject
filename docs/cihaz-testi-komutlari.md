@@ -1,7 +1,8 @@
 # Cihaz testi — komut kılavuzu
 
 Sunucu doğrulaması için hazır komutlar. Hepsi repo kökünden çalışır.
-Kapsam: Tur 39 (onay pull'u) + Tur 40 (defter pull'u) + Tur 40b (düzeltmeler).
+Kapsam: Tur 39 (onay pull'u) + Tur 40 (defter pull'u) + Tur 40b (düzeltmeler)
++ Tur 40d (yazma yolu, **D bloğu**) + Tur 42 (PGW sepeti, **E bloğu**).
 
 ## Kurulum (her testten önce)
 
@@ -18,7 +19,8 @@ adb reverse tcp:4010 tcp:4010
 # 4. Şema değiştiyse SIFIRLA (Tur 39'da ŞART; MIUI'de `pm clear` çalışmaz)
 adb uninstall com.example.app_pos
 adb uninstall com.example.app_mobile
-adb uninstall com.example.mock_pos      # ⚠️ Tur 41: mock-pos'un ESKİ id'si
+adb uninstall com.tokeninc.sardis.paymentgateway   # mock-pos (Tur 41'den beri bu id)
+adb uninstall com.example.mock_pos                 # ⚠️ yalnız ESKİ kurulum varsa
 
 # 5. Kur (ayrı Gradle projeleri, sırayla — 8GB RAM)
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
@@ -29,6 +31,18 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 (cd mock-pos   && ./gradlew :app:installDebug --max-workers=2 -Dorg.gradle.java.installations.auto-detect=false)
 (cd mock-pos   && ./gradlew --stop)
 ```
+
+> 💡 **Kısayol: `~/.zshrc`'deki yardımcılar.** 5. adımın (ve 3. adımdaki `adb reverse`'ün)
+> yerine geçer, JAVA_HOME'u ve hedef cihazı kendisi ayarlar:
+>
+> ```bash
+> posbuild --usb        # app-pos  : derle + kur (host'u ayarlar, adb reverse dahil)
+> mockbuild             # mock-pos : ağ bayrağı YOK — PGW taklidi backend'e bağlanmaz
+> mobilebuild --usb     # app-mobile
+> ```
+>
+> `--wifi` de var. Birden fazla cihaz bağlıysa serial ekle (`posbuild --usb 136dd281`) ya da
+> `dev <serial>` ile sabitle. Son crash için `poscrash`.
 
 > ⚠️ **mock-pos'un paket adı DEĞİŞTİ (Tur 41).** Artık taklit ettiği gerçek geçidin id'sini
 > taşıyor: `com.tokeninc.sardis.paymentgateway`. Android için bu **ayrı bir uygulama**, yani
@@ -41,6 +55,17 @@ export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 > **MIUI/HyperOS notu:** `INSTALL_FAILED_USER_RESTRICTED` alırsanız
 > Ayarlar → Ek ayarlar → Geliştirici seçenekleri → **"USB ile yükleme"** açık olmalı.
+
+> ℹ️ **`DELETE_FAILED_INTERNAL_ERROR` çoğu zaman hata DEĞİL.** `adb uninstall` **kurulu
+> olmayan** bir paket için de bu jenerik mesajı veriyor — yani "silemedim" değil, "silecek
+> bir şey yok" demek olabilir. Önce gerçekten kurulu mu diye bak:
+>
+> ```bash
+> adb shell pm list packages | grep -E "app_pos|app_mobile|paymentgateway|mock_pos"
+> ```
+>
+> Çıktı boşsa 4. adım zaten gereksizdir, doğrudan kuruluma geç. Paket **listede duruyor**
+> ama silinmiyorsa o zaman gerçek bir kısıt vardır (iş profili, cihaz yöneticisi).
 
 > ⚠️ **`--build`'i atlamayın (Tur 40c).** `docker compose up -d` çalışan container'ı
 > **yeniden derlemez**; backend'de yeni yazdığınız kod sunucuda çalışmaz. Bu, Tur 40c'de
@@ -88,9 +113,17 @@ done
 `conftest.py` şemayı `models.py`'den kuruyor → **Alembic test suite'inde hiç çalışmıyor.**
 
 ```bash
-docker compose -f backend/docker-compose.yml exec -T api alembic current   # 0003 (head)
-docker exec backend-db-1 psql -U veresiye -d veresiye -c "\d approvals" | grep updated_at
+docker compose -f backend/docker-compose.yml exec -T api alembic current   # 0005 (head)
+docker exec backend-db-1 psql -U veresiye -d veresiye -c "\d approvals" | grep basket_id
 ```
+
+> ⚠️ **Tur 42: `alembic upgrade head` bu turda ATLANAMAZ.** Sepet düzeltmesi
+> `approvals.basket_id` kolonunu getiriyor (migration **0005**); kolon yoksa onaya gönderme
+> anında sunucu patlar. Kurulum adımlarına ekle:
+>
+> ```bash
+> docker compose -f backend/docker-compose.yml exec -T api alembic upgrade head
+> ```
 
 ## Test hesapları (`backend/app/seed.py`)
 
@@ -282,3 +315,63 @@ docker exec backend-db-1 psql -U veresiye -d veresiye -c \
 > yazılan veresiye sunucuda 404 alır; 404 retry edilebilir değildir, dolayısıyla outbox
 > kaydı **atar** ve borç ekranda kalıp sunucuda hiç var olmaz. Tur 40d'ye kadar olan
 > davranış buydu. Bu yüzden "offline'da yeni müşteri açılamaz" bilinçli bir karardır.
+
+---
+
+## E bloğu — Tur 42: PGW sepeti ledger'a ulaşıyor mu?
+
+Bu blok `docs/deferred.md` §J'yi doğrulayan bloktur. Ölçüt **ekran değil, DB**: sepet
+hiçbir UI'da görünmüyor (henüz onu okuyan ekran yok), dolayısıyla tek kanıt aşağıdaki sorgu.
+
+### ⚠️ Kalemli sepet için: "Veresiye" düğmesine UZUN BAS
+
+mock-pos'ta iki ayrı yol var ve ikisi de aynı düğmede:
+
+| Hareket | Ne gönderilir | DB'de ne görünür |
+|---|---|---|
+| **Kısa dokunuş** | `MockBasket.moneyOnly` — tutarı tek sentetik kaleme koyar | tek satır, `name = "Veresiye"` |
+| **UZUN BASIŞ** | sepet seçici açılır → "Market sepeti (3 kalem)" / "Tek ürün (Yiyecek)" | 3 satır: Ekmek / Süt / Yumurta |
+
+Uzun basışta **tutar girmeye gerek yok** — `showBasketPicker` `requireAmount()` çağırmıyor,
+sepetin kendi toplamı geçerli oluyor (Market sepeti = 107,00 TL).
+
+> Bunu bilmeden test edersen zincir çalışsa bile hep tek "Veresiye" kalemi görürsün ve
+> ürün-bazlı yolun çalıştığını **doğrulamamış** olursun. Uzun basış UI'da hiçbir yerde
+> yazmıyor; kodda `MainActivity.kt` `btnCredit.setOnLongClickListener`.
+
+### Adımlar
+
+| # | Yap | Bekle |
+|---|-----|-------|
+| E1 | mock-pos → Veresiye'ye **uzun bas** → "Market sepeti (3 kalem)" | app-pos açılır, tutar **107,00 TL** |
+| E2 | Müşteri seç → onaya gönder | Tezgâh müşterinin cevabını bekler |
+| E3 | app-mobile → `05551112233` ile onayla | app-pos kapanır, mock-pos **"onaylandı"** der |
+| E4 | Aşağıdaki sorguyu koştur | **3 satır**, tek `basket_id` altında |
+| E5 | Yeniden dene, ama **reddet** | mock-pos **"reddedildi"** der (§K.4 regresyonu) |
+| E6 | Tahsilat yap (Veresiye değil, kart) | Geçit **ödeme ekranı** açar, fiş basmaz |
+
+```bash
+# E4 — asıl ölçüt. Tur 42'den ÖNCE bu sorgu 0 satır dönüyordu.
+docker exec backend-db-1 psql -U veresiye -d veresiye -c "
+SELECT t.transaction_id, t.basket_id, i.name, i.price_minor, i.quantity
+FROM transactions t LEFT JOIN basket_items i ON i.basket_id = t.basket_id
+WHERE t.basket_id IS NOT NULL ORDER BY t.created_at DESC;"
+```
+
+Beklenen (Market sepeti): `Ekmek 1500|2000` · `Süt 3200|1000` · `Yumurta (10'lu) 4500|1000`
+— üçü de **aynı** `basket_id`. `quantity` ×1000 ölçekli, yani 2000 = **2 adet**;
+`price_minor` 1500 = **15,00 TL**, dolayısıyla Ekmek satırı 30,00 TL, sepet toplamı 107,00.
+
+### ⚠️ Tahsilat bu sorguda GÖRÜNMEZ — eksiklik değil
+
+Sorgu `WHERE basket_id IS NOT NULL` diyor, tahsilatın ise sepeti yok (müşteri kart uzatıyor,
+satılan ürün listesi yok — geçide giden gövdede de `paymentItems` bulunmuyor, bkz. §K.2).
+Ödemeni görmek için filtresiz bak:
+
+```bash
+docker exec backend-db-1 psql -U veresiye -d veresiye -c "
+SELECT created_at, type, amount_minor, basket_id, description
+FROM transactions ORDER BY created_at DESC LIMIT 10;"
+```
+
+`PAYMENT` satırlarının `basket_id`'si **NULL olmalı**. Dolu çıkarsa yanlış bir şey var.

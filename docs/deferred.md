@@ -4,9 +4,9 @@
 > değil. Ama altı ay sonra koda bakan (sen dahil) "burası neden yarım?" diye soracak. Cevaplar
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
-> ⚠️ **Tek istisna §J** — o bilinçli bir erteleme değil, **gerçek bir bug**: PGW'den gelen
-> sepet hiç kaydedilmiyordu. Düzeltme Tur 42'de yazıldı (§J.5), ama **cihazda
-> doğrulanmadı** — §J.3'ün DB sorgusu ilk kez satır döndüğünde kapanır.
+> ⚠️ **Tek istisna §J** — o bilinçli bir erteleme değil, **gerçek bir bug'dı**: PGW'den
+> gelen sepet hiç kaydedilmiyordu. Tur 42'de düzeltildi (§J.5) ve **cihazda doğrulandı**
+> (§J.6). Kalan iş bug değil, yazılmamış UI: sepeti gösteren ekran yok.
 >
 > 🔒 **[§K](#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) tersini anlatır:** §A–§J
 > neyi **ertelediğimiz**, §K neye **dokunmadığımız** — gerçek terminalde çalıştığı
@@ -67,8 +67,8 @@ POS'un `?role=SELLER` filtresi ve telefonun filtresiz kutusu.
 **Kalan iş:** §H.1'de listeli (OTP, UNCLAIMED için SMS-OTP, PGW handshake, yol 1 timeout)
 + cihaz testinden çıkan iki not: **§C.3.1** (logout 401 log gürültüsü) ve **§F.5** (pullBook
 N+1). İkisi de kullanıcı kararıyla ertelendi: *"sunuma az kaldı, kozmetik yerlere
-odaklanacağız."* **Ayrıca §J: sepet bug'ı — kod yazıldı (Tur 42, §J.5), cihaz
-doğrulaması bekliyor.**
+odaklanacağız."* **§J (sepet bug'ı) Tur 42'de kapandı; ondan kalan tek iş sepeti gösteren
+ekran — bug değil, yazılmamış UI (§J.6).**
 
 ---
 
@@ -785,8 +785,13 @@ Gönderdiğimiz eski gövde ↓ ve gateway'in beklediği ↓ arasındaki **üç 
 | Alan | Eski | Yeni |
 |---|---|---|
 | `documentType` | `9002` | **`0`** — 9002 bu belge sınıfı için reddediliyordu |
-| `items` | anahtar **yok** | **`[]`** — anahtar şemanın parçası; §J bağlanınca sadece *içi* dolacak |
+| `items` | anahtar **yok** | **`[]`** — anahtar şemanın parçası; §J kapandı ama **hâlâ boş**, aşağıya bak |
 | `customerInfo` | yok | **`{"name": …}`** — sunucu dolduruyor |
+
+**`items` neden hâlâ boş (2026-08-31):** §J kapandı, yani sunucu artık sepeti biliyor —
+ama fişteki `items`'ı doldurmak **ayrı bir karar**: fişte kalem kalem ne yazacağı, adı,
+KDV'si ve tutarların fişin toplamıyla nasıl uzlaşacağı ürün sorusu. Bilinçli olarak
+bırakıldı; anahtar şemanın parçası olduğu için `[]` olarak gitmeye devam ediyor.
 
 `paymentItems` + `type:17` **aynen kaldı** (referans gövdede de var, fişi veresiye yapan
 alan o). `9002` sabiti de silinmedi — `paymentOrderBody` (yol 2, COLLECT) onu kullanmaya
@@ -820,18 +825,15 @@ bağ sadece bir doc yorumu).
 
 ---
 
-## J. Yol 1'in sepeti hiç kaydedilmiyor  🐞 **KOD YAZILDI — cihaz doğrulaması bekliyor (Tur 42)**
+## ~~J. Yol 1'in sepeti hiç kaydedilmiyor~~  ✅ **KAPANDI (Tur 42, 2026-08-31)**
 
-> Bu bölüm §A–§I'den **farklı**: oradakiler bilinçli ertelemeler, bu **gerçek bir hata**.
+> Bu bölüm §A–§I'den **farklı**: oradakiler bilinçli ertelemeler, bu **gerçek bir hataydı**.
 > 2026-08-20'de DB sorgusuyla bulundu — Ayşe Demir'in (`c2`) 35,00 TL'lik veresiyesinin
 > sepeti soruldu, `basket_id` NULL çıktı. Sonra tüm tablo tarandı: **`baskets` 0 satır,
-> `basket_items` 0 satır.** Yani PGW'den intent'le gelen hiçbir sepet bugüne kadar
-> kaydedilmemiş.
+> `basket_items` 0 satır.** Yani PGW'den intent'le gelen hiçbir sepet kaydedilmemişti.
 >
-> **2026-08-31 durumu:** düzeltme yazıldı (backend + iki Kotlin halkası, aşağıda §J.5).
-> Derleme ve testler yeşil, ama **§J.3'ün DB sorgusu henüz koşturulmadı** — bu bölüm
-> ancak o sorgu ilk kez satır döndüğünde kapanır. Kaynağa bakarak kapatma
-> ([[verify-running-artifact-not-source]]).
+> **Kapanış kanıtı (§J.6): aynı sorgu artık satır döndürüyor.** Kaynak incelemesiyle değil,
+> gerçek cihazdan geçen handoff'la doğrulandı ([[verify-running-artifact-not-source]]).
 
 ### J.1 Teşhis: zincirin İLK halkası bağlı değil
 
@@ -936,6 +938,41 @@ anahtarı altında mı, ×1000 ölçek korunuyor mu, null sepet gövdeden düş�
 *izlenen* boru hattı yol 2'ninkiydi. Bir zincirde kopukluk ararken **hangi yolun** gerçekten
 koştuğunu doğrula: bu sistemde beş yol var ve ikisi ledger'a farklı uçlardan yazıyor
 ([[approval-five-paths-turn41]]).
+
+### J.6 Kapanış — cihazdan gelen kanıt (2026-08-31)
+
+Gerçek telefon + mock-pos ile dört hareket geçirildi. §J.3'ün sorgusu **ilk kez satır
+döndürdü**, yani ölçüt karşılandı:
+
+```
+ transaction_id | basket_id | name            | price_minor | quantity
+ d95c2212-…     | 0793fcb9-… | Ekmek           |        1500 |     2000
+ d95c2212-…     | 0793fcb9-… | Süt             |        3200 |     1000
+ d95c2212-…     | 0793fcb9-… | Yumurta (10'lu) |        4500 |     1000
+ 43d3013d-…     | 30cf58a6-… | Veresiye        |      444444 |     1000
+ a3ae4686-…     | dde4ea8d-… | Veresiye        |        8888 |     1000
+```
+
+Doğrulanan üç şey:
+
+1. **Ürün-bazlı sepet** — üç kalem **tek** `basket_id` altında (üç ayrı sepet değil),
+   ölçekler korunmuş: `quantity` 2000 = 2 adet, `price_minor` 1500 = 15,00 TL. Kaydın
+   tutarı **10700** = kalemlerin toplamı, yani `totalMinor()` doğru hesaplıyor.
+2. **Tutar-only handoff** — tek sentetik "Veresiye" kalemi (`MockBasket.moneyOnly`).
+   Sepet yolu ile tutar yolu **aynı boru hattını** kullanıyor.
+3. **Tahsilatın sepeti YOK ve bu doğru** — aynı turda yazılan 111.111,00 TL'lik `PAYMENT`
+   kaydının `basket_id`'si NULL. Müşteri kart uzatıyor, satılan ürün listesi yok; geçide
+   giden gövdede de `paymentItems` bulunmuyor (§K.2). Sorgu `WHERE basket_id IS NOT NULL`
+   dediği için tahsilat orada **görünmez** — eksiklik değil, filtre.
+
+Aynı turda §K.4'ün regresyon kontrolleri de yapıldı: onaylanan veresiye `RESULT_OK`,
+**reddedilen** `RESULT_CANCELED` olarak ayrışıyor, tahsilat geçidin ödeme ekranını açıyor.
+Yani sepet düzeltmesi dondurulmuş sözleşmeyi bozmadı.
+
+**Kalan iş — sepet hiçbir EKRANDA görünmüyor.** Veri `Transaction.basket` olarak app-pos ve
+app-mobile'ın domain modeline kadar geliyor, ama onu okuyan tek bir UI yok. §J'yi başlatan
+soru ("bu veresiyede ne vardı?") hâlâ yalnız SQL'den cevaplanabiliyor. Bu bir bug değil,
+yazılmamış iş: [[replace-source-before-removing-it]]'in tersi — kaynak bağlandı, tüketici yok.
 
 ---
 
