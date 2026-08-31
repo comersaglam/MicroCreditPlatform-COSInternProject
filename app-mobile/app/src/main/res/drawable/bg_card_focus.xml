@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The focus card's ground (theme B-a).
+
+  A vertical gradient from a lighter top edge down to something close to the page,
+  so the card reads as lifted at the top and settled at the base. Three stops, not
+  two: a straight fade made the card look like it was dissolving rather than sitting
+  on the page.
+
+  There is no shadow and no elevation anywhere in this theme. On a dark ground a
+  shadow does not read as depth — it reads as a smudge around the corners. The
+  gradient does that job instead, and it costs nothing at runtime.
+
+  Used on FOUR screens only (customer detail, seller detail, my debts, my customers).
+  A stripe and a gradient on every card would stop being emphasis.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <gradient
+        android:angle="270"
+        android:startColor="@color/card_top"
+        android:centerColor="@color/card_mid"
+        android:endColor="@color/card_bottom"
+        android:centerY="0.45"
+        android:type="linear" />
+
+    <stroke
+        android:width="@dimen/stroke_hairline"
+        android:color="@color/outline" />
+
+    <corners android:radius="@dimen/radius_md" />
+</shape>

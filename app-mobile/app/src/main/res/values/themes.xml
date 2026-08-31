@@ -44,6 +44,18 @@
         <item name="colorOutline">@color/outline</item>
         <item name="colorOutlineVariant">@color/outline</item>
 
+        <!--
+          The type scale (Tur 44). Bound here so a plain TextView inherits the right
+          appearance without every layout naming a style: the scale becomes the default
+          rather than something each screen opts into.
+        -->
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.Fides.Display</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.Fides.Title</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.Fides.Body</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.Fides.Caption</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.Fides.Label</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.Fides.Button</item>
+
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/background</item>
 

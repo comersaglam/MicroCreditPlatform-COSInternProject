@@ -1,0 +1,162 @@
+package com.example.app_mobile.view
+
+import android.animation.ValueAnimator
+import android.content.Context
+import android.graphics.LinearGradient
+import android.graphics.Shader
+import android.util.AttributeSet
+import android.view.animation.DecelerateInterpolator
+import androidx.appcompat.widget.AppCompatTextView
+import androidx.core.content.ContextCompat
+import com.example.app_mobile.R
+
+/**
+ * TASLAK — Tur 44. Para gösteren büyük rakamlar: sayarak gelir, sonra gradyan alır.
+ *
+ * NEDEN TEK SINIF
+ * Gradyan ve sayma animasyonu ayrı ayrı basit ama BİRLİKTE çakışıyorlar: shader metnin
+ * genişliğine göre kurulur, sayarken genişlik her karede değişir, ve her karede shader
+ * kurmak hem israf hem de titreme kaynağı.
+ *
+ * Çözüm sıralamak: sayarken DÜZ renk, animasyon bitince gradyan. Kullanıcı zaten sayan
+ * rakamın rengine bakmıyor -- hareketi izliyor. Gradyan, rakam durduğunda ve okunmaya
+ * hazır olduğunda beliriyor.
+ *
+ * NE ZAMAN SAYAR
+ * Yalnızca DEĞER İLK KEZ geldiğinde. Sonraki güncellemeler doğrudan yazılır. Bir ödemenin
+ * ardından rakamın yeniden sayması, ekranın "hesap yapıyormuş" gibi görünmesine yol açar --
+ * oysa o an tam da kesinlik beklenen andır.
+ */
+class MoneyText @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyle: Int = android.R.attr.textViewStyle,
+) : AppCompatTextView(context, attrs, defStyle) {
+
+    /** Metne çevirme işi çağırana ait: kuruş biçimlemesi util/MoneyFormat'ta zaten var. */
+    var format: (Long) -> CharSequence = { it.toString() }
+
+    private var gradientTop = ContextCompat.getColor(context, R.color.balance_due)
+    private var gradientBottom = ContextCompat.getColor(context, R.color.balance_due)
+
+    private var animator: ValueAnimator? = null
+    private var hasShownValue = false
+    private var lastWidth = 0
+
+    /**
+     * Rakamın alacağı iki renk. Ayrı ayrı verilir çünkü bakiyenin YÖNÜ renk seçiyor:
+     * borç kırmızı, alacak yeşil, sıfır nötr -- Tur 25b'nin cep testi.
+     */
+    fun setGradient(topColor: Int, bottomColor: Int) {
+        gradientTop = topColor
+        gradientBottom = bottomColor
+        // Metin zaten yerindeyse hemen uygula; değilse ilk çizimde uygulanacak.
+        if (!isAnimating()) applyGradient()
+    }
+
+    /**
+     * Değeri göster. İlk çağrıda sayarak gelir, sonrakilerde doğrudan yazılır.
+     */
+    fun setAmount(amountMinor: Long) {
+        animator?.cancel()
+
+        if (hasShownValue) {
+            text = format(amountMinor)
+            applyGradient()
+            return
+        }
+        hasShownValue = true
+
+        // Sayarken düz renk: shader kapalı, yoksa her karede yeniden kurulması gerekirdi.
+        paint.shader = null
+        setTextColor(gradientTop)
+
+        animator = ValueAnimator.ofInt(0, amountMinor.toInt()).apply {
+            duration = COUNT_MS
+            // Hızlı başlar, yavaşlayarak durur -- bir sayacın durması gibi. Doğrusal
+            // olsaydı mekanik görünürdü.
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { text = format((it.animatedValue as Int).toLong()) }
+            doOnEnd {
+                text = format(amountMinor)   // yuvarlama hatası bırakmasın
+                applyGradient()
+            }
+            start()
+        }
+    }
+
+    /**
+     * Shader metnin YÜKSEKLİĞİNE göre kurulur, genişliğine değil -- dikey bir gradyan
+     * genişlikten bağımsızdır. Yine de metin ölçülmeden yükseklik bilinmiyor, o yüzden
+     * çizim geçişine bırakılıyor.
+     */
+    private fun applyGradient() {
+        if (height == 0) {
+            post { applyGradient() }
+            return
+        }
+        // Metnin gerçek yüksekliği, View'ın değil: dolgu dahil edilirse gradyan
+        // rakamın dışında başlar ve üst kenar soluk görünür.
+        val textHeight = paint.fontMetrics.let { it.bottom - it.top }
+        paint.shader = LinearGradient(
+            0f, 0f, 0f, textHeight,
+            gradientTop, gradientBottom,
+            Shader.TileMode.CLAMP,
+        )
+        invalidate()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        // Yükseklik değiştiyse (yazı tipi ölçeği, döndürme) shader yeniden kurulmalı.
+        if (h != oldh && !isAnimating()) applyGradient()
+        lastWidth = w
+    }
+
+    override fun onDetachedFromWindow() {
+        // Ekran kapanırken koşan animatör View'ı canlı tutar ve sızıntı yapar.
+        animator?.cancel()
+        super.onDetachedFromWindow()
+    }
+
+    private fun isAnimating() = animator?.isRunning == true
+
+    private companion object {
+        const val COUNT_MS = 600L
+    }
+}
+
+/* Küçük yardımcı: androidx'in doOnEnd'i core-ktx'te var, burada elle yazıldı ki
+   taslak ek bağımlılık ima etmesin. */
+private fun ValueAnimator.doOnEnd(action: () -> Unit) {
+    addListener(object : android.animation.AnimatorListenerAdapter() {
+        override fun onAnimationEnd(animation: android.animation.Animator) = action()
+    })
+}
+
+/*
+ * KULLANIMI
+ *
+ * Layout -- TextView yerine:
+ *   <com.example.app_mobile.view.MoneyText
+ *       android:id="@+id/detailBalance"
+ *       android:layout_width="wrap_content"
+ *       android:layout_height="wrap_content"
+ *       android:fontFamily="sans-serif-light"
+ *       android:textSize="36sp" />
+ *
+ * Fragment:
+ *   binding.detailBalance.format = { it.toTlString() }
+ *   binding.detailBalance.setGradient(topColor, bottomColor)
+ *   binding.detailBalance.setAmount(balanceMinor)
+ *
+ * ⚠️ ID KORUNUYOR: detailBalance hâlâ detailBalance. Tip TextView'dan MoneyText'e
+ * değiştiği için ViewBinding'in ürettiği alan da değişir, ama SADECE bu iki satırın
+ * olduğu yerde -- Fragment'ın geri kalanı ve ViewModel dokunulmuyor.
+ *
+ * NEREDE KULLANILIR: yalnızca BÜYÜK, tek başına duran rakamlar.
+ *   - müşteri detayı bakiyesi        - toplam alacak (Müşterilerim)
+ *   - dükkân detayı bakiyesi         - toplam borç (Borçlarım)
+ * Liste satırlarındaki tutarlarda KULLANILMAZ: RecyclerView'da her geri dönüşümde
+ * animasyon tetiklenir ve liste titrer.
+ */

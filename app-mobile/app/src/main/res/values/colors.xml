@@ -2,25 +2,77 @@
 <resources>
 
     <!--
-      Token dark fintech palette — shared with app-pos so the two apps read as one
+      T-Fides dark palette (Tur 44) — shared with app-pos so the two apps read as one
       product. Trust reads as blue, positive money as green, debt as red.
-      Backgrounds avoid pure black and text avoids pure white for readability.
-    -->
-    <color name="background">#121212</color>
-    <color name="surface">#1C1C1E</color>
-    <color name="surface_elevated">#242428</color>
-    <color name="primary">#4C8BFF</color>
-    <color name="primary_container">#1A3A6B</color>
-    <color name="accent">#00C896</color>
-    <color name="error">#FF5C5C</color>
-    <color name="on_background">#E4E4E7</color>
-    <color name="on_surface_variant">#9B9BA1</color>
-    <color name="outline">#2C2C2E</color>
 
-    <color name="error_container">#5C1F1F</color>
+      The names are unchanged from the previous palette on purpose: the layouts reach
+      these through theme attributes, so re-tuning the values re-skins every screen
+      without touching a single layout. Only the values below moved.
+
+      BACKGROUNDS carry a slight blue cast rather than being neutral grey, which relates
+      them to the brand without anyone reading them as coloured. Pure black is avoided:
+      on OLED it makes edges look cut out and leaves smear trails when scrolling.
+    -->
+    <color name="background">#0B0D12</color>
+    <color name="surface">#14171F</color>
+    <color name="surface_elevated">#1B1F29</color>
+
+    <!--
+      Token blue. #2151F3 is the brand colour and is used as a FILL: buttons, the selected
+      chip, the stripe down a focus card. White on it clears 8:1 contrast.
+
+      It is NOT used for text on a dark background — there it measures about 3:1 and
+      fails AA. `primary_light` below is the same hue opened up for that job, and is what
+      links and secondary actions use.
+    -->
+    <color name="primary">#2151F3</color>
+    <color name="primary_light">#5B87FF</color>
+    <color name="primary_container">#152A5E</color>
+
+    <color name="accent">#22C55E</color>
+    <color name="error">#FF6B6B</color>
+    <color name="on_background">#E8EAF0</color>
+    <color name="on_surface_variant">#8B92A4</color>
+    <color name="outline">#262B36</color>
+
+    <color name="error_container">#4A1D1D</color>
 
     <color name="on_primary">#FFFFFF</color>
     <color name="on_accent">#00120C</color>
+
+    <!--
+      Focus-card gradient (theme B-a). Three stops rather than two: a straight fade from
+      surface to background made the card look like it was dissolving, while holding the
+      mid tone across the top half keeps it reading as a raised panel that settles into
+      the page at its base.
+
+      No elevation and no shadow anywhere in this theme. On a dark ground a shadow is
+      invisible; what it actually produces is a smudge around the corners.
+    -->
+    <color name="card_top">#1A1E28</color>
+    <color name="card_mid">#14171F</color>
+    <color name="card_bottom">#0F1219</color>
+
+    <!--
+      The balance figure's own gradient: lighter at the cap height, deeper at the
+      baseline. Applied as a shader on the text paint (see MoneyText), and only ever to
+      the one large figure on a screen.
+    -->
+    <color name="debt_grad_top">#FF9090</color>
+    <color name="debt_grad_bottom">#D94A4A</color>
+    <color name="credit_grad_top">#4ADE80</color>
+    <color name="credit_grad_bottom">#16A34A</color>
+    <color name="neutral_grad_top">#A8AEBD</color>
+    <color name="neutral_grad_bottom">#6B7280</color>
+
+    <!-- Sparkline: the line in the open brand tone, its fill fading to nothing. -->
+    <color name="spark_line">@color/primary_light</color>
+    <color name="spark_fill_top">#4D2151F3</color>
+    <color name="spark_fill_bottom">#002151F3</color>
+
+    <!-- The stripe on a focus card: full brand at the top, spent by the bottom. -->
+    <color name="stripe_top">#2151F3</color>
+    <color name="stripe_bottom">#402151F3</color>
 
     <!-- Ledger semantics, mapped onto the palette above -->
     <color name="balance_due">@color/error</color>

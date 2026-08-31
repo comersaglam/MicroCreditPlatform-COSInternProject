@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      The type scale. Six roles, and every piece of text in the app plays one of them.
+
+      Until now there was no type scale at all: each layout set its own textSize and
+      textStyle inline, which is why the same kind of label appeared at 14sp on one screen
+      and 15sp on another. Nothing was wrong enough to notice and nothing was consistent.
+
+      WEIGHT AND THE minSdk 24 PROBLEM
+      This theme wants light weights on the large text. `android:fontWeight` would be the
+      direct way to ask for that, but it needs API 28 and this app supports 24. The named
+      families below work from API 16 and are the portable equivalent:
+
+          sans-serif-light    300
+          sans-serif          400
+          sans-serif-medium   500
+
+      WHY ONLY THE BIG TEXT IS LIGHT
+      A 300 weight thins out below about 14sp, badly on low-density screens, and this app
+      is read at a shop counter in daylight. So the light weight is spent where it buys
+      elegance without costing legibility — names and balances — and everything in a
+      list stays at 400.
+    -->
+
+    <!-- The balance. One per screen, and the reason the screen exists. -->
+    <style name="TextAppearance.Fides.Display" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:textSize">36sp</item>
+        <item name="android:fontFamily">sans-serif-light</item>
+        <item name="android:letterSpacing">-0.03</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <!-- A person, a shop, a screen heading. -->
+    <style name="TextAppearance.Fides.Title" parent="TextAppearance.Material3.TitleLarge">
+        <item name="android:textSize">22sp</item>
+        <item name="android:fontFamily">sans-serif-light</item>
+        <item name="android:letterSpacing">-0.01</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <!-- List rows, dialog text, anything read in quantity. Weight 400 on purpose. -->
+    <style name="TextAppearance.Fides.Body" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">?attr/colorOnSurface</item>
+    </style>
+
+    <!-- Timestamps, phone numbers, the quiet half of a row. -->
+    <style name="TextAppearance.Fides.Caption" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <!--
+      Section labels above a figure: GÜNCEL BAKİYE, TOPLAM ALACAK.
+      Uppercase with wide tracking so a small label reads as a label rather than as
+      shrunken body text.
+    -->
+    <style name="TextAppearance.Fides.Label" parent="TextAppearance.Material3.LabelSmall">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.11</item>
+        <item name="android:textColor">?attr/colorOnSurfaceVariant</item>
+    </style>
+
+    <!--
+      Amounts inside a list row.
+
+      Medium rather than bold: at 15sp against a 14sp description, bold made every row
+      shout its number and the eye had nowhere to rest while scrolling. Medium separates
+      the figure from the label without competing with the balance above.
+    -->
+    <style name="TextAppearance.Fides.Money" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">15sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+    </style>
+
+    <!-- Buttons. Their own style so the label weight is not tied to the row amounts. -->
+    <style name="TextAppearance.Fides.Button" parent="TextAppearance.Material3.LabelLarge">
+        <item name="android:textSize">14sp</item>
+        <item name="android:fontFamily">sans-serif-medium</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+</resources>

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!--
+      The spacing scale. Every margin and padding in the app comes from here.
+
+      Before this file, all 17 layouts carried their own hardcoded values — 16dp here,
+      12dp there, 2dp somewhere else — and nothing said which was deliberate. Naming the
+      steps makes an unusual value visible as a decision rather than a typo.
+
+      The scale is 4dp-based and deliberately COARSE: six steps, not twelve. A scale with
+      a value for every occasion is a scale nobody follows, because there is always one
+      close enough. Where a layout genuinely needs something between two steps, that is a
+      sign the layout is fighting the grid.
+    -->
+    <dimen name="space_1">4dp</dimen>
+    <dimen name="space_2">8dp</dimen>
+    <dimen name="space_3">12dp</dimen>
+    <dimen name="space_4">16dp</dimen>
+    <dimen name="space_5">24dp</dimen>
+    <dimen name="space_6">32dp</dimen>
+
+    <!--
+      Screen edge. Its own name rather than an alias for space_4, because it is the one
+      value that would change if the app ever ran on a tablet — and then it must change
+      in one place, not in every layout that happened to use 16dp for a different reason.
+    -->
+    <dimen name="screen_edge">16dp</dimen>
+
+    <!-- Corner radii. Two, because a third would be indistinguishable at these sizes. -->
+    <dimen name="radius_sm">8dp</dimen>
+    <dimen name="radius_md">14dp</dimen>
+
+    <!--
+      Hairline. 1dp rather than 0.5dp: sub-pixel lines vanish entirely on low-density
+      screens, and a separator that is sometimes invisible is worse than a slightly heavy
+      one.
+    -->
+    <dimen name="stroke_hairline">1dp</dimen>
+
+    <!-- The brand stripe down the left edge of a focus card. -->
+    <dimen name="stripe_width">3dp</dimen>
+
+    <!--
+      Vertical rhythm for list rows. Note this is LARGER than the 12dp the layouts used
+      before: the type got smaller in this theme, and shrinking the text without opening
+      up the space around it just produces something cramped and hard to read.
+    -->
+    <dimen name="row_vertical">14dp</dimen>
+
+    <!-- Controls. 48dp is the minimum comfortable touch target. -->
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="chip_height">32dp</dimen>
+
+    <!-- The sparkline under a focus card's balance. Tall enough to read a trend, short
+         enough that it stays an ornament to the number rather than a chart. -->
+    <dimen name="sparkline_height">40dp</dimen>
+
+    <!-- The T-Fides mark. Large on the sign-in screen, small in the dashboard corner. -->
+    <dimen name="logo_login">72dp</dimen>
+    <dimen name="logo_bar">28dp</dimen>
+
+</resources>
