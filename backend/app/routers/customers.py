@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from .. import models, schemas
+from ..breakdown import breakdown_for
 from ..deps import CurrentUser, DbSession
 from ..indexation import ensure_indexed, ensure_indexed_book
 from ..ledger import balance_of, balances_by_customer, book_customer_ids
@@ -117,6 +118,41 @@ def list_customers(current_user: CurrentUser, db: DbSession) -> list[schemas.Cus
         _customer_out(customer, balances.get(customer.customer_id, 0))
         for customer in sorted(customers, key=lambda c: c.display_name)
     ]
+
+
+@router.get("/customers/breakdown")
+def book_breakdown(
+    current_user: CurrentUser,
+    db: DbSession,
+    customer_id: str | None = Query(None),
+) -> schemas.LedgerBreakdown:
+    """
+    What this shop's receivables are MADE OF: principal, inflation, payments.
+
+    The mirror of the buyer's breakdown, and the same three numbers -- but read the other
+    way round. Where the customer sees what inflation ADDED to their debt, the shopkeeper
+    sees what it SAVED them: money lent a year ago and repaid at face value would have come
+    back worth less, and the indexation total is exactly the difference. That is the whole
+    argument for the feature, and this is the endpoint that can state it in lira.
+
+    `customer_id` narrows to one account; without it the answer covers the whole book.
+
+    Declared before `/customers/{customer_id}` so the literal path wins the match --
+    otherwise "breakdown" would be read as a customer id and this endpoint would be
+    unreachable, exactly as noted for `lookup` below.
+    """
+    _require_seller(current_user)
+
+    if customer_id is not None:
+        ensure_indexed(db, current_user.user_id, customer_id)
+    else:
+        ensure_indexed_book(db, current_user.user_id)
+
+    return breakdown_for(
+        db,
+        seller_id=current_user.user_id,
+        customer_ids=[customer_id] if customer_id else None,
+    )
 
 
 @router.get("/customers/lookup")

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select
 
 from .. import models, schemas
+from ..breakdown import breakdown_for
 from ..deps import CurrentUser, DbSession
 from ..indexation import ensure_indexed, ensure_indexed_for_buyer
 from ..ledger import debts_by_seller
@@ -104,6 +105,36 @@ def my_debts(current_user: CurrentUser, db: DbSession) -> list[schemas.SellerDeb
         )
 
     return sorted(debts, key=lambda d: d.shop_name)
+
+
+@router.get("/me/debts/breakdown")
+def my_debt_breakdown(
+    current_user: CurrentUser,
+    db: DbSession,
+    seller_id: str | None = Query(None),
+) -> schemas.LedgerBreakdown:
+    """
+    What this buyer's debt is MADE OF: principal, inflation, payments.
+
+    The screens show one number, and the question this answers is the one that number
+    provokes -- why is what I owe more than what I bought. Naming the inflation component
+    is the honest answer, and it is also the only way an indexed ledger can be defended to
+    the person paying it.
+
+    `seller_id` is optional and narrows to one shop; without it the answer covers every
+    shop this buyer deals with. Both are real screens: the debts list shows a grand total,
+    and each shop's detail shows its own.
+
+    Declared before `/me/transactions` has no bearing here -- the paths do not overlap --
+    but it is grouped with the debts endpoint it decomposes.
+    """
+    my_ids = _my_customer_ids(db, current_user.user_id)
+
+    # Same catch-up the plain balance reads do. A breakdown that omitted this month's
+    # indexation would disagree with the total displayed directly above it.
+    ensure_indexed_for_buyer(db, my_ids)
+
+    return breakdown_for(db, seller_id=seller_id, customer_ids=my_ids)
 
 
 @router.get("/me/transactions")

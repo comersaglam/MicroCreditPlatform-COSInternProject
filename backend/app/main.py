@@ -8,9 +8,18 @@ from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import SessionLocal
-from .routers import approvals, auth, buyer, customers, ledger, pgw_jobs, users
+from .routers import (
+    approvals,
+    auth,
+    buyer,
+    customers,
+    fx_rates,
+    ledger,
+    pgw_jobs,
+    users,
+)
 from .seed import is_empty, seed
-
+1
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,6 +77,7 @@ app.include_router(ledger.router)
 app.include_router(buyer.router)
 app.include_router(approvals.router)
 app.include_router(pgw_jobs.router)
+app.include_router(fx_rates.router)
 
 
 @app.get("/health", tags=["meta"])

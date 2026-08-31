@@ -7,7 +7,7 @@ values are plain `str` on purpose, matching the client's EnumMapping: a value ne
 recognises must be droppable, not a parse error that fails a whole response.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
@@ -200,6 +200,53 @@ class SellerDebt(BaseModel):
     # read another account, so without this the card can name the shop but not call it.
     shop_phone: str | None = None
     balance_minor: int
+
+
+class FxSnapshot(BaseModel):
+    """What one unit of each currency cost on a given day, in kuruş."""
+
+    as_of: date
+    usd_minor: int
+    eur_minor: int
+    gold_minor: int
+
+
+class LedgerBreakdown(BaseModel):
+    """
+    What a balance is MADE OF, rather than what it comes to.
+
+    The screens above this show one number, and one number cannot answer the question both
+    sides of the counter actually ask. The customer wants to know why the figure is larger
+    than what they bought; the shopkeeper wants to know whether extending credit cost them
+    anything. Those are the same three components read in opposite directions, so one shape
+    serves both endpoints.
+
+    The parts are exact: principal + indexation - paid == outstanding, always, because all
+    four come from the same rows the balance itself sums. A breakdown that did not add up
+    would be worse than none.
+
+    The two fx fields and the projection are the "what was this worth" half. They are
+    nullable because the rate series can simply not cover a date, and a missing rate must
+    read as unknown rather than as zero.
+    """
+
+    # SUM of DEBT rows -- what was actually bought.
+    principal_minor: int
+    # SUM of INDEXATION rows -- what inflation added while the debt was outstanding.
+    indexation_minor: int
+    # SUM of PAYMENT rows.
+    total_paid_minor: int
+    # The balance. Equal to principal + indexation - paid.
+    outstanding_minor: int
+
+    # The rate on the day the FIRST entry was written, and today's. Together they say what
+    # has happened to the money since -- the shopkeeper's side of the same story.
+    fx_at_open: FxSnapshot | None = None
+    fx_today: FxSnapshot | None = None
+
+    # What the outstanding amount becomes in three months if prices keep moving as they
+    # have. A forecast, never written to the ledger, and labelled as one on screen.
+    projected_3m_minor: int | None = None
 
 
 # --- approval ---
