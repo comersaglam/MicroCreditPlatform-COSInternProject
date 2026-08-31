@@ -195,7 +195,9 @@ interface TransactionDao {
 
     /** One buyer↔seller balance. */
     @Query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor ELSE -amountMinor END), 0) " +
+        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor " +
+            "WHEN type = 'INDEXATION' THEN amountMinor " +
+            "WHEN type = 'PAYMENT' THEN -amountMinor ELSE 0 END), 0) " +
             "FROM transactions WHERE sellerId = :sellerId AND customerId IN " +
             "(SELECT customerId FROM customers WHERE claimedByUserId = :userId)"
     )
@@ -203,7 +205,9 @@ interface TransactionDao {
 
     /** What this buyer owes across every shop. */
     @Query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor ELSE -amountMinor END), 0) " +
+        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor " +
+            "WHEN type = 'INDEXATION' THEN amountMinor " +
+            "WHEN type = 'PAYMENT' THEN -amountMinor ELSE 0 END), 0) " +
             "FROM transactions WHERE customerId IN " +
             "(SELECT customerId FROM customers WHERE claimedByUserId = :userId)"
     )
@@ -216,7 +220,9 @@ interface TransactionDao {
      */
     @Query(
         "SELECT t.sellerId AS sellerId, u.shopName AS shopName, " +
-            "SUM(CASE WHEN t.type = 'DEBT' THEN t.amountMinor ELSE -t.amountMinor END) AS balanceMinor " +
+            "SUM(CASE WHEN t.type = 'DEBT' THEN t.amountMinor " +
+            "WHEN t.type = 'INDEXATION' THEN t.amountMinor " +
+            "WHEN t.type = 'PAYMENT' THEN -t.amountMinor ELSE 0 END) AS balanceMinor " +
             "FROM transactions t LEFT JOIN users u ON u.userId = t.sellerId " +
             "WHERE t.customerId IN (SELECT customerId FROM customers WHERE claimedByUserId = :userId) " +
             "GROUP BY t.sellerId"
@@ -241,16 +247,33 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions")
     suspend fun allOnce(): List<TransactionEntity>
 
-    /** The (seller, customer) balance: DEBT adds, PAYMENT subtracts. Never stored. */
+    /**
+     * The (seller, customer) balance: DEBT and INDEXATION add, PAYMENT subtracts. Never
+     * stored.
+     *
+     * The three cases are spelled out rather than left to an ELSE, and that is the whole
+     * point: this CASE used to read `ELSE -amountMinor`, which counted anything that was
+     * not a DEBT as money coming in. The day INDEXATION rows started arriving from the
+     * server, that ELSE would have SUBTRACTED each month's inflation instead of adding it
+     * -- and silently, since a query lives in a string no compiler checks.
+     *
+     * Must stay identical to backend/app/ledger.py::_SIGNED_AMOUNT. The shopkeeper reads
+     * this number off the terminal and compares it with the server's; any drift between
+     * the two reads as money going missing.
+     */
     @Query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor ELSE -amountMinor END), 0) " +
+        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor " +
+            "WHEN type = 'INDEXATION' THEN amountMinor " +
+            "WHEN type = 'PAYMENT' THEN -amountMinor ELSE 0 END), 0) " +
             "FROM transactions WHERE sellerId = :sellerId AND customerId = :customerId"
     )
     fun observeBalance(sellerId: String, customerId: String): Flow<Long>
 
     /** Total the seller is owed across their own customers. */
     @Query(
-        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor ELSE -amountMinor END), 0) " +
+        "SELECT COALESCE(SUM(CASE WHEN type = 'DEBT' THEN amountMinor " +
+            "WHEN type = 'INDEXATION' THEN amountMinor " +
+            "WHEN type = 'PAYMENT' THEN -amountMinor ELSE 0 END), 0) " +
             "FROM transactions WHERE sellerId = :sellerId"
     )
     fun observeTotalReceivable(sellerId: String): Flow<Long>

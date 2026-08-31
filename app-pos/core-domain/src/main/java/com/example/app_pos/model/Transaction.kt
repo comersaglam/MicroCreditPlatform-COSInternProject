@@ -3,13 +3,24 @@ package com.example.app_pos.model
 /**
  * Type of a ledger entry.
  *
- * DEBT:    credit extended by the merchant -> INCREASES the balance
- * PAYMENT: money received from the customer -> DECREASES the balance
+ * DEBT:       credit extended by the merchant -> INCREASES the balance
+ * PAYMENT:    money received from the customer -> DECREASES the balance
+ * INDEXATION: the month's inflation on an outstanding balance -> INCREASES it
+ *
+ * INDEXATION is written ONLY by the server, never by a device. A shopkeeper lends money
+ * that loses value while it is out, and this is how the debt keeps pace; carrying it as a
+ * ledger row rather than as a factor in the balance formula is what lets the balance stay
+ * a plain sum that both sides derive identically.
+ *
+ * It only ever runs one way. Nothing is indexed while a customer is square or in credit
+ * -- a shop is not a bank and does not pay inflation on what it owes -- and a month whose
+ * adjustment rounds to zero or less writes no row at all.
  *
  * An enum instead of a String: invalid values ("debt", "Debt", "borc") become
- * impossible at compile time.
+ * impossible at compile time. Adding a case here is deliberate leverage -- every
+ * exhaustive `when` in both apps stops compiling until it has been considered.
  */
-enum class TransactionType { DEBT, PAYMENT }
+enum class TransactionType { DEBT, PAYMENT, INDEXATION }
 
 /**
  * A single entry in the append-only ledger.

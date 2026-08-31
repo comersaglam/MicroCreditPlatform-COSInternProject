@@ -72,16 +72,23 @@ class CustomerDetailViewModel @Inject constructor(
         combine(allTransactions, filter) { txs, f ->
             when (f) {
                 TransactionFilter.ALL -> txs
-                TransactionFilter.DEBT -> txs.filter { it.type == TransactionType.DEBT }
+                // Indexation counts as debt here too -- see SellerDetailViewModel. The
+                // seller looking at what a customer owes must see the same rows the
+                // customer does.
+                TransactionFilter.DEBT -> txs.filter {
+                    it.type == TransactionType.DEBT || it.type == TransactionType.INDEXATION
+                }
                 TransactionFilter.PAYMENT -> txs.filter { it.type == TransactionType.PAYMENT }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // Must agree with core-domain/Ledger.kt::balanceOf and with the server's sum.
     val balanceMinor: StateFlow<Long> =
         allTransactions.map { txs ->
             txs.sumOf { tx ->
                 when (tx.type) {
                     TransactionType.DEBT -> tx.amountMinor
+                    TransactionType.INDEXATION -> tx.amountMinor
                     TransactionType.PAYMENT -> -tx.amountMinor
                 }
             }

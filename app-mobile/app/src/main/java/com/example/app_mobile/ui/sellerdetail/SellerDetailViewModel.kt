@@ -69,16 +69,25 @@ class SellerDetailViewModel @Inject constructor(
         combine(allTransactions, filter) { txs, f ->
             when (f) {
                 TransactionFilter.ALL -> txs
-                TransactionFilter.DEBT -> txs.filter { it.type == TransactionType.DEBT }
+                // Indexation belongs under DEBT: someone filtering for what they owe means
+                // the whole debt, and the inflation on it is part of that. Given a filter
+                // of its own it would vanish from both lists and the two would stop adding
+                // up to the balance shown above them.
+                TransactionFilter.DEBT -> txs.filter {
+                    it.type == TransactionType.DEBT || it.type == TransactionType.INDEXATION
+                }
                 TransactionFilter.PAYMENT -> txs.filter { it.type == TransactionType.PAYMENT }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // Must agree with core-domain/Ledger.kt::balanceOf and with the server's sum. Three
+    // implementations of one rule; the exhaustive `when` is what keeps this one honest.
     val balanceMinor: StateFlow<Long> =
         allTransactions.map { txs ->
             txs.sumOf { tx ->
                 when (tx.type) {
                     TransactionType.DEBT -> tx.amountMinor
+                    TransactionType.INDEXATION -> tx.amountMinor
                     TransactionType.PAYMENT -> -tx.amountMinor
                 }
             }

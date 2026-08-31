@@ -107,6 +107,10 @@ class CustomerDetailFragment : Fragment() {
                 when (type) {
                     TransactionType.DEBT -> writeDebt(amountMinor)
                     TransactionType.PAYMENT -> collectAtTerminal(amountMinor)
+                    // Only the two buttons above reach this dialog. Indexation is written
+                    // by the server against a balance that has aged; there is no amount
+                    // for a person to type and no button that could ask for one.
+                    TransactionType.INDEXATION -> Unit
                 }
             }
             .setNegativeButton(R.string.pay_dialog_negative, null)

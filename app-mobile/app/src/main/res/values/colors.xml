@@ -28,6 +28,17 @@
     <color name="payment_received">@color/accent</color>
 
     <!--
+      Indexation: the month's inflation added to an outstanding balance. It moves the
+      balance the same way a debt does, so it stays on the red side of the palette rather
+      than earning a colour of its own.
+
+      Muted, because no goods changed hands and no money moved. That is the same intensity
+      rule the direction accents below already use: a booked entry is faint, cash is
+      vivid — here applied to the amount's own text.
+    -->
+    <color name="balance_indexation">#C77A7A</color>
+
+    <!--
       Direction accents: a soft fill + hairline stroke that say which way value moves
       for the signed-in user. Red = it leaves me, green = it comes to me — the same
       convention the balances above already use.

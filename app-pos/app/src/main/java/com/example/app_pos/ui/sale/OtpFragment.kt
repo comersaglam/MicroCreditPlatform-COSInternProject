@@ -202,6 +202,8 @@ class OtpFragment : Fragment() {
         val msg = when (type) {
             TransactionType.DEBT -> getString(R.string.msg_credit_written, name, amount.toTlString())
             TransactionType.PAYMENT -> getString(R.string.msg_payment_written, name, amount.toTlString())
+            // Unreachable: this flow only ever writes the two entries a cashier can start.
+            TransactionType.INDEXATION -> return
         }
         Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
         finishHandoff(success = true, type = type)

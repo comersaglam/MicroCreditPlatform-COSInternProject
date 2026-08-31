@@ -43,6 +43,7 @@ class ConfirmViewModel(
                     txs.sumOf { tx ->
                         when (tx.type) {
                             TransactionType.DEBT -> tx.amountMinor
+                            TransactionType.INDEXATION -> tx.amountMinor
                             TransactionType.PAYMENT -> -tx.amountMinor
                         }
                     }

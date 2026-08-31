@@ -29,4 +29,15 @@
     <color name="balance_clear">@color/on_surface_variant</color>
     <color name="payment_received">@color/accent</color>
 
+    <!--
+      Indexation: the month's inflation added to an outstanding balance. It moves the
+      balance the same way a debt does, so it stays on the red side of the palette rather
+      than earning a colour of its own.
+
+      Muted, because no goods changed hands and no money moved. Kept identical to
+      app-mobile's, so the same row reads the same on the counter and in the customer's
+      hand.
+    -->
+    <color name="balance_indexation">#C77A7A</color>
+
 </resources>

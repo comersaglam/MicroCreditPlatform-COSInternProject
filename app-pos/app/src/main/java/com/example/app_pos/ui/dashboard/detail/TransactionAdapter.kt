@@ -27,11 +27,23 @@ class TransactionAdapter :
 
             // The stored amount is always positive; the sign shown comes from
             // the entry type, mirroring how the balance is summed.
-            val isDebt = transaction.type == TransactionType.DEBT
-            val prefix = if (isDebt) "+" else "-"
+            //
+            // A `when` over all three types rather than the boolean this used to be. The
+            // boolean read "DEBT or not", which quietly made an INDEXATION row look like a
+            // payment -- minus sign, green -- while the balance above it went up. Nothing
+            // would have failed to compile.
+            val prefix = when (transaction.type) {
+                TransactionType.PAYMENT -> "-"
+                else -> "+"
+            }
             txAmount.text = prefix + transaction.amountMinor.toTlString()
 
-            val colorRes = if (isDebt) R.color.balance_due else R.color.payment_received
+            val colorRes = when (transaction.type) {
+                TransactionType.DEBT -> R.color.balance_due
+                // Same direction as a debt, muted: nothing was bought and no money moved.
+                TransactionType.INDEXATION -> R.color.balance_indexation
+                TransactionType.PAYMENT -> R.color.payment_received
+            }
             txAmount.setTextColor(root.context.getColor(colorRes))
         }
     }

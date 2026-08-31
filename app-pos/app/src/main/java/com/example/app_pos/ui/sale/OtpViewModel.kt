@@ -170,6 +170,11 @@ class OtpViewModel @Inject constructor(
                 // asked to take the payment.
                 TransactionType.PAYMENT ->
                     collectPayment(sellerId, customerId, amountMinor, orderBody, onWritten)
+
+                // Not reachable: the type comes from the two buttons on the keypad. The
+                // server writes indexation against a balance that has aged, on no one's
+                // instruction and with no amount for a cashier to enter.
+                TransactionType.INDEXATION -> _status.value = OtpStatus.ERROR
             }
         }
     }
@@ -317,6 +322,9 @@ class OtpViewModel @Inject constructor(
         when (type) {
             TransactionType.DEBT -> "Veresiye"
             TransactionType.PAYMENT -> "Ödeme"
+            // Unreachable from this flow; the server writes its own description, naming
+            // the month and the rate it applied.
+            TransactionType.INDEXATION -> "Enflasyon farkı"
         }
 
     private companion object {
