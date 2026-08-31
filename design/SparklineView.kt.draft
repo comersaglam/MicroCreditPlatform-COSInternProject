@@ -1,0 +1,145 @@
+package com.example.app_mobile.view
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Shader
+import android.util.AttributeSet
+import android.view.View
+import androidx.core.content.ContextCompat
+import com.example.app_mobile.R
+
+/**
+ * TASLAK — Tur 44 için. design/tema-draft.html'deki SVG'nin Kotlin karşılığı.
+ *
+ * Bir bakiye serisinin şekli, eksen ve etiket olmadan. Rakamların yanında durur ve
+ * tek bir soruyu cevaplar: bu artıyor mu, azalıyor mu?
+ *
+ * Kütüphane YOK. MPAndroidChart bu iş için 800 KB ve bir sürü özellik getirirdi;
+ * burada gereken tek şey iki Path.
+ */
+class SparklineView @JvmOverloads constructor(
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyle: Int = 0,
+) : View(context, attrs, defStyle) {
+
+    /** Çizilecek değerler, eskiden yeniye. Boş veya tek elemanlıysa hiçbir şey çizilmez. */
+    var values: List<Long> = emptyList()
+        set(value) {
+            field = value
+            invalidate()   // yeniden çizim iste — onDraw bir sonraki karede koşar
+        }
+
+    // Paint nesneleri BİR KEZ kurulur. onDraw saniyede 60 kez çağrılabilir; orada
+    // nesne yaratmak çöp toplayıcıyı tetikler ve kaydırma takılır.
+    private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3f          // ~1.5dp; dp dönüşümü init'te yapılıyor
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        color = ContextCompat.getColor(context, R.color.brand_light)
+    }
+
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+
+    private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = ContextCompat.getColor(context, R.color.brand_light)
+    }
+
+    private val linePath = Path()
+    private val fillPath = Path()
+
+    init {
+        val density = resources.displayMetrics.density
+        linePaint.strokeWidth = 1.5f * density
+    }
+
+    /**
+     * Gradyan, görünümün YÜKSEKLİĞİNE bağlı, o yüzden boyut bilindiğinde kurulur.
+     * init'te kurulsaydı yükseklik henüz 0 olurdu ve dolgu görünmezdi.
+     */
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        fillPaint.shader = LinearGradient(
+            0f, 0f, 0f, h.toFloat(),
+            ContextCompat.getColor(context, R.color.spark_fill_top),
+            ContextCompat.getColor(context, R.color.spark_fill_bottom),
+            Shader.TileMode.CLAMP,
+        )
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        if (values.size < 2) return   // tek nokta bir çizgi değildir
+
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val pad = linePaint.strokeWidth   // çizgi kalınlığı kenarda kırpılmasın
+
+        val min = values.min()
+        val max = values.max()
+        // Düz bir seride (min == max) bölme sıfıra düşer; o durumda ortadan geç.
+        val span = (max - min).takeIf { it != 0L }
+
+        val stepX = w / (values.size - 1)
+
+        linePath.reset()
+        fillPath.reset()
+
+        values.forEachIndexed { i, value ->
+            val x = i * stepX
+            val y = if (span == null) {
+                h / 2f
+            } else {
+                // Ekran koordinatında Y AŞAĞI doğru büyür; büyük değer yukarıda
+                // görünsün diye 1'den çıkarılıyor.
+                pad + (1f - (value - min).toFloat() / span) * (h - 2 * pad)
+            }
+
+            if (i == 0) {
+                linePath.moveTo(x, y)
+                fillPath.moveTo(x, h)
+                fillPath.lineTo(x, y)
+            } else {
+                linePath.lineTo(x, y)
+                fillPath.lineTo(x, y)
+            }
+
+            // Son nokta işaretlenir: "şu an buradasın".
+            if (i == values.lastIndex) {
+                canvas.drawCircle(x, y, 2.5f * resources.displayMetrics.density, dotPaint)
+            }
+        }
+
+        // Dolgu, tabana kapatılarak kapalı bir şekle dönüşür.
+        fillPath.lineTo(w, h)
+        fillPath.close()
+
+        canvas.drawPath(fillPath, fillPaint)
+        canvas.drawPath(linePath, linePaint)
+    }
+}
+
+/*
+ * LAYOUT'TA KULLANIMI — başka hiçbir şey gerekmiyor:
+ *
+ *   <com.example.app_mobile.view.SparklineView
+ *       android:id="@+id/balanceSpark"
+ *       android:layout_width="match_parent"
+ *       android:layout_height="44dp" />
+ *
+ * FRAGMENT'TA:
+ *
+ *   binding.balanceSpark.values = monthlyBalances
+ *
+ * VERİ NEREDEN GELİYOR:
+ * Yeni bir uç gerekmez. GET /transactions zaten tüm satırları döndürüyor; aylık
+ * bakiye serisi onlardan türetilir — tıpkı bakiyenin kendisi gibi. Room'da tek
+ * GROUP BY sorgusu da olur, ama önce bellekte hesaplamak yeterli: bir müşterinin
+ * geçmişi zaten ekranda duruyor.
+ */

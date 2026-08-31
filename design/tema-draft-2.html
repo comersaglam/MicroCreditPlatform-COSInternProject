@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tur 44 — Tema draftı 2</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   TUR 44 — TEMA DRAFTI, 2. TUR
+
+   B beğenildi. A ve C yeniden yazıldı:
+     A → daha minimalist/ferah  (B'nin sade ucu)
+     C → daha futuristik        (B'nin teknolojik ucu)
+   B ortada, referans olarak duruyor.
+
+   KISIT: her efektin XML karşılığı olmak zorunda. Kullanılmayanlar:
+   backdrop-filter, çok katmanlı box-shadow, ::before süsleri, blend modları.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand:        #2151F3;
+  --brand-light:  #5B87FF;
+
+  --bg:           #0B0D12;
+  --surface:      #14171F;
+  --surface-2:    #1B1F29;
+  --line:         #262B36;
+
+  --text:         #E8EAF0;
+  --text-dim:     #8B92A4;
+
+  --debt:         #FF6B6B;
+  --paid:         #22C55E;
+  --index:        #C77A7A;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --r-sm: 8px; --r-md: 14px; --r-lg: 20px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #06070A; color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: var(--sp-5);
+  display: flex; flex-wrap: wrap; gap: var(--sp-6);
+  justify-content: center; align-items: flex-start;
+}
+
+.phone {
+  width: 360px; min-height: 730px; background: var(--bg);
+  border-radius: 28px; border: 1px solid #1E222C;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.label { width: 360px; margin-bottom: var(--sp-3); font-size: 13px; color: var(--text-dim); line-height: 1.55; }
+.label b { color: var(--brand-light); font-size: 15px; display: block; margin-bottom: 2px; }
+.label i { color: #6B7280; font-style: normal; }
+.col { display: flex; flex-direction: column; align-items: center; }
+
+.bar { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-4) var(--sp-4) var(--sp-2); }
+.bar .back { color: var(--text-dim); font-size: 20px; line-height: 1; }
+.bar .who { font-size: 13px; color: var(--text-dim); }
+
+.row { display: flex; align-items: center; justify-content: space-between; }
+.row .desc { font-size: 15px; }
+.row .date { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.row .amt  { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.amt.debt { color: var(--debt); } .amt.paid { color: var(--paid); } .amt.index { color: var(--index); }
+
+.chips { display: flex; gap: var(--sp-2); padding: 0 var(--sp-4) var(--sp-4); }
+.chip { font-size: 13px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--text-dim); }
+.chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+.btns { display: flex; gap: var(--sp-3); padding: var(--sp-4); }
+.btn { flex: 1; height: 52px; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 600; }
+.btn.ghost { background: var(--surface-2); color: var(--text); }
+.btn.solid { background: var(--brand); color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   A — "Kağıt"  (minimalist / ferah)
+
+   Tek bir kutu yok. Ne kart, ne çerçeve, ne ayraç çizgisi. Hiyerarşinin
+   tamamı boşluk ve tipografiden geliyor — satırlar arası 28dp, bölümler
+   arası 48dp. Boşluk pahalı bir malzemedir ve burada bilerek harcanıyor.
+
+   Renk neredeyse yok: tek renkli vurgu bakiye, tek marka rengi buton.
+   Endeks satırı bile rozet taşımıyor — girintili yazılmış olması yetiyor,
+   çünkü açıklaması zaten "enflasyon farkı" diyor.
+   ═══════════════════════════════════════════════════════════════════════ */
+.a .head { padding: var(--sp-5) var(--sp-5) var(--sp-7); }
+.a .name { font-size: 28px; font-weight: 300; letter-spacing: -.6px; }
+.a .phone-no { font-size: 13px; color: var(--text-dim); margin-top: var(--sp-2); }
+
+.a .bal-wrap { margin-top: var(--sp-7); }
+.a .bal-label { font-size: 12px; color: var(--text-dim); }
+.a .bal {
+  font-size: 44px; font-weight: 200; letter-spacing: -2px;
+  margin-top: var(--sp-2); font-variant-numeric: tabular-nums; line-height: 1;
+}
+.a .bal small { font-size: 20px; font-weight: 300; letter-spacing: 0; margin-left: 2px; }
+.a .note { font-size: 13px; color: var(--text-dim); margin-top: var(--sp-4); line-height: 1.6; }
+.a .note b { color: var(--index); font-weight: 500; }
+.a .note a { color: var(--brand-light); text-decoration: none; }
+
+/* Çipler de çerçevesiz — sadece seçili olan dolu. */
+.a .chips { padding: 0 var(--sp-5) var(--sp-5); gap: var(--sp-5); }
+.a .chip { border: none; padding: 0; font-size: 13px; }
+.a .chip.on { background: none; color: var(--text); font-weight: 600; }
+
+/* Ayraç yok. Ayrımı 28dp boşluk yapıyor. */
+.a .list { flex: 1; padding: 0 var(--sp-5); display: flex; flex-direction: column; gap: 28px; }
+.a .btns { padding: var(--sp-5); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B — "Kart"  (beğenilen, referans)
+   ═══════════════════════════════════════════════════════════════════════ */
+.b .head { padding: var(--sp-2) var(--sp-4) var(--sp-4); }
+.b .name { font-size: 22px; font-weight: 600; letter-spacing: -.3px; }
+.b .phone-no { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+.b .card {
+  margin: var(--sp-4); padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  background: linear-gradient(180deg, var(--surface) 0%, #11141B 100%);
+  border: 1px solid var(--line); border-left: 3px solid var(--brand);
+  border-radius: var(--r-md);
+}
+.b .bal-label { font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-dim); }
+.b .bal { font-size: 34px; font-weight: 400; letter-spacing: -1px; margin-top: var(--sp-2); font-variant-numeric: tabular-nums; }
+.b .sub { font-size: 12px; color: var(--text-dim); margin-top: var(--sp-2); }
+.b .sub .up { color: var(--index); }
+.b .list { flex: 1; }
+.b .list .row { padding: var(--sp-3) var(--sp-4); }
+.b .list .row + .row { border-top: 1px solid var(--line); }
+.b .tag {
+  display: inline-block; margin-top: var(--sp-1); font-size: 10px; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--index);
+  border: 1px solid rgba(199,122,122,.35); border-radius: 4px; padding: 1px 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   C — "Terminal"  (futuristik)
+
+   Fintech'in teknolojik ucu: veri bir ÖLÇÜM gibi sunuluyor.
+     · Bakiyenin üstünde ince bir ölçek çizgisi ve "canlı" noktası
+     · Etiketler tek-aralıklı (monospace), büyük harf, geniş harf aralığı
+     · Kartın köşesinde ince marka çizgisi — devre kartı hissi
+     · Satırlarda sol tarafta tip göstergesi: ▲ borç, ▼ ödeme, ◆ endeks
+
+   Parlama YOK, neon YOK. Futuristik hissi çizgi kalitesinden ve
+   tipografiden geliyor; ışıktan değil. Işıkla yapılsaydı hem ferahlık
+   kaybolurdu hem de XML'de sahte gölge katmanları gerekirdi.
+   ═══════════════════════════════════════════════════════════════════════ */
+.c .head { padding: var(--sp-2) var(--sp-4) var(--sp-3); }
+.c .name { font-size: 20px; font-weight: 600; letter-spacing: -.2px; }
+.c .phone-no {
+  font-size: 12px; color: var(--text-dim); margin-top: 2px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .5px;
+}
+
+/* Ölçüm paneli. XML: MaterialCardView + üstte 1px'lik iki View (ölçek + vurgu). */
+.c .panel {
+  margin: var(--sp-3) var(--sp-4) var(--sp-4);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  position: relative; overflow: hidden;
+}
+/* Üst kenarda marka çizgisi — solda parlak, sağa doğru sönümleniyor.
+   XML: 2dp yükseklikte bir View + <gradient> drawable. */
+.c .panel .edge {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--brand) 0%, rgba(33,81,243,.15) 55%, transparent 100%);
+}
+.c .meta {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px; letter-spacing: 1.4px; color: var(--text-dim);
+}
+/* "canlı" noktası. XML: 6dp View + oval <shape>. Yanıp sönme ValueAnimator
+   ile mümkün ama gereksiz — sabit nokta da aynı şeyi söylüyor. */
+.c .live { display: flex; align-items: center; gap: 5px; }
+.c .live .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--paid); }
+
+.c .bal {
+  font-size: 36px; font-weight: 500; letter-spacing: -1.2px;
+  margin-top: var(--sp-3); font-variant-numeric: tabular-nums; line-height: 1;
+}
+.c .bal small { font-size: 18px; font-weight: 400; letter-spacing: 0; color: var(--text-dim); margin-left: 3px; }
+
+/* Kırılım: üç bileşen tek satırda, aralarında ince dikey ayraç.
+   XML: LinearLayout + 1dp genişlikte View'lar. */
+.c .split { display: flex; margin-top: var(--sp-4); border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+.c .split div { flex: 1; }
+.c .split div + div { border-left: 1px solid var(--line); padding-left: var(--sp-3); }
+.c .split .k {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px; letter-spacing: 1px; color: var(--text-dim);
+}
+.c .split .v { font-size: 14px; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+.c .list { flex: 1; }
+.c .list .row { padding: var(--sp-3) var(--sp-4); }
+.c .list .row + .row { border-top: 1px solid var(--line); }
+/* Tip göstergesi. XML: TextView, adapter'daki `when` içeriği ve rengi verir. */
+.c .mark {
+  width: 16px; font-size: 9px; text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.c .left { display: flex; align-items: center; gap: var(--sp-3); }
+</style>
+</head>
+<body>
+
+<!-- ══════════ A ══════════ -->
+<div class="col">
+  <div class="label"><b>A — Kağıt</b>Hiç kutu yok: ne kart, ne çerçeve, ne ayraç. Hiyerarşinin tamamı boşluk ve tipografiden. Satır arası 28dp, bölüm arası 48dp. Bakiye 44sp ve çok ince (200 ağırlık).<br><i>Endeks satırı rozet taşımıyor — açıklaması zaten söylüyor.</i></div>
+  <div class="phone a">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+
+    <div class="head">
+      <div class="name">Fatma Şahin</div>
+      <div class="phone-no">+90 555 666 77 88</div>
+
+      <div class="bal-wrap">
+        <div class="bal-label">Güncel bakiye</div>
+        <div class="bal" style="color:var(--debt)">2.616,00<small>₺</small></div>
+        <div class="note">Bunun <b>66,00 ₺</b>'si enflasyon farkı.<br><a href="#">Kırılımı gör →</a></div>
+      </div>
+    </div>
+
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ══════════ B ══════════ -->
+<div class="col">
+  <div class="label"><b>B — Kart</b> <i>(beğenilen, referans)</i><br>Bakiye kendi yüzeyinde, sol kenarda marka şeridi, altında sparkline.</div>
+  <div class="phone b">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+
+    <div class="head">
+      <div class="name">Fatma Şahin</div>
+      <div class="phone-no">+90 555 666 77 88</div>
+    </div>
+
+    <div class="card">
+      <div class="bal-label">Güncel bakiye</div>
+      <div class="bal" style="color:var(--debt)">2.616,00 ₺</div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span style="color:var(--brand-light)">detay →</span></div>
+      <svg width="100%" height="44" viewBox="0 0 300 44" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="gb" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2151F3" stop-opacity=".28"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="M0,36 L27,33 L55,34 L82,28 L109,25 L136,27 L164,20 L191,22 L218,15 L245,17 L273,9 L300,6 L300,44 L0,44 Z" fill="url(#gb)"/>
+        <path d="M0,36 L27,33 L55,34 L82,28 L109,25 L136,27 L164,20 L191,22 L218,15 L245,17 L273,9 L300,6" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="6" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem 2026 · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos 2026 enflasyon farkı</div><div class="date">1 Ağu 2026</div><span class="tag">%2,51 · endeks</span></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem 2026 · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem 2026 · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ══════════ C ══════════ -->
+<div class="col">
+  <div class="label"><b>C — Terminal</b>Veri bir ölçüm gibi: monospace etiketler, üst kenarda sönümlenen marka çizgisi, kırılım üç sütunda. Satırlarda tip göstergesi (▲ ▼ ◆).<br><i>Parlama yok — futuristik hissi çizgi ve tipografiden geliyor, ışıktan değil.</i></div>
+  <div class="phone c">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+
+    <div class="head">
+      <div class="name">Fatma Şahin</div>
+      <div class="phone-no">+90 555 666 77 88</div>
+    </div>
+
+    <div class="panel">
+      <div class="edge"></div>
+      <div class="meta">
+        <span>GÜNCEL BAKİYE</span>
+        <span class="live"><span class="dot"></span>EŞZAMANLI</span>
+      </div>
+      <div class="bal" style="color:var(--debt)">2.616,00<small>₺</small></div>
+
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:14px;display:block">
+        <defs><linearGradient id="gc" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2151F3" stop-opacity=".22"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/>
+        </linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#gc)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+
+      <div class="split">
+        <div><div class="k">ANAPARA</div><div class="v">2.550,00</div></div>
+        <div><div class="k">ENFLASYON</div><div class="v" style="color:var(--index)">+66,00</div></div>
+        <div><div class="k">ÖDENEN</div><div class="v" style="color:var(--paid)">0,00</div></div>
+      </div>
+    </div>
+
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+
+    <div class="list">
+      <div class="row">
+        <div class="left"><span class="mark" style="color:var(--debt)">▲</span><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div></div>
+        <div class="amt debt">+255,00</div>
+      </div>
+      <div class="row">
+        <div class="left"><span class="mark" style="color:var(--index)">◆</span><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · %2,51</div></div></div>
+        <div class="amt index">+6,40</div>
+      </div>
+      <div class="row">
+        <div class="left"><span class="mark" style="color:var(--debt)">▲</span><div><div class="desc">Market alışverişi</div><div class="date">18 Tem · 11:20</div></div></div>
+        <div class="amt debt">+1.200,00</div>
+      </div>
+      <div class="row">
+        <div class="left"><span class="mark" style="color:var(--paid)">▼</span><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div></div>
+        <div class="amt paid">−800,00</div>
+      </div>
+    </div>
+
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+</body>
+</html>
