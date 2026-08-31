@@ -164,6 +164,7 @@ Mevcut `PendingApproval` mock'unun (app-mobile) alanları + ileri üç-hat alanl
 | `description` | TEXT | YES | |
 | `channel` | TEXT | NO | APP_PUSH \| SMS_OTP |
 | `origin` | TEXT | NO | POS \| PHONE (Tur 41, migration 0004) — onaylanınca PGW işi yaratılıp yaratılmayacağına bu karar verir |
+| `basket_id` | TEXT | YES | FK→baskets (Tur 42, migration 0005) — isteğin açıldığı sepet; para-only'de null |
 | `status` | TEXT | NO | PENDING \| APPROVED \| REJECTED |
 | `requested_at` | TIMESTAMP | NO | mock: `requestedAt`. Ne zaman SORULDU — hiç değişmez |
 | `updated_at` | TIMESTAMP | NO | Ne zaman DEĞİŞTİ (migration 0003). `requested_at` karara bağlanmış satırı bekleyenden ayıramıyordu; `PENDING→APPROVED/REJECTED` geçişi damga bırakmıyordu |
@@ -184,6 +185,13 @@ Mevcut `PendingApproval` mock'unun (app-mobile) alanları + ileri üç-hat alanl
   `pgw_jobs`'a bir iş bırakır. Tezgâhta açılan satış bunu istemez — terminal PGW'nin önünde
   duruyor ve kendi intent'ini zaten atıyor, yani iş yaratmak **fişi iki kez** kestirirdi. İstek
   anında kaydedilir çünkü karar saatler sonra verilebilir ve o an bu bilgi kaybolmuş olur.
+- **`basket_id` neden gerekti (Tur 42):** PGW'den gelen veresiye `POST /transactions`'a **hiç
+  uğramıyor** — onaya gidiyor ve ledger'a sunucu yazıyor. Yani bu kolon olmadan, müşterinin
+  onayını bekleyen **her** veresiyenin sepeti kayboluyordu (`baskets` tablosu turlarca 0
+  satırdı, bkz. [deferred.md §J](deferred.md)). `origin` ile **aynı gerekçe**: istek anında
+  saklanır, çünkü sepeti taşıyan handoff karar verildiğinde çoktan bitmiştir.
+- **Reddedilen istek de sepetini korur:** ne İSTENDİĞİ, denetim izi için ne kabul edildiği
+  kadar değerli. Nullable kalır — para-only kaydın gerçekten sepeti yoktur.
 
 ```sql
 CREATE TABLE approvals (
@@ -191,7 +199,7 @@ CREATE TABLE approvals (
   target_user_id TEXT NOT NULL, seller_id TEXT NOT NULL, shop_name TEXT NOT NULL,
   customer_id TEXT NOT NULL, amount_minor INTEGER NOT NULL, type TEXT NOT NULL, description TEXT,
   channel TEXT NOT NULL, origin TEXT NOT NULL, status TEXT NOT NULL, requested_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL );
+  updated_at TEXT NOT NULL, basket_id TEXT REFERENCES baskets(basket_id) );
 CREATE INDEX idx_approvals_target ON approvals(target_user_id, status);
 ```
 
@@ -277,7 +285,7 @@ Her değerin üç değişme-sebebi farklı temsili (architecture-pos.md §4 "ü�
 |---|---|---|
 | `User` (nested `SellerInfo?`) | `UserEntity` (düz shop_name?/shop_phone?) | `User` (`seller_info?` gömülü) |
 | `Customer` (balanceMinor türetilir) | `CustomerEntity` (balance YOK) | `Customer` (`balance_minor` sunucu hesap) |
-| `Transaction` (+basketId?, settledViaPgw, receiptNo?) | `TransactionEntity` (FK basket_id?) | `Transaction` / `TransactionCreate` |
+| `Transaction` (+**`basket: OrderBody?`**, Tur 42) | `TransactionEntity` (FK `basket_id?`) | `Transaction` (`basket_id` + `basket`) / `TransactionCreate` (`basket`) |
 | `OrderBody` / `OrderItem` | `BasketEntity` / `BasketItemEntity` | `OrderBody` / `OrderItem` |
 | `Approval` (yön alanlı) | `ApprovalEntity` | `Approval` |
 | `SellerDebt` (repo projeksiyon) | — (DAO join sonucu) | `SellerDebt` |
@@ -286,4 +294,9 @@ Her değerin üç değişme-sebebi farklı temsili (architecture-pos.md §4 "ü�
 
 - **Mapper konumu:** Entity↔Domain → `:core-data/mapper/`; Dto↔Domain → `:core-network/mapper/`
   (FAZ 4). Enum'lar üç temsilde de string.
+- **Domain `Transaction` neden id değil SEPETİ taşıyor (Tur 42):** sepeti tek başına servis
+  eden bir uç yok, yani yalnız `basketId` tutan bir domain nesnesi **çözemeyeceği** bir
+  referans tutardı. Depolama tarafı (Entity) FK'yi korur — orada sepet ayrı tabloda ve id
+  gerçekten çözülebilir. `settledViaPgw`/`receiptNo` domain'de **hâlâ yok**: onlar geçit
+  muhasebesi, defter ekranları sormuyor. Sepet ise ne satıldığı, yani defterin kendisi.
 - **Alan adı çevirisi:** Dto'da Moshi `@Json(name="...")` ile snake_case; Room kolon adı `@ColumnInfo`.

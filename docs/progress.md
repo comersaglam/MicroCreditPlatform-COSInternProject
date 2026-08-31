@@ -3060,3 +3060,70 @@ yol 2'de iki kez yanlıştı: hem hiçbir şeyi doğrulamıyordu (Tur 41), hem d
 bile **yanlış sorunun kapısı** olurdu. Tur 41 kapının **eksik olduğu** yeri bulmuştu; bu tur
 kapının **fazladan durduğu** yeri kaldırdı. İkisi aynı hatanın iki yüzü: kapıların nereye
 ait olduğunu akışın kendisi değil, **kimin neye rıza verdiği** belirler.
+
+---
+
+### 2026-08-31 — Tur 42 (devam): PGW sepeti ledger'a ulaştı + sözleşme donduruldu
+
+Kullanıcının isteği iki parçalıydı: *"şu anda bizim tarafta intent'lerin atılması dinlenmesi
+vs konusunda gerçek PGW ve POS cihazı ile tam uyum içerisindeyiz. notlara nelerin uyumlu
+olduğunu ve değişmemesi gerektiğini kaydedelim. sonrasında bu bağlantıyı koparmadan son
+değişikliklerimizi yapacağız."*
+
+#### 1) Sözleşme donduruldu — [deferred.md §K](deferred.md)
+
+PGW/intent alışverişi gerçek Token terminalinde çalışıyordu ama bu bilgi §H/§I içinde
+gerekçelerin arasına ve kod yorumlarına **dağılmıştı**; "neye dokunulmaz" diye bakılacak tek
+bir liste yoktu. §K bunu kontrol listesi olarak topluyor — gerekçeleri tekrarlamadan, çünkü
+onlar yerinde duruyor. §A–§J "neyi ertelediğimiz", §K "neye dokunmadığımız".
+
+En kolay gözden kaçan iki bağ ayrıca yazıldı: mock-pos'un geçidi **paket seviyesinde**
+taklit etmesi (`applicationId` + `activity-alias` — app-pos'un gerçek component adını
+taşımasını sağlayan şey), ve backend'imize giden `OrderBodyDto`'nun **snake_case** olması
+(geçidin camelCase'i değil; sepet işine dokunan turlar bunu değiştirir, geçit gövdesini değil).
+
+#### 2) §J kapandı — sepet gerçekten ledger'a ulaşıyor
+
+**Teşhis yarımmış.** §J.1 tek kopuk halka bulmuş ve "boru hattının geri kalanı baştan sona
+doğru" demişti. İlk yarısı doğruydu; ikincisi değil — **izlenen boru hattı yol 2'ninkiydi.**
+
+Yol 1'in veresiyesi `addTransaction`'a **hiç uğramıyor**: onaya gidiyor ve ledger'a
+**sunucu** yazıyor (müşteri onayladığında). `requestApproval` sepeti taşımıyordu, yani
+**iki** kopuk halka vardı ve **her biri tek başına** sepeti kaybetmeye yetiyordu. Sadece
+teşhis edilen halka bağlansaydı yol 1 aynen bozuk kalırdı: sepet artık ViewModel'de dolu
+olurdu ama onu göndermeyen bir çağrıya ulaşırdı.
+
+| Halka | Nerede | Ne yapıldı |
+|---|---|---|
+| 1 (§J.3'teki) | intent → `SaleViewModel` | ham JSON nav argümanı olarak taşınıyor; **iki** giriş noktası da (`handleIntent` + `onLoginSucceeded`) |
+| 2 (teşhiste YOK) | `requestApproval` → sunucu | `basket` alanı DTO'dan `OtpViewModel`'e kadar opsiyonel olarak eklendi |
+
+Sunucu tarafı (migration 0005 `approvals.basket_id`, `baskets.py`, onayda ledger'a taşıma)
+bir önceki commit'te hazırdı.
+
+**Testler neden yakalamadı:** `TransactionMapperTest` bunların hepsini `POST /transactions`
+için doğruluyordu — yani PGW veresiyesinin **hiç geçmediği** yolda. Yeni `ApprovalMapperTest`
+eksik yarıyı kapatıyor (5 test).
+
+#### Cihaz doğrulaması (§J.6) — kaynak değil, DB
+
+§J.3'ün sorgusu **ilk kez satır döndürdü**: üç kalem tek `basket_id` altında, ölçekler
+korunmuş (`quantity` 2000 = 2 adet, `price_minor` 1500 = 15,00 TL), kaydın tutarı 10700 =
+kalemlerin toplamı. Aynı turda §K.4 regresyonları da geçti: onaylanan `RESULT_OK`,
+reddedilen `RESULT_CANCELED`, tahsilat geçidin ödeme ekranını açıyor.
+
+Test sırasında iki tuzak çıktı, ikisi de kılavuza (**E bloğu**) yazıldı:
+- **Kalemli sepet "Veresiye" düğmesine UZUN BASIŞ'ta.** Kısa dokunuş tutar-only sepet
+  gönderiyor, yani bilmeden test eden hep tek "Veresiye" kalemi görür ve ürün-bazlı yolun
+  çalıştığını **doğrulamamış** olur. UI'da hiçbir yerde yazmıyor.
+- **Tahsilat §J.3 sorgusunda görünmez** — sorgu `basket_id IS NOT NULL` diyor, tahsilatın
+  sepeti yok. Eksik ödeme gibi okunuyor, oysa filtre.
+
+**Öğrenilen:** **Bir zincirde kopukluk ararken hangi yolun gerçekten koştuğunu doğrula.**
+Bu sistemde beş yol var ve ikisi ledger'a farklı uçlardan yazıyor. "Boru hattının geri kalanı
+doğru" demek, *hangi* boru hattına bakıldığına bağlı — ve yeşil testler yanlış yolu test
+ediyorsa hiçbir şey söylemez. §J turlarca yeşil testlerin altında durdu.
+
+**Kalan iş — bug değil, yazılmamış UI:** sepet `Transaction.basket` olarak app-pos ve
+app-mobile'ın domain modeline kadar geliyor ama **onu okuyan tek bir ekran yok**. §J'yi
+başlatan soru ("bu veresiyede ne vardı?") hâlâ yalnız SQL'den cevaplanabiliyor.

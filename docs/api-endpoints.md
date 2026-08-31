@@ -163,10 +163,17 @@ FakeRepository: `findCustomerByPhone` / `customerPhoneExists`.
   "type": "DEBT",                // DEBT | PAYMENT
   "description": "Ekmek, süt",
   "basket_id": null,             // set when the handoff carried an orderBody 
+  "basket": null,                // the basket ITSELF (Tur 42) — OrderBody, null if money-only
   "settled_via_pgw": false,      // PAYMENT settled through the payment gateway? (FAZ 8)
   "receipt_no": null,            // PGW receipt when settled (FAZ 8)
   "created_at": "2026-07-20T09:15:00Z" }
 ```
+
+**`basket` neden id'nin YANINDA gidiyor (Tur 42):** sepeti tek başına servis eden bir uç
+**yok**, dolayısıyla yalnız `basket_id` tutan cihaz **çözemeyeceği** bir referans tutmuş
+olurdu. Kalemler kaydın kendisiyle birlikte geliyor. Geçmiş uçlarında (`GET /transactions`,
+`GET /me/history`) sepetler **tek okumada** toplanıyor — kayıt başına sorgu, zaten müşteri
+başına bir istek atan `pullBook`'un üstüne çarpım olurdu ([deferred.md §F.5](deferred.md)).
 
 ### `POST /transactions`  — tek yazma noktası
 Idempotency zorunlu: `Idempotency-Key` header = `transaction_id`. `basket` verilirse
@@ -191,7 +198,9 @@ Idempotency zorunlu: `Idempotency-Key` header = `transaction_id`. `basket` veril
 // Response 201 -> Transaction   (retry with same key -> 200, same Transaction)
 // 403 not_in_book — müşteri bu satıcının defterinde değil (Tur 41)
 ```
-FakeRepository: `addTransaction` (+ orderBody Aşama 3'te).
+Client: `Repository.addTransaction(transaction, orderBody)` — orderBody **bağlandı** (Tur 42).
+⚠️ Ama PGW'den gelen **veresiye bu uca hiç gelmez**; o yol `POST /approvals`'tan geçer ve
+sepetini oraya taşır. Bu uç yalnız onaydan geçmeyen yazımlar içindir (yol 2 tahsilat).
 
 ⚠️ **Defter üyeliği doğrulanır (Tur 41).** `seller_id`'nin token'dan gelmesi *başkasının
 defterine* yazmayı engelliyordu; bu kontrol **aynanın diğer yüzünü** kapatıyor: başka
@@ -280,11 +289,19 @@ push kartı düşer). **UNCLAIMED** ise (app'siz) OTP mock true → **anında** 
 { "seller_id": "u_owner", "customer_id": "c1", "amount_minor": 5000,
   "type": "DEBT", "description": "Veresiye",
   "initiator_role": "SELLER", "target_user_id": "u1",
-  "origin": "POS" }              // POS | PHONE — varsayılan PHONE (Tur 41)
+  "origin": "POS",               // POS | PHONE — varsayılan PHONE (Tur 41)
+  "basket": { /* OrderBody */ } } // OPTIONAL (Tur 42) — PGW handoff'u varsa; para-only'de yok
 // Response 201 -> Approval (PENDING)          // CLAIMED target
 //   OR       -> Transaction (already written) // UNCLAIMED target (immediate)
 ```
 FakeRepository: `requestApproval` (+ `ApprovalService`).
+
+**`basket` (Tur 42) — `POST /transactions`'ınkiyle aynı şekil, ama bu uçta olması ŞART.**
+PGW'den gelen veresiye `POST /transactions`'a **hiç uğramaz**: onaya gider ve ledger'a
+sunucu yazar. Dolayısıyla bu alan olmadan, müşterinin onayını bekleyen **her** veresiyenin
+sepeti kaybolur — turlarca olan buydu ([deferred.md §J](deferred.md)). Sepet istek anında
+`approvals.basket_id`'ye yazılır (handoff karar anında çoktan bitmiştir), onaylanınca
+ledger kaydına taşınır. **Reddedilen istek de sepetini korur.**
 
 **`origin` (Tur 41)** isteği hangi CİHAZIN açtığını söyler ve onaylanınca `pgw_jobs`'a iş
 bırakılıp bırakılmayacağına karar verir. Tezgâh PGW'nin önünde durup kendi intent'ini
