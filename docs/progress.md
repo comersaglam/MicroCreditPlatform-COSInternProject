@@ -3131,3 +3131,135 @@ ediyorsa hiçbir şey söylemez. §J turlarca yeşil testlerin altında durdu.
 **Kalan iş — bug değil, yazılmamış UI:** sepet `Transaction.basket` olarak app-pos ve
 app-mobile'ın domain modeline kadar geliyor ama **onu okuyan tek bir ekran yok**. §J'yi
 başlatan soru ("bu veresiyede ne vardı?") hâlâ yalnız SQL'den cevaplanabiliyor.
+
+### 2026-08-31 — Tur 43: enflasyon borcun parçası oldu (FAZ 6 başladı)
+
+**FAZ 6 (sunum fazı) başladı.** Fazın tamamı: [faz6-sunum-plani.md](faz6-sunum-plani.md).
+Bu tur veri temelini kuruyor — hem app-mobile'ın kur/enflasyon ekranları hem admin
+panelinin grafikleri buradan besleniyor, o yüzden fazın ilk turu.
+
+#### Kapsam planlarken büyüdü — ve bilinçli olarak
+
+Plan enflasyonu *gösterilen bir bilgi* olarak tasarlamıştı: bakiye ham kalacak, yanında
+"bugünkü karşılığı şu" yazacaktı. Kullanıcının kararı farklı çıktı:
+
+> *"ödeme yaparken inflated halini ödemesini istiyoruz teknik olarak"*
+
+Bu, enflasyonu göstergeden **borcun kendisine** çeviriyor. Satıcının veresiye vererek
+enflasyona yenilmemesi ürünün asıl vizyon argümanı — ama mimarinin en hassas yerine,
+bakiyeye dokunuyor.
+
+#### Asıl mesele: bakiye formülü 10 yerde yazılı
+
+| Nerede | Kaç | Derleyici korur mu |
+|---|---|---|
+| `backend/app/ledger.py` `_SIGNED_AMOUNT` | 1 | — (tek yer, Python) |
+| Kotlin `balanceOf` + ViewModel toplamları | 3+ | ✅ exhaustive `when` |
+| **Room `@Query` SQL string'leri** | **7** | ❌ **hayır** |
+
+Onunun da birebir aynı olması bir güvenlik kuralı: esnaf terminaldeki rakamla sunucudakini
+karşılaştırıyor, fark "para kayboldu" demek ([ledger.py](../backend/app/ledger.py)
+docstring'i bunu zaten söylüyordu).
+
+Düz formül yaklaşımı (`SUM(tutar × cpi_bugün / cpi_o_gün)`) bu on yerin **hepsini**
+değiştirmeyi gerektirirdi, üstelik Room tarafında `fx_rates`'in cihaza da senkronlanmasını.
+Kullanıcının önerdiği "rolling, aylık bir kez hesapla" fikri doğruydu ama saklanan bir
+bakiye kolonu `ledger.py`'ın *"balance is computed, never stored"* kuralını bozardı.
+
+**Seçilen çözüm — INDEXATION satırı:** enflasyon farkı bir *hareket* olur, formül değil.
+Bakiye `SUM` olarak kalır, toplamın içine endeks satırları da girer.
+
+```
+01 Oca  DEBT        10000  Ekmek, süt
+01 Şub  INDEXATION    300  Şubat 2026 enflasyon farkı (%3,00)   ← sunucu yazdı
+01 Mar  INDEXATION    309  Mart 2026 enflasyon farkı (%3,00)
+20 Mar  PAYMENT      3000  Nakit ödeme
+01 Nis  INDEXATION    228  Nisan 2026 enflasyon farkı (%3,00)   ← ödeme sonrası düştü
+```
+
+`transactions` tablosuna **hiçbir kolon eklenmedi**; sadece `type` üç değer alıyor. Bileşik
+çalışması kendiliğinden geliyor: her ay, önceki ayın satırını da içeren bakiyeyi okuyor.
+
+**Tek yön:** bakiye ≤ 0 ise satır yazılmıyor. Müşteri alacaklıysa endeks uygulanmıyor —
+*satıcı banka değil, enflasyona karşı para korumaz.* Deflasyonda da satır yok (`delta ≤ 0`).
+
+**Tembel tetikleme:** cron yok, bakiye okunduğunda eksik aylar yetiştiriliyor. Satır id'si
+`idx_{seller}_{customer}_{YYYY-MM}` — veriden türetildiği için aynı ay iki kez yazılamıyor,
+PK çakışıyor. Bu, `Idempotency-Key == transaction_id` kuralının sunucunun kendine yazdığı
+satırlara uygulanmış hali.
+
+🔒 `_VALID_TYPES` **değişmedi** (`{DEBT, PAYMENT}`) — istemci INDEXATION yazamıyor. Cihazda
+denendi: `POST /transactions` `type=INDEXATION` ile **400** dönüyor.
+
+#### Derleyicinin gördüğü ve görmediği
+
+Enum'a değer eklemek app-pos'ta **8 yeri kırdı**: beşi bakiye toplamı, üçü satış akışında
+INDEXATION'ın hiç gelemeyeceği yerler (`descriptionFor`, keypad `when`'i). Sekizi de bilinçli
+karara bağlandı — sonradan bulunacak sekiz bug yerine.
+
+Ama **iki yer sessizce yanlış çalışacaktı**:
+
+1. **7 Room sorgusu** — hepsi `ELSE -amountMinor` yazıyordu, yani *DEBT olmayan her şey
+   ödemedir*. İlk endeks satırı indiğinde cihaz onu borçtan **düşerdi**, sunucu artırırken.
+   String içinde olduğu için derleme geçerdi.
+2. **`TransactionAdapter`'daki `val isDebt`** — boolean olduğu için `when` değil, hata
+   vermedi. Endeks satırı **yeşil ve eksi işaretli** görünürken üstündeki bakiye artacaktı.
+
+İkisi de düzeltildi; endeks satırı artık DEBT'in *soluk* varyantında (`balance_indexation
+#C77A7A`), yeni renk eklenmeden — yön aynı çünkü borcu artırıyor, soluk çünkü mal alınmadı.
+
+#### Yazılanlar
+
+| Dosya | Ne |
+|---|---|
+| `backend/app/fx.py` | Kur/enflasyon aritmetiği tek yerde. `int` kuruş → `Fraction` oran → tek dönüşümde half-up yuvarlama |
+| `backend/app/indexation.py` | Aylık endeksleyici, tembel + idempotent |
+| `backend/app/breakdown.py` | Bakiyeyi bileşenlerine ayırır (anapara / endeks / ödeme) |
+| `backend/app/seed_demo.py` | 12 aylık demo mahalle, `seed()`'in **üstüne** |
+| migration `0006`, `0007` | `fx_rates`, `audit_log` |
+
+**Yeni uçlar:** `GET /fx-rates`, `GET /me/debts/breakdown?seller_id=`,
+`GET /customers/breakdown?customer_id=`. Kırılım iki taraflı çünkü aynı üç sayı zıt
+anlamlar taşıyor: alıcı *"borcum neden aldığım maldan fazla"*, satıcı *"bu parayı
+kaybetmedim"*.
+
+#### Demo verisi — test hesaplarını bozmadan
+
+`seed.py` **aynen duruyor**, ~190 test ona yaslanıyor. `seed_demo.py` önce `seed()`'i
+çağırıp üstüne ekliyor: 8 dükkân, 42 kullanıcı, 107 müşteri kaydı, ~5800 hareket, 549 kur
+satırı, 3500 trafik kaydı. `docs/test-hesaplari.md`'deki yedi bakiye de korunuyor ve bunu
+artık bir test zorluyor.
+
+İlk denemede mevsimsellik sadece *tutarlara* uygulanmıştı; yıllık grafik neredeyse düz
+çıktı. Yoğun aylarda ziyaret **sayısı** da artınca Ramazan ve okul dönüşü grafikten
+okunur oldu.
+
+**Endeks satırları seed'lenmiyor** — sunucu ilk okumada kendisi üretiyor, böylece demo
+endeksleyicinin taklidini değil kendisini çalıştırıyor.
+
+#### Doğrulama
+
+- **274 pytest** yeşil (192 eski + 82 yeni: `test_fx` 30, `test_indexation` 15,
+  `test_breakdown` 19, `test_seed_demo` 18). Eski 192'nin **hiçbiri değişmedi** — kur
+  serisi olmadan endeksleyici satır yazmıyor, `cpi_ratio` `None` dönüyor.
+- **Docker + Postgres:** migration 0007'ye kadar koştu, `seed_demo` idempotent, endeks
+  satırı `GET /balances` çağrısıyla oluştu (öncesi 0, sonrası 1), 5 kez çağırınca hâlâ 1.
+- İki app `assembleDebug` öncesi `compileDebugKotlin` + unit testler yeşil.
+- **CİHAZDA DOĞRULANMADI** — APK kurulmadı, endeks satırının telefonda nasıl göründüğü
+  görülmedi. Tur 44 (tema) sonunda birlikte doğrulanacak.
+
+#### Yan bulgu: `reset.py` üç tabloyu atlıyordu
+
+Postgres'te doğrularken çıktı: `_TABLES` listesi yazıldığı gündeki altı tabloyu tutuyordu.
+`pgw_jobs` (Tur 41), `fx_rates`, `audit_log` (bu tur) reset'ten sağ çıkıyordu. `fx_rates`'in
+PK'sı tarih olduğu için `seed_demo` ikinci çalıştırmada **çakıştı** — hata böyle bulundu.
+Listenin üstündeki yorum kuralı zaten yazmıştı (*"yeni tablo buraya bilinçli bir düzenleme
+olarak eklenir"*), kimse dönüp bakmamıştı.
+
+**Öğrenilen:** **Aynı kuralın kaç kopyası olduğu değil, hangi dilde yazıldığı önemli.**
+Bakiye formülü 10 yerde duruyor; Kotlin'deki 3'ü enum'a değer eklenince derlemeyi kırdı ve
+beni tek tek her birine götürdü. Room'daki 7'si SQL string'i olduğu için hiçbir şey demedi —
+ve `ELSE -amountMinor` yazdıkları için endeksi **ters işaretle** toplayacaklardı. Bir
+kuralın kopyalarını sayarken, kaçının derleyici korumasında olduğunu ayrı say.
+
+**Sıradaki:** Tur 44 — Tema C (neon aksan), app-mobile'ın tasarım sistemi.

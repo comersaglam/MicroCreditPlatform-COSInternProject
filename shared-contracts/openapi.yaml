@@ -239,6 +239,45 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+  /customers/breakdown:
+    get:
+      tags: [customers]
+      summary: What this shop's receivables are made of — principal, inflation, payments
+      description: >
+        The seller's side of the same decomposition. Where the customer sees what inflation
+        ADDED to their debt, the shopkeeper sees what it SAVED them on money that was out:
+        the indexation total is exactly what lending at face value would have cost. Without
+        customer_id it covers the whole book.
+        Declared before /customers/{customer_id} so the literal path wins the match.
+      parameters:
+        - { name: customer_id, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerBreakdown' }
+        '403': { description: Not a seller account }
+  /fx-rates:
+    get:
+      tags: [fx]
+      summary: What a lira was worth on a given day
+      description: >
+        Reference data, identical for every caller. Falls BACK to the most recent earlier
+        reading when a day has no row of its own, and reports the date it actually used —
+        never the date asked for. Devices do not need this to compute a balance: indexation
+        arrives as ledger rows already denominated in lira, precisely so no phone has to
+        carry a rate table.
+      parameters:
+        - { name: as_of, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FxSnapshot' }
+              example: { as_of: '2026-03-01', usd_minor: 399607, eur_minor: 435319, gold_minor: 347848 }
+        '404': { description: The series does not reach this date (rate_not_found) }
   /customers/lookup:
     get:
       tags: [customers]
@@ -332,6 +371,22 @@ paths:
               example:
                 - { seller_id: u_market, shop_name: Ayşe Market, balance_minor: 10000 }
                 - { seller_id: u_owner, shop_name: Ahmet Bakkal, balance_minor: 4000 }
+  /me/debts/breakdown:
+    get:
+      tags: [buyer]
+      summary: What the buyer's debt is made of — principal, inflation, payments
+      description: >
+        Answers the question indexing a debt provokes: why do I owe more than I bought.
+        Without seller_id it covers every shop; with it, one. The mirror of
+        /customers/breakdown — same three figures, read from the other side of the counter.
+      parameters:
+        - { name: seller_id, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LedgerBreakdown' }
   /me/transactions:
     get:
       tags: [buyer]
@@ -524,7 +579,11 @@ components:
     # --- enums ---
     TransactionType:
       type: string
-      enum: [DEBT, PAYMENT]
+      # INDEXATION is SERVER-WRITTEN ONLY (Tur 43): a month's inflation on an outstanding
+      # balance. It appears in ledger responses and counts toward the balance the same way
+      # DEBT does, but POST /transactions rejects it -- a client able to mint indexation
+      # could inflate a debt at will.
+      enum: [DEBT, PAYMENT, INDEXATION]
     ClaimStatus:
       type: string
       enum: [UNCLAIMED, CLAIMED]
@@ -765,6 +824,57 @@ components:
         seller_id: { type: string }
         shop_name: { type: string }
         balance_minor: { type: integer, format: int64 }
+
+    # --- fx and breakdown (Tur 43) ---
+
+    FxSnapshot:
+      type: object
+      required: [as_of, usd_minor, eur_minor, gold_minor]
+      description: >
+        What ONE unit of each currency cost on a day, in kuruş. `as_of` is the date of the
+        row actually used, which may precede the date requested.
+      example: { as_of: '2026-03-01', usd_minor: 399607, eur_minor: 435319, gold_minor: 347848 }
+      properties:
+        as_of: { type: string, format: date }
+        usd_minor: { type: integer, format: int64 }
+        eur_minor: { type: integer, format: int64 }
+        gold_minor: { type: integer, format: int64 }
+
+    LedgerBreakdown:
+      type: object
+      required: [principal_minor, indexation_minor, total_paid_minor, outstanding_minor]
+      description: >
+        What a balance is MADE OF. The parts reconcile exactly:
+        principal + indexation − paid == outstanding, because all four come from the rows
+        the balance itself sums.
+        The fx fields and the projection are NULLABLE and must be rendered as "unknown"
+        rather than zero — the rate series can simply not reach a date, and a client that
+        treated a missing rate as 0 would divide by it. A settled account carries no
+        projection either.
+      example:
+        principal_minor: 31000
+        indexation_minor: 545
+        total_paid_minor: 10000
+        outstanding_minor: 21545
+        fx_at_open: { as_of: '2026-07-10', usd_minor: 429132, eur_minor: 465987, gold_minor: 386779 }
+        fx_today: { as_of: '2026-08-31', usd_minor: 441942, eur_minor: 481668, gold_minor: 405676 }
+        projected_3m_minor: 23383
+      properties:
+        principal_minor: { type: integer, format: int64, description: SUM of DEBT rows }
+        indexation_minor: { type: integer, format: int64, description: SUM of INDEXATION rows }
+        total_paid_minor: { type: integer, format: int64, description: SUM of PAYMENT rows }
+        outstanding_minor: { type: integer, format: int64 }
+        fx_at_open:
+          allOf: [{ $ref: '#/components/schemas/FxSnapshot' }]
+          nullable: true
+        fx_today:
+          allOf: [{ $ref: '#/components/schemas/FxSnapshot' }]
+          nullable: true
+        projected_3m_minor:
+          type: integer
+          format: int64
+          nullable: true
+          description: A forecast, never written to the ledger. Label it as one on screen.
 
     # --- approval ---
     Approval:

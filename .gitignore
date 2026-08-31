@@ -6,6 +6,7 @@ out/
 captures/
 .cxx/
 .externalNativeBuild/
+.vscode/
 
 # --- IDE ---
 .idea/

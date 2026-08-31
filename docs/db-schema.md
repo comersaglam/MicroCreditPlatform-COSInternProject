@@ -82,7 +82,7 @@ CREATE INDEX idx_customers_created_by ON customers(created_by_seller_id);
 | `seller_id` | TEXT | NO | hangi satıcının defteri |
 | `customer_id` | TEXT | NO | FK→customers; buyer |
 | `amount_minor` | INTEGER | NO | pozitif; işaret `type`'ta |
-| `type` | TEXT | NO | DEBT \| PAYMENT |
+| `type` | TEXT | NO | DEBT \| PAYMENT \| **INDEXATION** (Tur 43) |
 | `description` | TEXT | NO | "Veresiye" / "Ekmek, süt" |
 | `basket_id` | TEXT | YES | FK→baskets; orderBody varsa (para-only null) |
 | `settled_via_pgw` | BOOL | NO | PAYMENT PGW'den geçti mi (default false) — FAZ 8 |
@@ -90,7 +90,25 @@ CREATE INDEX idx_customers_created_by ON customers(created_by_seller_id);
 | `created_at` | TIMESTAMP | NO | |
 
 - Index: `INDEX(seller_id, customer_id)` (bakiye/liste), `INDEX(customer_id)` (buyer-scoped).
-- Bakiye = (seller, customer) çiftinin toplamı (DEBT +, PAYMENT −).
+- Bakiye = (seller, customer) çiftinin toplamı (**DEBT +, INDEXATION +, PAYMENT −**).
+
+**INDEXATION (Tur 43):** açık bakiyeye o ayın enflasyonu. Formül değil **satır** olması
+bilinçli — bakiye hesabı 10 yerde yazılı (sunucuda 1, Kotlin'de 3, **Room SQL string'inde
+7**) ve onunun da aynı kalması gerekiyor. Satır eklemek formülü değiştirmiyor; endeksi
+formüle gömmek onunu birden değiştirirdi, üstelik `fx_rates`'i cihaza da senkronlamayı
+gerektirirdi.
+
+- **Yalnız sunucu yazar.** `routers/ledger.py`'daki `_VALID_TYPES` `{DEBT, PAYMENT}` olarak
+  **kalır** — endeks mintleyebilen bir cihaz borcu istediği kadar şişirebilirdi.
+- **Tek yön:** bakiye ≤ 0 ise satır yok. Müşteri alacaklıysa endekslenmiyor — satıcı banka
+  değil, borcuna enflasyon ödemez. Deflasyonda da satır yok.
+- **Bileşik kendiliğinden:** her ay, önceki ayın satırını da içeren bakiyeyi okuyor.
+- **id veriden türetilir:** `idx_{seller}_{customer}_{YYYY-MM}` — aynı ay iki kez yazılamaz,
+  PK çakışır. `Idempotency-Key == transaction_id` kuralının sunucunun kendi satırlarına
+  uygulanmış hali.
+- **`created_at` ait olduğu ayın 1'i**, yazıldığı gün değil; yoksa satır sonraki alışverişlerin
+  ardına düşer ve dükkân geçmişe kayıt atmış gibi görünür.
+- ⚠️ **Geri alınamaz** (append-only): düzeltme ters kayıt gerektirir, o akış **yok** (§L.7).
 
 ```sql
 CREATE TABLE transactions (
@@ -244,6 +262,67 @@ CREATE TABLE pgw_jobs (
 CREATE INDEX idx_pgw_jobs_seller ON pgw_jobs(seller_id, status);
 ```
 
+## A.8 `fx_rates` (bir liranın o günkü değeri — Tur 43, migration 0006)
+
+Ledger neyin ne zaman borçlanıldığını tutuyor ama o tutarın **o gün ne ettiğini** tutmuyordu.
+İkinci yarı olmadan bir yıl önce açılan borç bugün daha az satın alan parayla kapanıyor ve
+farkı sessizce esnaf yükleniyor. Bu tablo o farkı hesaplanabilir kılıyor.
+
+| Kolon | Tip | Null | Not |
+|---|---|---|---|
+| `as_of` | DATE | NO | **PK — günün kendisi** |
+| `usd_minor` | INTEGER | NO | 1 USD kaç kuruş |
+| `eur_minor` | INTEGER | NO | 1 EUR kaç kuruş |
+| `gold_minor` | INTEGER | NO | 1 gram altın kaç kuruş |
+| `cpi_index` | INTEGER | NO | TÜFE endeksi ×100 |
+
+- **Neden çekilmiyor da saklanıyor:** soru her zaman *geçmiş* bir gün hakkında; canlı kur
+  cevaplayamaz. Ayrıca anlık çekim, bakiye okumasının önüne bir ağ çağrısı koyardı — asla
+  yavaşlamaması ve başarısız olmaması gereken tek okuma.
+- **Gün başına tek satır:** kurlar sürekli hareket eder ama bir ledger satırı yalnız başka
+  bir *günle* karşılaştırılır; daha ince anahtar kimsenin okumadığı hassasiyeti saklardı.
+- **`cpi_index` birimsiz sayılır:** yalnız *oranları* alınıyor (`fx.cpi_ratio`), baz dönem
+  sadeleşiyor. 100'den başlayan seri ile 100000'den başlayan aynı cevabı verir.
+- ⚠️ **Veri şu an uydurma** — `seed_demo._fx_series` üretiyor, web-fetch yok (deferred §L.4).
+
+```sql
+CREATE TABLE fx_rates (
+  as_of DATE PRIMARY KEY, usd_minor BIGINT NOT NULL, eur_minor BIGINT NOT NULL,
+  gold_minor BIGINT NOT NULL, cpi_index BIGINT NOT NULL );
+```
+
+## A.9 `audit_log` (kim ne yaptı — Tur 43, migration 0007)
+
+İki şey istiyor: KVKK'nın *anlattığı kaydı geçen* denetim izi, ve admin panelinin trafik
+sekmesi.
+
+| Kolon | Tip | Null | Not |
+|---|---|---|---|
+| `id` | TEXT | NO | PK |
+| `actor_user_id` | TEXT | **YES** | kimliksiz denemede (başarısız login) yok — **FK YOK** |
+| `action` | TEXT | NO | `"POST /transactions"`, `"auth.login"` |
+| `entity_type` / `entity_id` | TEXT | YES | tek satıra dokunmayan eylemde NULL |
+| `ip` / `user_agent` | TEXT | YES | |
+| `status_code` | INTEGER | NO | reddedilen deneme kabul edilenden değerli: art arda 401 birinin anahtar denediğinin şeklidir |
+| `created_at` | TIMESTAMP | NO | |
+
+- Index: `(actor_user_id, created_at)` ve `(created_at)` — panelin sorduğu iki soru.
+- **Neden ayrı tablo:** iz, anlattığı kaydı geçmeli. Silinen müşteri, silindiğine dair kanıt
+  bırakmalı; artık var olmayan satırdaki `deleted_by` kolonu hiçbir şey kaydetmez.
+- **`actor_user_id`'de FK YOK, bilerek:** olsaydı kullanıcı silmek ya engellenirdi ya da izi
+  de götürürdü — ikisi de tutmanın amacını yener.
+- ⚠️ **Canlı yazan YOK** (deferred §L.1). Satırlar `seed_demo`'dan geliyor; middleware
+  bilinçli yazılmadı. Tablo şimdi geldi ki ileride eklemek migration değil tek dosya olsun.
+
+```sql
+CREATE TABLE audit_log (
+  id TEXT PRIMARY KEY, actor_user_id TEXT, action TEXT NOT NULL,
+  entity_type TEXT, entity_id TEXT, ip TEXT, user_agent TEXT,
+  status_code INTEGER NOT NULL, created_at TIMESTAMPTZ NOT NULL );
+CREATE INDEX idx_audit_actor ON audit_log(actor_user_id, created_at);
+CREATE INDEX idx_audit_created ON audit_log(created_at);
+```
+
 ---
 
 # BÖLÜM B — İLERİ FAZ tabloları (kod iskeleti yazılır, bağlama ertelenir)
@@ -256,20 +335,20 @@ YAZILIR (derlenir), ama UI/sync/web-fetch **bağlaması** ertelenir. Desen: `Otp
 `id TEXT PK, transaction_id TEXT NOT NULL, payload TEXT NOT NULL, created_at TIMESTAMP NOT NULL,
 retry_count INTEGER NOT NULL DEFAULT 0`. WorkManager bağlaması FAZ 4.
 
-## B.2 `fx_rates` (döviz kuru geçmişi — YER TUTUCU)
-`as_of TIMESTAMP PK, usd_minor INTEGER, eur_minor INTEGER, gold_minor INTEGER`. Her işlem
-anındaki USD/EUR/altın kuru; geriye dönük enflasyon/mikrokredi hesabı (tasarim.md son not).
-Web-fetch dolumu ileride.
+## ~~B.2 `fx_rates`~~ → **A.8'e taşındı** (Tur 43, migration 0006)
+Postgres'te gerçek tablo. `cpi_index` eklendi (enflasyon oranı için şart) ve `as_of` DATE
+oldu — bir ledger satırı yalnız başka bir günle karşılaştırılıyor. Veri hâlâ mock: web-fetch
+yerine `seed_demo` dolduruyor (deferred §L.4).
 
 ## B.3 `credit_offers` (FAZ 2/8 — mikrokredi)
 `offer_id TEXT PK, user_id TEXT NOT NULL, limit_minor INTEGER NOT NULL, apr INTEGER NOT NULL,
 term_days INTEGER NOT NULL, status TEXT NOT NULL, created_at TIMESTAMP NOT NULL`. `apr` ×100
 (1900 = %19). UI + hesaplama FAZ 2/8 (BDDK lisans — tasarim.md FAZ 7).
 
-## B.4 `audit_log` (FAZ 7 — denetim izi)
-`id TEXT PK, actor_user_id TEXT NOT NULL, action TEXT NOT NULL, entity TEXT NOT NULL,
-entity_id TEXT NOT NULL, at TIMESTAMP NOT NULL`. Değiştirilemez kim-ne-zaman-ne. Yazma-noktası
-enstrümantasyonu FAZ 7.
+## ~~B.4 `audit_log`~~ → **A.9'a taşındı** (Tur 43, migration 0007)
+Postgres'te gerçek tablo. İki alan iskeletten ayrıldı: `actor_user_id` **nullable** oldu
+(başarısız login'in aktörü yok) ve `status_code` eklendi (reddedilen deneme kabul edilenden
+değerli). Yazma-noktası enstrümantasyonu **hâlâ yok** — satırlar `seed_demo`'dan (§L.1).
 
 ## B.5 `devices` (FAZ 8 — FCM push)
 `device_id TEXT PK, user_id TEXT NOT NULL, fcm_token TEXT NOT NULL, platform TEXT NOT NULL,

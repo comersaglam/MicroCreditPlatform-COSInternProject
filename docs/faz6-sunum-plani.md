@@ -9,7 +9,7 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-08-31, faz planlandı. Henüz hiçbir tur başlamadı.
+> Son güncelleme: 2026-08-31, Tur 43 kapandı.
 
 ---
 
@@ -17,7 +17,7 @@
 
 | Tur | Konu | Durum |
 |-----|------|-------|
-| 43 | fx_rates + zengin seed | ⬜ başlamadı |
+| 43 | fx_rates + **endeksleme** + zengin seed | ✅ kapandı (progress.md Tur 43) — cihaz doğrulaması Tur 44'e |
 | 44 | Tema C (neon aksan) — app-mobile | ⬜ başlamadı |
 | 45 | Sepet detay ekranı (§J.6 kuyruğu) | ⬜ başlamadı |
 | 46 | Toplam kırılımı + insights | ⬜ başlamadı |
@@ -72,6 +72,19 @@ başlarken yeniden tartışılmaz** — değişirse burası güncellenir.
 | 2.9 | Tema | **C — Neon aksan (fintech)**; önce app-mobile tam, POS sadece token | XML views'da yapılabilir; Compose'a dönülmüyor |
 | 2.10 | Ödeme mock logoları | **Gerçek logolar**, `res/drawable/`, kendi renk şeridiyle | Token grubu içi sunum |
 | 2.11 | Sepet detay | **Her iki app**, işlem satırına tıkla → yeni Fragment | Veri zaten domain'de hazır |
+| 2.12 | **Enflasyon** | **Endeksleme** — gösterge değil, borcun parçası | *"ödeme yaparken inflated halini ödemesini istiyoruz"* (Tur 43'te eklendi) |
+| 2.13 | Endeksleme yöntemi | **INDEXATION ledger satırı**, aylık + bileşik, tembel tetikleme | Bakiye formülü 10 yerde yazılı; satır eklemek formülü değiştirmiyor |
+
+### Karar 2.12 nasıl girdi
+
+Plan enflasyonu *gösterilen bilgi* olarak tasarlamıştı. Tur 43 başlarken kullanıcı
+düzeltti: enflasyon farkı **borcun kendisi** olacak, ödeme onun üzerinden alınacak.
+Satıcının enflasyona yenilmemesi ürünün asıl vizyon argümanı olduğu için kapsam bilinçli
+büyütüldü — turun yaklaşık iki katına çıkmasına rağmen.
+
+⚠️ Bunun iki açık ucu var, ikisi de [deferred.md](deferred.md)'de: endeks satırı geri
+alınamıyor (§L.7) ve oran/sıklık henüz ürün kararı değil, teknik varsayım (§L.8 — BDDK
+sorusu dahil).
 
 ### Tema C — kısa tarif
 
@@ -318,6 +331,9 @@ olarak `TokenStore`'a yazılır, backend'e gitmez.
 **Profil tamamlama**
 
 `UserEntity` += `tcNo, idPhotoUri, birthDate, address` — **yerel-only**.
+
+* benim notum - buraya bi de yapıkrediye bağlan diye bi mock tuş da koyalım logosuyla beraber.
+microcredit sistemi içi banka ile anlaşma vizyonumuzu göstersin
 
 ⚠️ Alan eklerken **tüm construct noktaları** güncellenmeli + Room migration gerekir.
 Profil ekranında ilerleme çubuğu + eksik alan listesi. Kimlik fotoğrafı: galeri

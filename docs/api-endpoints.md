@@ -393,6 +393,49 @@ kanıtı değil.
 `seller_id` gövdede **yok**: terminal token'la adreslenir, yani kimse başka dükkânın
 kasasına iş koyamaz.
 
+## A.8 Kur & kırılım (Tur 43 — endeksleme)
+
+### `GET /fx-rates?as_of=2026-03-15` → `FxSnapshot`
+
+```jsonc
+// as_of atlanırsa bugün. Yanıt, KULLANILAN satırın tarihini taşır — istenen günü değil.
+{ "as_of": "2026-03-01", "usd_minor": 399607, "eur_minor": 435319, "gold_minor": 347848 }
+```
+
+- O gün satır yoksa **geriye** düşer (hafta sonu → cuma). İleri asla bakmaz: henüz
+  yayınlanmamış bir kur o gün yürürlükte olamaz.
+- Seri o tarihe hiç ulaşmıyorsa **404 `rate_not_found`**. Bilinmeyen kur, sıfır kurdan
+  ayırt edilebilmeli — sıfır alan istemci ona bölerdi.
+- Cihazlar bakiye için buna **ihtiyaç duymaz**; endeks zaten TL cinsinden ledger satırı
+  olarak geliyor. Bu uç *değeri zaman içinde gösteren* ekranlar için.
+
+### `GET /me/debts/breakdown?seller_id=u_owner` → `LedgerBreakdown` (alıcı)
+### `GET /customers/breakdown?customer_id=c1` → `LedgerBreakdown` (satıcı)
+
+```jsonc
+{
+  "principal_minor":    31000,   // DEBT toplamı — gerçekten alınan mal
+  "indexation_minor":     545,   // INDEXATION toplamı — enflasyonun eklediği
+  "total_paid_minor":   10000,   // PAYMENT toplamı
+  "outstanding_minor":  21545,   // bakiye = principal + indexation − paid
+  "fx_at_open": { "as_of": "2026-07-10", "usd_minor": 429132, "eur_minor": 465987, "gold_minor": 386779 },
+  "fx_today":   { "as_of": "2026-08-31", "usd_minor": 441942, "eur_minor": 481668, "gold_minor": 405676 },
+  "projected_3m_minor": 23383    // bugünkü hızla 3 ay sonra; TAHMİN, ledger'a yazılmaz
+}
+```
+
+- **Her iki parametre de opsiyonel.** Verilmezse: alıcıda tüm dükkânların toplamı, satıcıda
+  tüm defter. Verilirse tek hesap.
+- **Neden iki uç, aynı şekil:** aynı üç sayı zıt anlam taşıyor. Alıcı *"borcum neden aldığım
+  maldan fazla"*, satıcı *"bu parayı kaybetmedim"* okuyor. İkincisi özelliğin varlık sebebi
+  ve ilk kez burada lira cinsinden söylenebiliyor.
+- **Parçalar toplama tam eşit** — dördü de bakiyenin taradığı satırlardan, tek geçişte. Tutmayan
+  bir kırılım, okuyucuya defterin yaklaşık olduğunu öğretirdi.
+- **`fx_*` ve projeksiyon nullable, bilerek:** kur serisi o tarihe ulaşmıyorsa *bilinmiyor*
+  demeli, sıfır değil. Kapanmış hesaba projeksiyon da yok — *"3 ay sonra 0,00 olacak"* gürültü.
+- `/customers/breakdown`, `/customers/{customer_id}`'den **önce** tanımlı; yoksa "breakdown"
+  müşteri id'si sanılır (`lookup`'ta aynı tuzak).
+
 ---
 
 # BÖLÜM B — İLERİ FAZ endpoint'leri (premature ama planlı)
@@ -441,14 +484,15 @@ Gövde faz 2; şimdilik yalnız yer tutucu (veresiye-platform-tasarim.md bölüm
 ### `POST /credit-offers/{id}/accept` → `CreditOffer` (status=ACCEPTED)
 Tablo: `credit_offers`. UI + hesaplama FAZ 2/8 (BDDK lisans sorusu — tasarim.md FAZ 7).
 
-## B.5 FX rates (döviz kuru geçmişi — YER TUTUCU)
-Her işlem anındaki USD/EUR/altın kuru; geriye dönük enflasyon/mikrokredi hesabı (tasarim.md
-son not). Endpoint (ileride, web-fetch dolumu): `GET /fx-rates?as_of=...`. Bu turda contract'a
-girmez; tablo `fx_rates` iskele olarak yazılır (bkz. db-schema.md).
+## ~~B.5 FX rates~~ → **A.8'e taşındı** (Tur 43)
+`GET /fx-rates` canlı, tablo gerçek (migration 0006). Ertelenen tek şey **veri kaynağı**:
+web-fetch yerine `seed_demo` dolduruyor (deferred §L.4).
 
 ## B.6 Audit log (FAZ 7 — regülasyon/KVKK denetim izi)
 ### `GET /audit-log?entity=transaction&entity_id=t1` → `[AuditEntry]`
-Değiştirilemez kim-ne-zaman-ne kaydı. Tablo `audit_log`.
+Değiştirilemez kim-ne-zaman-ne kaydı. Tablo **artık gerçek** (Tur 43, migration 0007, bkz.
+db-schema §A.9) ama **uç yok ve yazan yok**: satırlar yalnız `seed_demo`'dan geliyor, admin
+paneli onları okuyacak (Tur 48). Canlı kaydeden middleware bilinçli yazılmadı (§L.1).
 
 ## B.7 Device / FCM (FAZ 8 — push)
 ### `POST /devices`

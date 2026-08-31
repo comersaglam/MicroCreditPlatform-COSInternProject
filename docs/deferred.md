@@ -1101,7 +1101,7 @@ fiş gövdesini alan alan doğruluyor. Cihaz tarafının karşılığı yok — 
 > madde gerçekleşen haline güncellenir (kod konumu + hangi turda yazıldığı eklenir).
 > Fazın nerede kaldığı: [faz6-sunum-plani.md §0](faz6-sunum-plani.md).
 
-### L.1 `audit_log` sadece seed'den doluyor — canlı yazan yok  ⬜ PLANLANDI (Tur 43)
+### L.1 `audit_log` sadece seed'den doluyor — canlı yazan yok  ⚠️ AÇIK (Tur 43'te tablo geldi)
 
 Admin panelinin "Trafik" sekmesi `audit_log` tablosunu okuyacak, ama tabloyu **hiçbir
 şey canlı doldurmayacak**: satırların tamamı `seed_demo.py`'dan gelir (~3000 sahte
@@ -1117,6 +1117,10 @@ Kullanıcının kararı: middleware'i yazmayalım, ama eksik olduğu yazılı ol
 **Yapılması gereken (ileride):** `backend/app/middleware/audit.py` — tek bir
 `@app.middleware("http")`, yazma metodları + `/auth` için satır düşürür (~40 satır,
 mevcut uçlara dokunmaz).
+
+**Tur 43 durumu:** tablo ve model **yazıldı** (migration 0007, `models.AuditLog`),
+`seed_demo` 3500 satır dolduruyor (hafta içi/sonu farkı, öğle ve akşam tepesi, ~%10 hata).
+Yazan middleware **yok** — panel geçmişi gösterecek, canlı olayı göstermeyecek.
 
 ### L.2 Ödeme düzeltme mock — ledger append-only  ⬜ PLANLANDI (Tur 48)
 
@@ -1143,7 +1147,7 @@ entegrasyon ayrı bir iş kolu (sözleşme, anahtar, sertifikasyon).
 akışını sürdürür. Yani **çalışan yol seçicinin arkasında duruyor**, mock'lar onun
 önüne geçmiyor.
 
-### L.4 `fx_rates` verisi mock — gerçek web-fetch yok  ⬜ PLANLANDI (Tur 43)
+### L.4 `fx_rates` verisi mock — gerçek web-fetch yok  ⚠️ AÇIK (Tur 43'te tablo geldi)
 
 `fx_rates` tablosu ve `fx.py` hesap katmanı **gerçek**: tablo Postgres'te, migration
 0006 ile geliyor, hesaplar tek yerde. Ama **içindeki 365 günlük seri uydurma** (USD
@@ -1157,6 +1161,19 @@ kendi tarihindeki kurla eşleşiyor mu, hesap tek yerde mi.
 **Yapılması gereken (ileride):** günlük bir job (TCMB veya benzeri kaynaktan) satırları
 gerçekten doldursun. Tablo şeması ve `fx.py` arayüzü **değişmez** — sadece veri kaynağı
 değişir.
+
+**Tur 43 durumu:** tablo (migration 0006), `fx.py` hesap katmanı ve `GET /fx-rates` **gerçek
+ve test edilmiş** (30 pytest). Uydurma olan yalnızca 549 satırlık serinin **içeriği**:
+`seed_demo._fx_series` USD'yi 31,80 → 44,19, TÜFE'yi ~%2,5/ay yürütüyor. Şekli inandırıcı,
+sayıları gerçek değil.
+
+⚠️ **Bunun bir sonucu var:** endeksleme (§L.7) bu uydurma seriyi kullanıyor. Yani demo'da
+müşterilerin borcuna eklenen enflasyon farkı da uydurma bir orandan geliyor. Sunumda
+"gerçek TÜFE" iddiasında bulunulmamalı.
+
+**`cpi_index` neden birimsiz:** yalnızca *oranları* alınıyor (`fx.cpi_ratio`), baz dönem
+sadeleşiyor. 100'den başlayan seri ile 100000'den başlayan aynı cevabı veriyor — kaynak
+değiştiğinde çağıranların hiçbiri etkilenmiyor.
 
 ### L.5 TC / kimlik fotoğrafı yerelde kalıyor — KVKK kararı  ⬜ PLANLANDI (Tur 47)
 
@@ -1186,3 +1203,49 @@ cevabı yok — birden fazla kişi aynı şifreyi kullanırsa ayırt edilemez.
 **Yapılması gereken (ileride):** `users.is_admin` kolonu + `require_admin` bağımlılığı,
 mevcut OTP akışının üstüne. O zaman admin işlemleri de `audit_log`'a gerçek bir
 `actor_user_id` ile düşer (bkz. §L.1).
+
+### L.7 Endeks satırı geri alınamaz — itiraz akışı yok  ⚠️ AÇIK (Tur 43)
+
+Aylık INDEXATION satırları `transactions`'a yazılıyor ve o tablo **append-only** (migration
+0001'deki `trg_transactions_append_only` trigger'ı). Yani yanlış yazılmış bir endeks satırı
+**silinemez, düzeltilemez**.
+
+**Neden bu şekilde bırakıldı:** append-only ledger'ın tamamı buna dayanıyor; endeks için
+istisna açmak kuralın kendisini kaldırırdı. Doğru çözüm zaten mimaride var — **ters kayıt**:
+düzeltme, ters yönde yeni bir satırdır.
+
+**Eksik olan:** o ters kaydı yazacak akış. Bugün mümkün olan tek şey elle bir PAYMENT
+satırı eklemek, ki bu da yanlış — ödeme olmadığı halde ödeme gibi görünür, tahsilat
+raporlarını kirletir.
+
+**Ne zaman ortaya çıkar:** kur serisi yanlışsa (§L.4 — şu an uydurma), yanlış oranla
+hesaplanmış aylar ledger'da kalıcı olur. Demo için sorun değil; gerçek veriyle çalışmadan
+önce çözülmeli.
+
+**Yapılması gereken (ileride):** ya yeni bir `REVERSAL` tipi (ledger'a dördüncü tip demek —
+bakiye formülünün 10 kopyası yine elden geçer, bkz. progress.md Tur 43), ya da negatif
+yönlü bir düzeltme kaydı. İkisi de ürün kararı: müşteriye ne gösterileceği, kimin
+yetkilendirileceği. Panelden "ödeme düzelt" de aynı sebeple mock (§L.2).
+
+⚠️ **Sunumda sorulursa:** "endeksleme geri alınabilir mi?" sorusunun dürüst cevabı
+*"append-only olduğu için satır silinmiyor, düzeltme ters kayıtla yapılır — o akışı henüz
+yazmadık"*. Mimari doğru, uygulama eksik.
+
+### L.8 Endeksleme oranı ürün/hukuk kararı değil, teknik varsayım  ⚠️ AÇIK (Tur 43)
+
+Endeksleme **aylık** ve **TÜFE oranında** yapılıyor. Bu sayılar tartışılarak seçilmedi;
+demo için makul göründükleri için seçildi.
+
+**Karara bağlanmamış olanlar:**
+- **Sıklık.** Aylık mı, üç aylık mı, yıllık mı? Aylık en görünür olanı — grafikte satır
+  satır birikiyor — ama küçük bir bakkal borcunda ayda 3 TL fark itici de olabilir.
+- **Oran.** TÜFE mi, ÜFE mi, dükkânın kendi sepeti mi? Şu an TÜFE varsayılıyor.
+- **Muafiyet.** İlk ay endekslenmeli mi? Küçük tutarlar için alt sınır olmalı mı?
+- **Rıza.** Müşteri veresiye alırken bunu kabul ediyor mu, nerede gösteriliyor?
+
+⚠️ **Hukuki taraf açık:** `veresiye-platform-tasarim.md` FAZ 7 zaten işaretlemişti — faiz
+veya vade hesabı yapmak **finansal hizmet** sayılırsa BDDK lisansı sorusu doğar. Enflasyon
+endeksi teknik olarak faize yakın duruyor. *Token ekibine erken sorulmalı.*
+
+Kod tarafında hepsi tek yerden değişir: `indexation.py`'ın ay döngüsü ve `fx.cpi_ratio`.
+Karar verildiğinde uygulama küçük; asıl iş kararın kendisi.

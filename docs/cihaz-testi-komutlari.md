@@ -375,3 +375,117 @@ FROM transactions ORDER BY created_at DESC LIMIT 10;"
 ```
 
 `PAYMENT` satırlarının `basket_id`'si **NULL olmalı**. Dolu çıkarsa yanlış bir şey var.
+
+---
+
+## F bloğu — Tur 43: enflasyon endekslemesi
+
+⚠️ **Bu blok Tur 43'te CİHAZDA ÇALIŞTIRILMADI.** Backend Docker+Postgres'te doğrulandı,
+APK kurulmadı. Tur 44'ün sonunda tema ile birlikte koşulacak.
+
+### Hazırlık — kur serisi olmadan hiçbir şey olmaz
+
+Endeksleyici `fx_rates` boşken **sessizce hiçbir satır yazmaz** (bilinen davranış: bilinmeyen
+enflasyon "sıfır enflasyon" sayılmıyor). Yani demo seed atılmadan test edilirse "endeksleme
+çalışmıyor" gibi görünür.
+
+```bash
+cd backend
+docker compose up -d --build
+docker compose exec api python -m app.reset        # temiz seed (15 satır)
+docker compose exec api python -m app.seed_demo    # + 12 aylık demo mahalle
+```
+
+Beklenen çıktı: `demo seed hazır: 8 dükkân, ~5800 hareket, 549 kur satırı, 3499 trafik kaydı`
+
+### F1 — Endeks satırı OKUNDUĞUNDA oluşuyor mu (tembel tetikleme)
+
+```bash
+# Okumadan ÖNCE: 0 satır olmalı
+docker compose exec db psql -U veresiye -d veresiye -tc \
+  "SELECT count(*) FROM transactions WHERE type='INDEXATION' AND customer_id='c5';"
+
+TOK=$(curl -s -X POST localhost:4010/auth/otp/verify -H 'Content-Type: application/json' \
+  -d '{"phone":"+905554443322","code":"123456"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s "localhost:4010/balances?customer_id=c5" -H "Authorization: Bearer $TOK"
+
+# Okumadan SONRA: satır belirmiş olmalı
+docker compose exec db psql -U veresiye -d veresiye -tc \
+  "SELECT count(*) FROM transactions WHERE type='INDEXATION' AND customer_id='c5';"
+```
+
+### F2 — Aynı ay iki kez yazılmıyor mu (idempotency)
+
+```bash
+for i in 1 2 3 4 5; do curl -s "localhost:4010/balances?customer_id=c5" -H "Authorization: Bearer $TOK" >/dev/null; done
+docker compose exec db psql -U veresiye -d veresiye -tc \
+  "SELECT count(*) FROM transactions WHERE type='INDEXATION' AND customer_id='c5';"
+```
+Beş okumadan sonra sayı **değişmemeli**. Artıyorsa satır id'si (`idx_{seller}_{customer}_{ay}`)
+bozulmuştur ve her ekran yenilemesi borcu şişiriyor demektir.
+
+### F3 — Kapanmış hesap endekslenmiyor mu
+
+```bash
+# c3 (Mehmet Kaya) seed'de 0 bakiyeli
+curl -s "localhost:4010/balances?customer_id=c3" -H "Authorization: Bearer $TOK"
+```
+`balance_minor: 0` kalmalı. Sıfırdan büyükse "satıcı banka değil" kuralı kırılmış demektir.
+
+### F4 — İstemci endeks yazamıyor mu (güvenlik sınırı)
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:4010/transactions \
+  -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: hack1' \
+  -d '{"transaction_id":"hack1","customer_id":"c5","amount_minor":999900,"type":"INDEXATION","description":"sahte"}'
+```
+**400** dönmeli. 201 dönüyorsa `_VALID_TYPES`'a INDEXATION sızmıştır — bir cihaz borcu
+istediği kadar şişirebilir.
+
+### F5 — ⚠️ ASIL ÖLÇÜT: cihaz ve sunucu aynı rakamı mı gösteriyor
+
+Turun en kritik testi. Room'daki 7 bakiye sorgusundan **biri bile** atlanmışsa burada
+ayrışır — ve derleyici bunu yakalayamaz, çünkü sorgular string.
+
+```bash
+# 1) Sunucunun rakamı
+curl -s "localhost:4010/balances?customer_id=c5" -H "Authorization: Bearer $TOK"
+
+# 2) APK'ları kur (compileDebugKotlin YETMEZ — APK üretmez)
+cd app-pos && ./gradlew assembleDebug && ./gradlew --stop
+adb uninstall com.example.app_pos
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
+
+3) POS'ta `+905554443322` ile gir → Hasan Öztürk'ü aç.
+4) **Ekrandaki bakiye, curl'ün döndürdüğü `balance_minor` ile birebir aynı olmalı.**
+
+Ayrışıyorsa: `grep -rn "ELSE -amountMinor" --include=Daos.kt app-pos app-mobile` — çıktı
+boş olmalı.
+
+### F6 — Endeks satırı ekranda nasıl görünüyor
+
+Müşteri detayında endeks satırları görünmeli:
+- Açıklama: `"Mart 2026 enflasyon farkı (%2,51)"`
+- İşaret: **+** (borcu artırıyor)
+- Renk: **soluk kırmızı** (`balance_indexation #C77A7A`) — normal veresiyeden daha soluk
+
+⚠️ **Yeşil ve eksi görünüyorsa** `TransactionAdapter`'daki `when` bozulmuş demektir. Eski
+`val isDebt` boolean'ı tam bunu yapıyordu: endeksi ödeme sanıp yeşil gösteriyordu.
+
+### F7 — DEBT filtresi endeksi kapsıyor mu
+
+Müşteri detayında **[Borç]** çipine bas: endeks satırları da listede kalmalı. Kaybolurlarsa
+iki filtrenin toplamı üstteki bakiyeyi vermez — kullanıcı "borçlarım" derken endeksi de
+kastediyor.
+
+### F8 — Alıcı tarafı (app-mobile)
+
+```bash
+BTOK=$(curl -s -X POST localhost:4010/auth/otp/verify -H 'Content-Type: application/json' \
+  -d '{"phone":"+905551112233","code":"123456"}' | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s "localhost:4010/me/debts/breakdown" -H "Authorization: Bearer $BTOK"
+```
+`principal + indexation − paid == outstanding` tutmalı. Telefondaki "Borçlarım" toplamı da
+aynı olmalı.
