@@ -159,6 +159,15 @@ class Approval(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     channel: Mapped[str] = mapped_column(String, nullable=False)
 
+    # The basket this request was raised over, stored the moment it is asked rather than
+    # when it is answered: the gateway handed the items over during the sale, and by the
+    # time somebody taps approve -- possibly hours later -- that handoff is long gone.
+    # Nullable because a money-only entry has no basket, and because a rejected request
+    # keeps its basket as the record of what was actually asked for.
+    basket_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("baskets.basket_id"), nullable=True
+    )
+
     # Which kind of device raised this: POS or PHONE. Stored rather than inferred at
     # decision time, because by then the fact is gone -- and it decides whether approving
     # leaves gateway work behind. A terminal-raised request hands its own intent over; a

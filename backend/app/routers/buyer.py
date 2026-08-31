@@ -18,7 +18,7 @@ from .. import models, schemas
 from ..deps import CurrentUser, DbSession
 from ..ledger import debts_by_seller
 from ..ledger import balance_of as _seller_scoped_balance
-from ..serializers import transaction_out
+from ..serializers import transactions_out
 
 router = APIRouter(tags=["buyer"])
 
@@ -121,7 +121,9 @@ def my_history(
         .order_by(models.Transaction.created_at.desc())
     ).scalars().all()
 
-    return [transaction_out(tx) for tx in rows]
+    # Batched like the seller-scoped history: the buyer sees the same entries from the
+    # other side, so they must arrive carrying the same baskets.
+    return transactions_out(rows, db)
 
 
 @router.get("/me/balances")

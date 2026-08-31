@@ -8,17 +8,17 @@ a queue entry safe on the client is precisely that a replay here replays rather 
 duplicates.
 """
 
-import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Header, Query, Response, status
 from sqlalchemy import select
 
 from .. import models, schemas
+from ..baskets import write_basket
 from ..deps import CurrentUser, DbSession
 from ..ledger import balance_of, is_in_book
 from ..security import api_error
-from ..serializers import transaction_out
+from ..serializers import transaction_out, transactions_out
 
 router = APIRouter(tags=["transactions"])
 
@@ -88,7 +88,7 @@ def create_transaction(
             )
         # A replay. Return the original untouched; the client treats 200 and 201 alike.
         response.status_code = status.HTTP_200_OK
-        return transaction_out(existing)
+        return transaction_out(existing, db)
 
     customer = db.get(models.Customer, body.customer_id)
     if customer is None:
@@ -102,7 +102,7 @@ def create_transaction(
     if not is_in_book(db, current_user.user_id, body.customer_id):
         raise api_error(403, "not_in_book", "This customer is not in your book")
 
-    basket_id = _write_basket(db, body.basket) if body.basket else None
+    basket_id = write_basket(db, body.basket) if body.basket else None
 
     transaction = models.Transaction(
         transaction_id=body.transaction_id,
@@ -124,45 +124,7 @@ def create_transaction(
     # orphan, and an entry pointing at a basket that was never written is a broken FK.
     db.commit()
 
-    return transaction_out(transaction)
-
-
-def _write_basket(db: DbSession, basket: schemas.OrderBody) -> str:
-    """
-    Persist the handed-off basket. Part of the caller's transaction, not its own.
-
-    Idempotent alongside the entry: a replay whose basket already exists reuses it rather
-    than inserting the items twice.
-    """
-    if db.get(models.Basket, basket.basket_id) is None:
-        db.add(
-            models.Basket(
-                basket_id=basket.basket_id,
-                create_invoice=basket.create_invoice,
-                document_type=basket.document_type,
-                is_void=basket.is_void,
-                created_at=datetime.now(UTC),
-            )
-        )
-        for item in basket.items:
-            db.add(
-                models.BasketItem(
-                    id=f"bi_{uuid.uuid4().hex[:12]}",
-                    basket_id=basket.basket_id,
-                    name=item.name,
-                    price_minor=item.price,
-                    quantity=item.quantity,
-                    tax_percent=item.tax_percent,
-                    section_no=item.section_no,
-                    status=item.status,
-                    type=item.type,
-                    item_limit=item.item_limit,
-                )
-            )
-        # Makes the basket visible to the FK on the entry added next.
-        db.flush()
-
-    return basket.basket_id
+    return transaction_out(transaction, db)
 
 
 @router.get("/transactions")
@@ -186,7 +148,8 @@ def transaction_history(
         .order_by(models.Transaction.created_at.desc())
     ).scalars().all()
 
-    return [transaction_out(tx) for tx in rows]
+    # Serialised as a batch so the baskets come back in one read rather than one per entry.
+    return transactions_out(rows, db)
 
 
 @router.get("/balances")

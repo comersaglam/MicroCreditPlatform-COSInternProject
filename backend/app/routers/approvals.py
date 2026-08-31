@@ -17,6 +17,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import select
 
 from .. import models, schemas
+from ..baskets import write_basket
 from ..deps import CurrentUser, DbSession
 from ..pgw import KIND_COLLECT, KIND_RECEIPT, queue_job, receipt_order_body
 from ..security import api_error
@@ -71,8 +72,14 @@ def _write_entry(
     amount_minor: int,
     tx_type: str,
     description: str | None,
+    basket_id: str | None = None,
 ) -> models.Transaction:
-    """Append the agreed entry. The only path from an approval into the ledger."""
+    """
+    Append the agreed entry. The only path from an approval into the ledger.
+
+    `basket_id` is carried over from the request rather than looked up here: the basket
+    was stored when the sale was raised, and this is where it becomes part of the ledger.
+    """
     transaction = models.Transaction(
         transaction_id=str(uuid.uuid4()),
         seller_id=seller_id,
@@ -80,7 +87,7 @@ def _write_entry(
         amount_minor=amount_minor,
         type=tx_type,
         description=description or "",
-        basket_id=None,
+        basket_id=basket_id,
         settled_via_pgw=False,
         receipt_no=None,
         created_at=datetime.now(UTC),
@@ -140,6 +147,11 @@ def send_for_approval(
         if customer.claimed_by_user_id != current_user.user_id:
             raise api_error(403, "forbidden", "This customer record is not yours")
 
+    # Stored before either branch, because both of them need it and only one of them
+    # writes a ledger entry today. A rejected request keeps its basket too: what was asked
+    # for is worth as much to the trail as what was agreed.
+    basket_id = write_basket(db, body.basket) if body.basket else None
+
     if approver_user_id is None:
         # UNCLAIMED counterparty: nobody can tap approve, so this is the SMS-OTP branch.
         # Mocked as accepted, exactly as the client's mock does today, and written now.
@@ -150,10 +162,11 @@ def send_for_approval(
             amount_minor=body.amount_minor,
             tx_type=body.type,
             description=body.description,
+            basket_id=basket_id,
         )
         db.commit()
         response.status_code = status.HTTP_200_OK
-        return transaction_out(transaction)
+        return transaction_out(transaction, db)
 
     raised_at = datetime.now(UTC)
     approval = models.Approval(
@@ -171,6 +184,10 @@ def send_for_approval(
         type=body.type,
         description=body.description,
         channel="APP_PUSH",
+        # Held on the row until somebody decides: the entry does not exist yet, so this is
+        # the only place the basket can wait without being attached to a sale nobody has
+        # agreed to.
+        basket_id=basket_id,
         # Kept from the request: by the time somebody decides this, the device that raised
         # it is long gone, and whether to queue gateway work depends on which it was.
         origin=body.origin,
@@ -310,6 +327,9 @@ def approve(
         amount_minor=approval.amount_minor,
         tx_type=approval.type,
         description=approval.description,
+        # The basket stored when the request was raised. It becomes part of the ledger
+        # here, at the moment the sale it describes is actually agreed.
+        basket_id=approval.basket_id,
     )
     approval.status = "APPROVED"
     approval.updated_at = datetime.now(UTC)
@@ -318,7 +338,7 @@ def approve(
 
     db.commit()
 
-    return transaction_out(transaction)
+    return transaction_out(transaction, db)
 
 
 def _queue_terminal_work(

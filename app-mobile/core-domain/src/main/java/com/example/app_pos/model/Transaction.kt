@@ -27,5 +27,15 @@ data class Transaction(
     val amountMinor: Long,           // in minor units (kuruş), always POSITIVE; type carries the sign
     val type: TransactionType,
     val description: String,         // "bread, milk" / "cash payment"
-    val createdAt: String            // ISO-8601 UTC: "2026-07-23T11:30:00Z" (sorts as text)
+    val createdAt: String,           // ISO-8601 UTC: "2026-07-23T11:30:00Z" (sorts as text)
+
+    /**
+     * What was bought, when the sale came through the payment gateway. Null for a
+     * money-only entry — most of them.
+     *
+     * This app never RAISES a basket (it has no gateway handoff), but it reads them: the
+     * buyer is looking at the same entries the shop wrote, so the items have to survive
+     * the trip to this side too.
+     */
+    val basket: OrderBody? = null
 )

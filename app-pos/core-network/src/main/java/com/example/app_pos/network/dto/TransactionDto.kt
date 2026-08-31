@@ -19,6 +19,11 @@ data class TransactionDto(
     @param:Json(name = "type") val type: String,
     @param:Json(name = "description") val description: String,
     @param:Json(name = "basket_id") val basketId: String? = null,
+
+    // The basket itself, not just its id. Nothing serves a basket on its own, so an id
+    // arriving without the items beside it would be a reference this client cannot follow.
+    @param:Json(name = "basket") val basket: OrderBodyDto? = null,
+
     @param:Json(name = "settled_via_pgw") val settledViaPgw: Boolean = false,
     @param:Json(name = "receipt_no") val receiptNo: String? = null,
     @param:Json(name = "created_at") val createdAt: String

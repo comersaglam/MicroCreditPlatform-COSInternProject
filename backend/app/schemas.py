@@ -164,6 +164,11 @@ class Transaction(BaseModel):
     type: str
     description: str
     basket_id: str | None = None
+
+    # The basket itself, not just its id. Nothing serves a basket on its own, so an id
+    # without the items beside it is a reference the client cannot resolve.
+    basket: OrderBody | None = None
+
     settled_via_pgw: bool = False
     receipt_no: str | None = None
     created_at: IsoUtc
@@ -236,6 +241,11 @@ class ApprovalCreate(BaseModel):
     # come from the token. The router still verifies it -- see routers/approvals.py.
     initiator_role: str
     target_user_id: str
+
+    # The basket the gateway handed over, when the sale came from one. Carried on the
+    # REQUEST rather than collected at approval time: the handoff is over by then, and
+    # a decision can be hours later. Absent for a money-only entry.
+    basket: OrderBody | None = None
 
     # Which DEVICE raised this: "POS" or "PHONE". It decides whether approving should
     # leave gateway work behind. A terminal is already standing in front of the gateway

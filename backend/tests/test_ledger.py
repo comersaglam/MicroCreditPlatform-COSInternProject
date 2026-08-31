@@ -7,6 +7,8 @@ server that duplicated a replay, or that silently overwrote an entry, would corr
 book that nobody is watching at the time.
 """
 
+from sqlalchemy import event
+
 from app import models
 
 
@@ -305,6 +307,128 @@ def test_replaying_a_basket_entry_does_not_duplicate_its_items(
 def test_a_money_only_entry_has_no_basket(client, owner_auth):
     response = _post(client, owner_auth, _entry())
     assert response.json()["basket_id"] is None
+    assert response.json()["basket"] is None
+
+
+# --- reading the basket back ---
+#
+# The id alone is not enough to be useful: nothing serves a basket on its own, so a device
+# holding only `basket_id` holds a reference it can never resolve. These pin the items to
+# the response.
+
+
+def test_the_history_returns_the_basket_with_its_items(client, owner_auth):
+    _post(
+        client,
+        owner_auth,
+        _entry(
+            basket={
+                "basket_id": "b-test-0001",
+                "items": [
+                    {
+                        "name": "Ekmek",
+                        "price": 500,
+                        "quantity": 2000,
+                        "tax_percent": 1000,
+                    },
+                    {"name": "Süt", "price": 3000, "quantity": 1000, "tax_percent": 1000},
+                ],
+            }
+        ),
+    )
+
+    rows = client.get("/transactions?customer_id=c1", headers=owner_auth).json()
+    entry = next(r for r in rows if r["basket_id"] == "b-test-0001")
+
+    names = [item["name"] for item in entry["basket"]["items"]]
+    assert names == ["Ekmek", "Süt"]
+
+    bread = entry["basket"]["items"][0]
+    # The scaled fields survive the round trip unscaled: quantity 2000 is two units, and
+    # dividing on the way out is how a price silently becomes wrong.
+    assert bread["price"] == 500
+    assert bread["quantity"] == 2000
+    assert bread["tax_percent"] == 1000
+
+
+def test_a_money_only_entry_reads_back_without_a_basket(client, owner_auth):
+    _post(client, owner_auth, _entry(transaction_id="tx-money-only"))
+
+    rows = client.get("/transactions?customer_id=c1", headers=owner_auth).json()
+    entry = next(r for r in rows if r["transaction_id"] == "tx-money-only")
+
+    assert entry["basket"] is None
+
+
+def test_the_buyer_sees_the_same_basket_as_the_seller(client, owner_auth, buyer_auth):
+    _post(
+        client,
+        owner_auth,
+        _entry(
+            basket={
+                "basket_id": "b-test-0002",
+                "items": [
+                    {"name": "Peynir", "price": 8000, "quantity": 1000, "tax_percent": 1000}
+                ],
+            }
+        ),
+    )
+
+    rows = client.get(
+        "/me/transactions", headers=buyer_auth, params={"seller_id": "u_owner"}
+    ).json()
+    entry = next(r for r in rows if r["basket_id"] == "b-test-0002")
+
+    assert [i["name"] for i in entry["basket"]["items"]] == ["Peynir"]
+
+
+def test_reading_many_baskets_does_not_query_per_entry(client, owner_auth, db_session):
+    """
+    The batch read is the point, not an optimisation detail: pullBook already issues one
+    request per customer, so a per-entry basket query would multiply the two together.
+    """
+    for n in range(3):
+        _post(
+            client,
+            owner_auth,
+            _entry(
+                transaction_id=f"tx-basket-{n}",
+                basket={
+                    "basket_id": f"b-many-{n}",
+                    "items": [
+                        {
+                            "name": f"Ürün {n}",
+                            "price": 100,
+                            "quantity": 1000,
+                            "tax_percent": 1000,
+                        }
+                    ],
+                },
+            ),
+        )
+
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, *rest):
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        rows = client.get("/transactions?customer_id=c1", headers=owner_auth).json()
+    finally:
+        # Removed by name, not by a fresh lambda: the listener stays attached to the
+        # shared engine otherwise and every later test in the run pays for it.
+        event.remove(engine, "before_cursor_execute", record)
+
+    # Matched on the FROM clause, not on the word "basket": the transactions query selects
+    # a basket_id column and would otherwise be counted as a basket read.
+    basket_reads = [
+        s for s in statements if "FROM baskets" in s or "FROM basket_items" in s
+    ]
+    # Two: one for the headers, one for the items -- regardless of how many entries.
+    assert len(basket_reads) == 2
+    assert sum(1 for r in rows if r["basket"] is not None) == 3
 
 
 # --- reads ---

@@ -27,5 +27,16 @@ data class Transaction(
     val amountMinor: Long,           // in minor units (kuruş), always POSITIVE; type carries the sign
     val type: TransactionType,
     val description: String,         // "bread, milk" / "cash payment"
-    val createdAt: String            // ISO-8601 UTC, e.g. "2026-07-23T11:30:00Z"
+    val createdAt: String,           // ISO-8601 UTC, e.g. "2026-07-23T11:30:00Z"
+
+    /**
+     * What was bought, when the sale came through the payment gateway. Null for a
+     * money-only entry — most of them.
+     *
+     * The whole basket rather than a `basketId`, because an id here would be a reference
+     * to nothing: no endpoint serves a basket on its own, so a device holding only the id
+     * could never resolve it. Defaulted so the many call sites that write a money-only
+     * entry stay unchanged.
+     */
+    val basket: OrderBody? = null
 )

@@ -366,9 +366,25 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         db.withTransaction {
             // insert-IGNORE keyed by the server's transaction id, so re-pulling the same
             // history is a no-op rather than a duplicate.
-            entries.forEach { transactions.insert(it.toEntity(basketId = null)) }
+            entries.forEach { transactions.insert(it.toEntity(storeBasket(it))) }
         }
     }
+
+    /**
+     * Writes a pulled entry's basket, if it brought one, and reports the id to link.
+     *
+     * Ordered basket-first so the entry's foreign key has something to point at. Both
+     * inserts IGNORE, which is what makes re-pulling the same history harmless.
+     *
+     * Call inside an existing db.withTransaction: a basket committed apart from its entry
+     * could outlive one that failed to write.
+     */
+    private suspend fun storeBasket(transaction: Transaction): String? =
+        transaction.basket?.let { basket ->
+            baskets.insertBasket(basket.toBasketEntity(transaction.createdAt))
+            baskets.insertItems(basket.toItemEntities())
+            basket.basketId
+        }
 
     override suspend fun markApprovalDecided(approvalId: String, status: String) {
         approvals.setStatus(approvalId, status)

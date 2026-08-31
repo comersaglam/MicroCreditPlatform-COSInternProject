@@ -502,3 +502,101 @@ def test_an_unknown_role_is_rejected(client, owner_auth):
     response = client.get("/approvals", headers=owner_auth, params={"role": "ADMIN"})
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "invalid_role"
+
+
+# --- the basket a request was raised over ---
+#
+# Path 1 is the reason this exists. A credit sale that starts at the gateway arrives here,
+# not at POST /transactions, so a basket the approval endpoint could not carry was a
+# basket lost for every veresiye that waited on a customer's tap.
+
+
+def _basket(basket_id: str = "b-appr-0001") -> dict:
+    return {
+        "basket_id": basket_id,
+        "items": [
+            {"name": "Ekmek", "price": 500, "quantity": 2000, "tax_percent": 1000},
+            {"name": "Süt", "price": 3000, "quantity": 1000, "tax_percent": 1000},
+        ],
+    }
+
+
+def test_approving_carries_the_basket_into_the_ledger(client, owner_auth, buyer_auth):
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request(basket=_basket())
+    ).json()["approval_id"]
+
+    entry = client.post(
+        f"/approvals/{approval_id}/approve", headers=buyer_auth
+    ).json()
+
+    assert entry["basket_id"] == "b-appr-0001"
+    assert [i["name"] for i in entry["basket"]["items"]] == ["Ekmek", "Süt"]
+
+
+def test_the_basket_is_stored_when_the_request_is_RAISED(
+    client, owner_auth, db_session
+):
+    """
+    Not when it is answered. The handoff that carried the items is over by then, and a
+    decision can come hours later -- the same reason `origin` is stored up front.
+    """
+    client.post("/approvals", headers=owner_auth, json=_seller_request(basket=_basket()))
+
+    items = db_session.query(models.BasketItem).filter_by(basket_id="b-appr-0001").all()
+    assert len(items) == 2
+
+
+def test_a_rejected_request_keeps_its_basket(
+    client, owner_auth, buyer_auth, db_session
+):
+    """
+    What was ASKED for is worth as much to the trail as what was agreed. The ledger stays
+    untouched; the basket stays as the record of the refused sale.
+    """
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request(basket=_basket())
+    ).json()["approval_id"]
+
+    client.post(f"/approvals/{approval_id}/reject", headers=buyer_auth)
+
+    assert (
+        client.get(f"/approvals/{approval_id}", headers=owner_auth).json()["status"]
+        == "REJECTED"
+    )
+
+    # The basket survives...
+    assert db_session.get(models.Basket, "b-appr-0001") is not None
+
+    # ...while no ledger entry points at it.
+    rows = client.get("/transactions?customer_id=c1", headers=owner_auth).json()
+    assert all(row["basket_id"] != "b-appr-0001" for row in rows)
+
+
+def test_an_unclaimed_counterparty_still_keeps_the_basket(client, owner_auth):
+    """
+    The SMS-OTP branch writes immediately instead of raising a row. It used to drop the
+    basket on the floor, which would have lost it for every customer without the app --
+    in the real world, most of them.
+    """
+    entry = client.post(
+        "/approvals",
+        headers=owner_auth,
+        json=_seller_request(customer_id="c2", target_user_id="", basket=_basket("b-appr-unc")),
+    ).json()
+
+    assert entry["basket_id"] == "b-appr-unc"
+    assert [i["name"] for i in entry["basket"]["items"]] == ["Ekmek", "Süt"]
+
+
+def test_a_money_only_request_has_no_basket(client, owner_auth, buyer_auth):
+    approval_id = client.post(
+        "/approvals", headers=owner_auth, json=_seller_request()
+    ).json()["approval_id"]
+
+    entry = client.post(
+        f"/approvals/{approval_id}/approve", headers=buyer_auth
+    ).json()
+
+    assert entry["basket_id"] is None
+    assert entry["basket"] is None

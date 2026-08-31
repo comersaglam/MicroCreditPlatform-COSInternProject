@@ -8,10 +8,12 @@ import com.example.app_pos.network.dto.TransactionDto
 /**
  * Transaction ↔ wire.
  *
- * The domain Transaction is deliberately narrower than both the entity and the DTO: it
- * has no basketId / settledViaPgw / receiptNo. Those are storage and gateway concerns,
- * and the Room mapper already hardcodes them the same way. Keeping the asymmetry means
- * the domain model stays about the ledger itself.
+ * The domain Transaction is narrower than the DTO: it has no settledViaPgw / receiptNo,
+ * which are gateway bookkeeping the ledger screens never ask about.
+ *
+ * The basket is the exception, and it used to be dropped here with the rest. It is not
+ * bookkeeping — it is what the customer actually bought, and dropping it meant the items
+ * could reach the server and never come back.
  */
 
 /**
@@ -30,7 +32,8 @@ fun TransactionDto.toDomainOrNull(): Transaction? {
         amountMinor = amountMinor,
         type = txType,
         description = description,
-        createdAt = createdAt
+        createdAt = createdAt,
+        basket = basket?.toDomain()
     )
 }
 
