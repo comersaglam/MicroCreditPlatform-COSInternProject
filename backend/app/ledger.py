@@ -1,10 +1,16 @@
 """
 Balance derivation -- the server's half of a rule the device also implements.
 
-This mirrors core-domain/Ledger.kt::balanceOf exactly: DEBT adds to what is owed, PAYMENT
-subtracts, and the amount is always positive with the sign carried by the type. The two
-implementations must agree, because the shopkeeper compares the number on the terminal
-with the number the server reports and any drift reads as money going missing.
+This mirrors core-domain/Ledger.kt::balanceOf exactly: DEBT and INDEXATION add to what is
+owed, PAYMENT subtracts, and the amount is always positive with the sign carried by the
+type. The two implementations must agree, because the shopkeeper compares the number on
+the terminal with the number the server reports and any drift reads as money going missing.
+
+That agreement is why indexation is a ROW and not a formula. The rule below is written out
+ten times across this codebase -- here, twice in Kotlin, and seven times as SQL inside Room
+DAOs -- and seven of those copies live in strings no compiler checks. Adding a type to the
+sum touches all ten; multiplying the sum by an index would have touched all ten AND
+required the rate table on every device.
 
 The balance is computed, never stored. A stored column would be the one place the two
 could diverge without anything noticing.
@@ -19,10 +25,18 @@ from sqlalchemy.orm import Session
 
 from . import models
 
-# DEBT counts positive, PAYMENT negative. Anything else contributes 0 rather than being
-# guessed at: an unrecognised type must never silently land on one side of the sum.
+# DEBT and INDEXATION count positive, PAYMENT negative. Anything else contributes 0 rather
+# than being guessed at: an unrecognised type must never silently land on one side of the
+# sum.
+#
+# INDEXATION is the month's inflation on what was still owed (see indexation.py). It adds
+# for the same reason DEBT does -- it is part of what the customer owes -- and carrying it
+# as a row here rather than as a factor is what keeps this a plain SUM. The seven copies of
+# this formula in the Room DAOs must list the same three cases; they were written with an
+# `ELSE -amountMinor` that would have counted indexation as a PAYMENT and subtracted it.
 _SIGNED_AMOUNT = case(
     (models.Transaction.type == "DEBT", models.Transaction.amount_minor),
+    (models.Transaction.type == "INDEXATION", models.Transaction.amount_minor),
     (models.Transaction.type == "PAYMENT", -models.Transaction.amount_minor),
     else_=0,
 )

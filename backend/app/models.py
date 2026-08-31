@@ -10,9 +10,18 @@ the migration additionally REVOKEs both from the application role so the rule is
 by the database rather than by everyone remembering it.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -102,7 +111,24 @@ class BasketItem(Base):
 
 
 class Transaction(Base):
-    """Append-only ledger. A correction is a new row with the opposite type."""
+    """
+    Append-only ledger. A correction is a new row with the opposite type.
+
+    THREE types, and the third is not written by any client:
+      DEBT       credit extended -> raises the balance
+      PAYMENT    money received  -> lowers it
+      INDEXATION the month's inflation on an outstanding balance -> raises it
+
+    INDEXATION exists because the shopkeeper who extends credit is lending money that
+    loses value while it is out. Carrying that as a LEDGER ROW rather than as a factor in
+    the balance formula is deliberate: the balance stays a plain SUM, which is what lets
+    the terminal and the server keep deriving the same number (see ledger.py). It also
+    makes each month's adjustment something a customer can be shown and can dispute,
+    instead of a number that silently changed.
+
+    Only the server writes these -- see `_VALID_TYPES` in routers/ledger.py, which stays
+    {DEBT, PAYMENT}. A device that could mint indexation could inflate a debt at will.
+    """
 
     __tablename__ = "transactions"
 
@@ -112,7 +138,9 @@ class Transaction(Base):
         String, ForeignKey("customers.customer_id"), nullable=False
     )
 
-    # Always positive; the sign lives in `type` (DEBT adds, PAYMENT subtracts).
+    # Always positive; the sign lives in `type` (DEBT and INDEXATION add, PAYMENT
+    # subtracts). An indexation row is never written for a balance of zero or less, so
+    # this stays positive there too.
     amount_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
@@ -239,3 +267,81 @@ class PgwJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (Index("idx_pgw_jobs_seller", "seller_id", "status"),)
+
+
+class FxRate(Base):
+    """
+    What a lira was worth on a given day.
+
+    Kept as a table rather than fetched when needed, for the reason the design note gives:
+    a debt is settled months after it was taken on, and by then "what was this worth at
+    the time" is a question about the past that no live rate can answer. Recording it
+    daily means the answer is always already here.
+
+    One row per day, keyed by the day itself. Rates move continuously; a date is the
+    granularity the ledger actually needs, since an entry is only ever compared against
+    another day, not another hour.
+
+    SCALES -- all integers, no floats anywhere near money:
+      usd_minor / eur_minor / gold_minor  what ONE unit costs, in kuruş.
+                                          4_100_000 = 41.000,00 TL per gram of gold.
+      cpi_index                           the consumer price index, ×100.
+                                          158_000 = 1580,00. Only RATIOS of this are
+                                          used, so the base year it is anchored to does
+                                          not matter -- see fx.cpi_ratio.
+    """
+
+    __tablename__ = "fx_rates"
+
+    as_of: Mapped[date] = mapped_column(Date, primary_key=True)
+
+    usd_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    eur_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    gold_minor: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    cpi_index: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class AuditLog(Base):
+    """
+    Who did what, and when.
+
+    KVKK asks for a trail that survives the record it describes, which is why this is a
+    table of its own rather than columns on the rows being changed: a deleted customer
+    must still leave evidence that someone deleted them.
+
+    NOTHING WRITES HERE YET. The rows come from the demo seed, and the admin panel reads
+    them; the middleware that would record live requests was deliberately not written
+    (deferred.md §L.1). The table exists now so that adding the middleware later is one
+    file, not a migration plus a file.
+
+    `actor_user_id` carries no foreign key on purpose. The trail outlives the user row it
+    names, and a constraint would make deleting a user either impossible or destructive to
+    the evidence.
+    """
+
+    __tablename__ = "audit_log"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+
+    actor_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # "POST /transactions", "auth.login", "admin.ban" -- what was attempted.
+    action: Mapped[str] = mapped_column(String, nullable=False)
+
+    # What it was attempted ON. Null for actions that touch no single row (a login).
+    entity_type: Mapped[str | None] = mapped_column(String, nullable=True)
+    entity_id: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    ip: Mapped[str | None] = mapped_column(String, nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Kept because a refused attempt is worth more than a successful one: repeated 401s
+    # are the shape of someone trying keys.
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        Index("idx_audit_actor", "actor_user_id", "created_at"),
+        Index("idx_audit_created", "created_at"),
+    )
