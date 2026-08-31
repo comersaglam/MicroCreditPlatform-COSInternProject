@@ -8,7 +8,11 @@
 > bir erteleme değil, **gerçek bir bug**: PGW'den gelen sepet hiç kaydedilmiyor, düzeltmesi
 > Tur 42'ye bırakıldı.
 >
-> Son güncelleme: 2026-08-20, sepet bug'ının teşhisi (§J) sonrası.
+> 🔒 **[§K](#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) tersini anlatır:** §A–§J
+> neyi **ertelediğimiz**, §K neye **dokunmadığımız** — gerçek terminalde çalıştığı
+> kanıtlanmış PGW/intent değerleri. Sepete veya geçide dokunacak her tur önce oraya baksın.
+>
+> Son güncelleme: 2026-08-31, PGW sözleşmesinin dondurulması (§K) sonrası.
 > Kalıcı adım günlüğü: [progress.md](progress.md). Uygulama planı ve §0 kararları:
 > [faz5-backend-plan.md](faz5-backend-plan.md). Kararların gerekçesi:
 > [architecture-pos.md](architecture-pos.md), [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md).
@@ -892,3 +896,111 @@ Bugün bu sorgu **0 satır** dönüyor; düzeltmenin ölçütü ilk kez satır d
 Şimdiye kadar yazılmış veresiyelerin sepetleri **kalıcı olarak kayıp**: JSON hiçbir yere
 yazılmadı, ne outbox payload'ında ne Room'da. `transactions` append-only olduğu için geriye
 dönük `basket_id` doldurmak da yok. Düzeltme yalnız **bundan sonraki** satışlar için geçerli.
+
+---
+
+## K. Cihazda doğrulanmış PGW sözleşmesi — 🔒 **DEĞİŞTİRME**
+
+> Bu bölüm §A–§J'nin **tersi**. Onlar "neyi ertelediğimizi" anlatır; bu, **neye
+> dokunmadığımızı**. Aşağıdakiler gerçek Token terminalinde çalıştığı **kanıtlanmış**
+> değerlerdir — her satırın karşılığında bir cihaz testi turu ve genelde bir hata var.
+>
+> **Neden ayrı bir bölüm:** bu bilgi bugüne kadar §H/§I içinde gerekçelerinin arasına
+> ve kod yorumlarına dağılmıştı; "neye dokunulmaz" diye bakılacak tek bir liste yoktu.
+> Gerekçeler yerinde duruyor, burada **tekrarlanmıyor** — bu bir kontrol listesi.
+>
+> **Bu bölümün asıl uyarısı:** buradaki hiçbir şey derlemede yakalanmaz. Bozulduğunda
+> build yeşil kalır, testler geçer, hata **yalnız cihazda** görünür. Değiştirmen
+> gerekiyorsa §K.4'teki üç kontrolü aynı turda koştur.
+
+### K.1 PGW → app-pos (geçit bizi çağırır ve cevap BEKLER)
+
+| Ne | Değer | Nerede |
+|---|---|---|
+| Action | `com.example.app_pos.action.CREDIT` | `MainActivity.ACTION_CREDIT`, app-pos manifest, `mock-pos/MainActivity` |
+| Extra key | `orderBody` — JSON String | aynı üç yer |
+| Category | `android.intent.category.DEFAULT` | app-pos manifest intent-filter |
+| Cevap | `RESULT_OK` = onaylandı / `RESULT_CANCELED` = reddedildi | `MainActivity.finishCreditHandoff` |
+
+**Result EXTRA'sı yoktur** — sözleşme çıplak `resultCode`'dan ibaret. Geçit bu tek sayıya
+bakarak fişi basıp basmayacağına karar veriyor.
+
+**⚠️ Üç satır, bozulursa kabul ve red geçide AYNI görünür:**
+
+1. app-pos'ta `android:launchMode="singleTop"` + `android:taskAffinity=""`.
+   `singleTask` Android'e kendi task'ında çalıştırır ve sonuç **anında `RESULT_CANCELED`**
+   döner (Tur 41'de yaşandı, §H.2).
+2. mock-pos tarafında `FLAG_ACTIVITY_NEW_TASK` **YOK** ve `registerForActivityResult`
+   kullanılıyor. NEW_TASK ile sonuç yine anında CANCELED gelir — ikisi karşılıklı dışlayan.
+   Launcher **alan olarak** kayıtlı, tık içinde değil (Activity Result API kaydı
+   STARTED'dan önce olmak zorunda).
+3. Her iki manifestteki `<queries>` blokları (Android 11+ paket görünürlüğü). Yoksa
+   `startActivity`, geçit **kurulu olduğu hâlde**, "kurulu değil" gibi sessizce patlar.
+
+**mock-pos geçidi PAKET SEVİYESİNDE taklit ediyor** — en kolay gözden kaçan bağ:
+`mock-pos/app/build.gradle.kts` içinde `applicationId = "com.tokeninc.sardis.paymentgateway"`
+(namespace ise `com.example.mock_pos`), artı manifestteki `activity-alias`. Bu ikisi
+sayesinde app-pos **gerçek component adını** taşıyor ve geliştirme-özel bir varyanta gerek
+kalmıyor; gerçek geçit kurulduğunda app-pos tarafında **hiçbir şey değişmiyor**. Biri
+değişirse mock geçit adreslenemez hâle gelir.
+
+### K.2 app-pos → PGW (biz geçidi çağırırız)
+
+[`PgwBridge`](../app-pos/app/src/main/java/com/example/app_pos/pgw/PgwBridge.kt) —
+implicit action **değil**, explicit component (implicit olsa eşleşen filtreyi tanımlayan
+herhangi bir uygulama cevap verebilirdi):
+
+- Paket `com.tokeninc.sardis.paymentgateway`, sınıf `…paymentgateway.MainActivity`
+- Extra `orderBody`; `FLAG_ACTIVITY_NEW_TASK` — bu yönde **doğru**, çünkü sonuç beklenmiyor
+  (K.1'deki yasak yalnız ters yön için)
+
+**İki gövde asla karıştırılamaz** (ikisi de gerçek terminalin reddiyle öğrenildi, §I.4):
+
+| | Fiş — `printReceipt` (yol 1/3) | Tahsilat — `collectPayment` (yol 2/4/5) |
+|---|---|---|
+| `documentType` | **`0`** (`DOCUMENT_TYPE_CREDIT_SALE`) | **`9002`** (`DOCUMENT_TYPE_RECEIPT`) |
+| `paymentItems` | **VAR** — `type: 17`, fişi bastıran şey bu | **YOK** — varsa geçit ödeme ekranı yerine fiş basar |
+| Tutar nerede | `paymentItems[].amount` | `taxFreeAmount` — yokluğu = *"sepet tutarı 0 olamaz"* |
+| `items` | **`[]`** — anahtar şemanın parçası, atlanamaz | (gönderilmiyor) |
+| Müşteri | `customerInfo{name}` — `taxID` YOK (§I.2 bu yola kopyalanmadı) | `customerInfo{name, taxID}`, blok adsızsa hiç gitmez |
+| Diğer | `createInvoice:false`, `isVoid:false` | `infoReceiptInfo{documentDate `dd-MM-yyyy`, documentNo}` |
+
+`basketID` her çağrıda benzersiz (geçit isteğini buna göre anahtarlıyor).
+`ITEM_TYPE_CREDIT = 17` **geçidin** numarası, bizim değil.
+
+**Yol 3'te gövdeyi SUNUCU üretir**, terminal **parse etmeden aynen geçirir**
+([`PgwJobDto.orderBody`](../app-pos/core-network/src/main/java/com/example/app_pos/network/dto/PgwJobDto.kt)
+String'tir). `PgwBridge.receiptOrderBody` yalnızca `order_body == null` iken çalışan bir
+yedek ve `backend/app/pgw.py::receipt_order_body` ile **elle** eşleniyor — ⚠️ ikisini
+karşılaştıran test yok, biri değişirse diğeri sessizce ayrışır.
+
+### K.3 Ölçek ve kodlama
+
+- Para **kuruş**, `Long`. Kayan nokta hiçbir yerde yok.
+- `quantity` ve `taxPercent` **×1000** (`QUANTITY_SCALE = 1000L`; 1000 = 1 adet,
+  1800 = %18). Satır toplamı `price * quantity / 1000`.
+- **Para birimi alanı hiçbir gövdede yok** — TL örtük.
+
+⚠️ **Karıştırılmaması gereken ÜÇÜNCÜ kodlama:** kendi backend'imize giden
+[`OrderBodyDto`](../app-pos/core-network/src/main/java/com/example/app_pos/network/dto/OrderBodyDto.kt)
+**snake_case**'dir (`basket_id`, `document_type`, `tax_percent`, `item_limit`) — geçidin
+camelCase'i **değil**. `limit` alanının üç adı var: `item_limit` (wire) / `limit` (domain) /
+`itemLimit` (DB, çünkü `limit` SQL'de rezerve). Sepet işine dokunan turlar **bunu**
+değiştirir, geçit gövdesini değil.
+
+### K.4 Değiştirmen gerekiyorsa — üç kontrol
+
+Kaynak incelemesi bu bölümün hiçbirini doğrulayamaz.
+[[verify-apk-not-just-compile]] gereği `assembleDebug` + yeniden kurulum şart,
+`compileDebugKotlin` yetmez. Cihazda:
+
+1. Onaylanan veresiye → mock-pos **"onaylandı"** diyor (`RESULT_OK`).
+2. **Reddedilen** veresiye → mock-pos **"reddedildi"** diyor (`RESULT_CANCELED`).
+   İkisi ayrışıyorsa K.1 sağlam demektir; ikisi de aynı çıkıyorsa `launchMode` /
+   `NEW_TASK` bozulmuştur.
+3. Yol 2 tahsilat → geçit **ödeme ekranını açıyor**, fiş basmıyor (K.2'nin `paymentItems`
+   satırı).
+
+Tek otomatik bekçi sunucu tarafında:
+`backend/tests/test_pgw_jobs.py::test_the_receipt_body_matches_the_gateway_shape`
+fiş gövdesini alan alan doğruluyor. Cihaz tarafının karşılığı yok — bu üç kontrol elle.
