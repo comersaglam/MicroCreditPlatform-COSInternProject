@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tur 44 — Rakam efektleri</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   TUR 44 — RAKAM EFEKTLERİ
+
+   B-a sabit. Değişen tek şey bakiye rakamının kendisi.
+
+   Dördü de XML'de yapılabilir; maliyetleri farklı:
+     1 Düz        — bugünkü hali, referans
+     2 Gradyan    — ~5 satır Kotlin (LinearGradient shader), statik
+     3 Sayma      — ~15 satır (ValueAnimator), ekran açılınca bir kez
+     4 Sayma+Glow — 3 + arkada soluk bir hale (<shape> radial gradient)
+
+   ⚠️ Sayfa yüklenince 2. ve 3. kart otomatik sayıyor. Tekrar görmek için
+      sayfayı yenile.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand:#2151F3; --brand-light:#5B87FF;
+  --bg:#0B0D12; --surface:#14171F; --surface-2:#1B1F29; --line:#262B36;
+  --text:#E8EAF0; --text-dim:#8B92A4;
+  --debt:#FF6B6B; --paid:#22C55E; --index:#C77A7A;
+  --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px; --r-md:14px;
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body {
+  background:#06070A; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding:var(--sp-5); display:flex; flex-wrap:wrap; gap:var(--sp-6);
+  justify-content:center; align-items:flex-start;
+}
+.phone { width:340px; background:var(--bg); border-radius:26px; border:1px solid #1E222C;
+         overflow:hidden; display:flex; flex-direction:column; }
+.label { width:340px; margin-bottom:var(--sp-3); font-size:13px; color:var(--text-dim); line-height:1.55; }
+.label b { color:var(--brand-light); font-size:15px; display:block; margin-bottom:2px; }
+.label i { color:#6B7280; font-style:normal; }
+.label code { color:#9AA3B8; font-size:11px; }
+.col { display:flex; flex-direction:column; align-items:center; }
+
+.bar { display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-4) var(--sp-4) var(--sp-2); }
+.bar .back { color:var(--text-dim); font-size:20px; }
+.bar .who { font-size:13px; color:var(--text-dim); }
+.head { padding:var(--sp-2) var(--sp-4) var(--sp-3); }
+.name { font-size:22px; font-weight:300; letter-spacing:-.2px; }
+.phone-no { font-size:13px; color:var(--text-dim); margin-top:3px; }
+
+/* ── B-a kartı (sabit) ──────────────────────────────────────────────────── */
+.card {
+  margin:var(--sp-3) var(--sp-4) var(--sp-4); padding:20px 20px var(--sp-4);
+  border-radius:var(--r-md);
+  background:linear-gradient(180deg,#1A1E28 0%, #14171F 45%, #0F1219 100%);
+  border:1px solid var(--line); position:relative; overflow:hidden;
+}
+.card .stripe {
+  position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(180deg,var(--brand) 0%, rgba(33,81,243,.25) 100%);
+}
+.bal-label { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-dim); }
+.bal { font-size:36px; font-weight:200; letter-spacing:-1.2px; margin-top:var(--sp-2);
+       font-variant-numeric:tabular-nums; line-height:1; position:relative; }
+.bal small { font-size:18px; font-weight:300; color:var(--text-dim); margin-left:3px; }
+.sub { font-size:12px; color:var(--text-dim); margin-top:10px; }
+.sub .up { color:var(--index); }
+.sub .more { color:var(--brand-light); }
+
+.chips { display:flex; gap:var(--sp-2); padding:0 var(--sp-4) var(--sp-3); }
+.chip { font-size:12px; padding:6px 14px; border-radius:999px; border:1px solid var(--line); color:var(--text-dim); }
+.chip.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+.list { flex:1; }
+.list .row { display:flex; align-items:center; justify-content:space-between; padding:13px var(--sp-4); }
+.list .row + .row { border-top:1px solid var(--line); }
+.desc { font-size:14px; } .date { font-size:11px; color:var(--text-dim); margin-top:2px; }
+.amt { font-size:15px; font-weight:500; font-variant-numeric:tabular-nums; }
+.amt.debt{color:var(--debt)} .amt.paid{color:var(--paid)} .amt.index{color:var(--index)}
+.btns { display:flex; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4) var(--sp-4); }
+.btn { flex:1; height:48px; border-radius:var(--r-md); display:flex; align-items:center;
+       justify-content:center; font-size:14px; font-weight:500; }
+.btn.ghost { background:var(--surface-2); color:var(--text); }
+.btn.solid { background:var(--brand); color:#fff; }
+
+/* ═══ 1 DÜZ ═══════════════════════════════════════════════════════════════
+   Bugünkü hali. Karşılaştırma için burada. */
+.e1 .bal { color:var(--debt); }
+
+/* ═══ 2 GRADYAN ═══════════════════════════════════════════════════════════
+   Rakam yukarıdan aşağı açıktan koyuya. Statik — hiç animasyon yok.
+
+   XML: TextView'a shader bağlanıyor, ~5 satır:
+     val p = binding.detailBalance.paint
+     p.shader = LinearGradient(0f, 0f, 0f, textSize,
+         0xFFFF8585.toInt(), 0xFFD94A4A.toInt(), Shader.TileMode.CLAMP)
+   ⚠️ Metin genişliği değişince shader yeniden kurulmalı (post{} içinde).       */
+.e2 .bal {
+  background:linear-gradient(180deg,#FF9090 0%, #D94A4A 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+
+/* ═══ 3 SAYMA ═════════════════════════════════════════════════════════════
+   Ekran açılınca 0'dan gerçek değere sayıyor, ~600ms.
+
+   XML tarafı ValueAnimator, ~15 satır:
+     ValueAnimator.ofInt(0, balanceMinor).apply {
+         duration = 600
+         interpolator = DecelerateInterpolator()
+         addUpdateListener { tv.text = (it.animatedValue as Int).toTlString() }
+     }.start()
+
+   ⚠️ SADECE ilk gösterimde. Her bakiye değişiminde saymak, bir ödeme
+      sonrası ekranın "hesap yapıyormuş" gibi görünmesine yol açar —
+      oysa rakam zaten kesindir.                                              */
+.e3 .bal { color:var(--debt); }
+
+/* ═══ 4 SAYMA + HALE ══════════════════════════════════════════════════════
+   3'ün üstüne: rakamın arkasında çok soluk bir renk halesi.
+
+   XML: TextView'ın arkasına bir View, background = radial <shape>.
+   Genişlik/yükseklik sabit, rakamın ortasına hizalı.
+   ⚠️ Opaklık %10'da tutuldu. Yükseltilirse rakam bulanık görünmeye başlıyor
+      ve ferahlık kayboluyor.                                                 */
+.e4 .bal { color:var(--debt); }
+.e4 .bal .halo {
+  position:absolute; left:-14px; top:-10px; width:230px; height:64px;
+  background:radial-gradient(50% 50% at 30% 50%, rgba(255,107,107,.16) 0%, rgba(255,107,107,0) 70%);
+  pointer-events:none; z-index:-1;
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ 1 ═══ -->
+<div class="col">
+  <div class="label"><b>1 — Düz</b> <i>(bugünkü hali, referans)</i></div>
+  <div class="phone e1">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card"><div class="stripe"></div>
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal">2.616,00<small>₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="s1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".30"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#s1)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ═══ 2 ═══ -->
+<div class="col">
+  <div class="label"><b>2 — Gradyan</b>Rakam yukarıdan aşağı açıktan koyuya. Hiç animasyon yok, statik.<br><i>~5 satır Kotlin: <code>paint.shader = LinearGradient(...)</code></i></div>
+  <div class="phone e2">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card"><div class="stripe"></div>
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal">2.616,00<small style="color:var(--text-dim)">₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="s2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".30"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#s2)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ═══ 3 ═══ -->
+<div class="col">
+  <div class="label"><b>3 — Sayma</b>Ekran açılınca 0'dan gerçek değere sayıyor (~600ms, yavaşlayarak).<br><i>~15 satır: <code>ValueAnimator.ofInt(0, balanceMinor)</code>. Sadece ilk gösterimde — her değişimde saymak ekranı "hesap yapıyor" gibi gösterir.</i></div>
+  <div class="phone e3">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card"><div class="stripe"></div>
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal"><span id="c3">0,00</span><small>₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="s3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".30"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#s3)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ═══ 4 ═══ -->
+<div class="col">
+  <div class="label"><b>4 — Sayma + hale</b>3'ün üstüne rakamın arkasında çok soluk bir renk halesi.<br><i>XML: TextView'ın arkasına bir View, radial <code>&lt;shape&gt;</code>. Opaklık %16'da — yükseltilince rakam bulanıklaşıyor.</i></div>
+  <div class="phone e4">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card"><div class="stripe"></div>
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal"><span class="halo"></span><span id="c4">0,00</span><small>₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span class="more">detay →</span></div>
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="s4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".30"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#s4)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<script>
+/* ValueAnimator'ın tarayıcı karşılığı. Android'de:
+     ValueAnimator.ofInt(0, 261600).apply {
+         duration = 600
+         interpolator = DecelerateInterpolator()
+         addUpdateListener { tv.text = (it.animatedValue as Int).toTlString() }
+     }.start()
+   Buradaki easing (1-(1-t)^3) DecelerateInterpolator'a karşılık gelir:
+   hızlı başlar, yavaşlayarak durur — bir sayacın durması gibi. */
+function countUp(el, target, ms) {
+  const start = performance.now();
+  function frame(now) {
+    const t = Math.min((now - start) / ms, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    const v = target * eased;
+    el.textContent = v.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+setTimeout(() => {
+  countUp(document.getElementById('c3'), 2616, 600);
+  countUp(document.getElementById('c4'), 2616, 600);
+}, 350);
+</script>
+
+</body>
+</html>
