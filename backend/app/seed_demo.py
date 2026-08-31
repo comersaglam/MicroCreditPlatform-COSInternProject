@@ -160,7 +160,14 @@ def _fx_series(db: Session) -> None:
     outruns both, and the index rises about 2.5% a month with a little variation. What the
     demo needs is a series with a believable SHAPE -- see deferred.md §L.4 on why the
     numbers themselves are invented.
+
+    Returns early if rates already exist. `as_of` is the primary key, so a second pass
+    over a populated table raises rather than skipping -- and it raised for real, on a
+    database whose reset had left fx_rates behind.
     """
+    if db.execute(select(func.count()).select_from(models.FxRate)).scalar_one() > 0:
+        return
+
     usd, eur, gold, cpi = 3_180_00 / 100, 3_450_00 / 100, 2_450_00, 100_000
 
     day = _RATES_FROM

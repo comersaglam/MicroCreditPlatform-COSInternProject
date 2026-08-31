@@ -36,6 +36,13 @@ _TABLES = (
     "baskets",
     "customers",
     "users",
+    # Added late, and each was already a bug by the time it was noticed. pgw_jobs survived
+    # a reset and left the terminal work queued against users that no longer existed;
+    # fx_rates survived one and made the demo seed collide on its primary key the second
+    # time it ran. The comment above is the rule: a new table is a deliberate edit HERE.
+    "pgw_jobs",
+    "fx_rates",
+    "audit_log",
 )
 
 
