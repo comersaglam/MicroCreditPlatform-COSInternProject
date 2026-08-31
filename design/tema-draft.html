@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tur 44 — Tema draftı</title>
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   TUR 44 — TEMA DRAFTI
+
+   Bu dosya XML'e çevrilecek. Her efektin karşılığı yorumda yazılı; karşılığı
+   olmayan hiçbir CSS özelliği kullanılmadı (backdrop-filter, çok katmanlı
+   box-shadow, ::before/::after süsleri yok).
+
+   Ekran: müşteri detayı. Seçildi çünkü YENİ endeks satırı burada görünüyor —
+   yani üç ayrı satır tipini (borç / endeks / ödeme) aynı listede ayırt
+   edilebilir kılmak zorunda. Temanın en zor sınavı bu.
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Marka. #2151F3 dolgu rengi: üstüne beyaz metin 8.1:1 kontrast verir.
+     Koyu zeminde METİN olarak kullanılamaz (3.1:1, AA'yı geçmez), o yüzden
+     açık türevi ayrı token. */
+  --brand:        #2151F3;
+  --brand-light:  #5B87FF;   /* koyu zeminde okunan metin/link  → 5.9:1 */
+
+  /* Zemin. Saf siyah değil: OLED'de saf siyah kenarları "kesik" gösterir ve
+     kaydırmada iz bırakır. Hafif mavi tonu markayla akraba. */
+  --bg:           #0B0D12;
+  --surface:      #14171F;
+  --surface-2:    #1B1F29;
+  --line:         #262B36;
+
+  --text:         #E8EAF0;
+  --text-dim:     #8B92A4;
+
+  --debt:         #FF6B6B;   /* borç: benden çıkan */
+  --paid:         #22C55E;   /* ödeme: bana gelen */
+  --index:        #C77A7A;   /* endeks: borçla aynı yön, soluk (mal alınmadı) */
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --r-sm: 8px; --r-md: 14px; --r-lg: 20px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #06070A;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: var(--sp-5);
+  display: flex; flex-wrap: wrap; gap: var(--sp-6);
+  justify-content: center; align-items: flex-start;
+}
+
+/* Telefon çerçevesi — sadece draft için, XML'de yok */
+.phone {
+  width: 360px; min-height: 720px;
+  background: var(--bg);
+  border-radius: 28px; border: 1px solid #1E222C;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.label {
+  width: 360px; margin-bottom: var(--sp-3);
+  font-size: 13px; color: var(--text-dim); line-height: 1.5;
+}
+.label b { color: var(--brand-light); font-size: 15px; display: block; margin-bottom: 2px; }
+.col { display: flex; flex-direction: column; align-items: center; }
+
+/* ── Ortak: üst bar ─────────────────────────────────────────────────────── */
+.bar {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) var(--sp-2);
+}
+.bar .back { color: var(--text-dim); font-size: 20px; line-height: 1; }
+.bar .who { font-size: 13px; color: var(--text-dim); }
+
+/* ── Satır tipleri (üç varyantta da aynı) ───────────────────────────────── */
+/* XML: item_transaction.xml — id'ler txDescription / txDate / txAmount korunur */
+.row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+}
+.row .desc { font-size: 15px; }
+.row .date { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.row .amt  { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.amt.debt  { color: var(--debt); }
+.amt.paid  { color: var(--paid); }
+.amt.index { color: var(--index); }
+
+/* Endeks satırının etiketi. XML: item_transaction.xml'e bir TextView daha,
+   normalde gone. Adapter'daki `when` onu görünür yapar. */
+.tag {
+  display: inline-block; margin-top: var(--sp-1);
+  font-size: 10px; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--index); border: 1px solid rgba(199,122,122,.35);
+  border-radius: 4px; padding: 1px 6px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VARYANT A — "Sakin"
+   Kart yok. Bilgi hiyerarşisi sadece tipografi ve boşlukla kuruluyor.
+   Tek renkli vurgu: bakiye rakamı. Marka mavisi yalnız butonlarda.
+   ═══════════════════════════════════════════════════════════════════════ */
+.a .head { padding: var(--sp-2) var(--sp-4) var(--sp-6); }
+.a .name { font-size: 26px; font-weight: 600; letter-spacing: -.4px; }
+.a .phone-no { font-size: 13px; color: var(--text-dim); margin-top: var(--sp-1); }
+.a .bal-label {
+  font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--text-dim); margin-top: var(--sp-6);
+}
+.a .bal {
+  font-size: 40px; font-weight: 300; letter-spacing: -1.5px;
+  margin-top: var(--sp-2); font-variant-numeric: tabular-nums;
+}
+/* Kırılım satırı: dokunulabilir olduğunu ok işareti söylüyor.
+   XML: TextView + drawableEnd */
+.a .breakdown {
+  font-size: 12px; color: var(--brand-light); margin-top: var(--sp-3);
+}
+
+/* Filtre çipleri. XML: ChipGroup + Widget.Material3.Chip.Filter,
+   sadece renkleri override edilir. */
+.chips { display: flex; gap: var(--sp-2); padding: 0 var(--sp-4) var(--sp-4); }
+.chip {
+  font-size: 13px; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text-dim);
+}
+.chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+
+.a .list { flex: 1; }
+.a .row + .row { border-top: 1px solid var(--line); }
+
+/* Butonlar. XML: MaterialButton — biri Tonal, biri dolu. */
+.btns { display: flex; gap: var(--sp-3); padding: var(--sp-4); }
+.btn {
+  flex: 1; height: 52px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 600;
+}
+.btn.ghost { background: var(--surface-2); color: var(--text); }
+.btn.solid { background: var(--brand); color: #fff; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VARYANT B — "Kart"
+   Bakiye bir kartta duruyor: sol kenarında marka şeridi, altında sparkline.
+   Liste yine kartsız — iki kat kutu "ferah" hissini öldürür.
+   ═══════════════════════════════════════════════════════════════════════ */
+.b .head { padding: var(--sp-2) var(--sp-4) var(--sp-4); }
+.b .name { font-size: 22px; font-weight: 600; letter-spacing: -.3px; }
+.b .phone-no { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+
+/* XML: MaterialCardView + sol şerit için bir View (4dp genişlik, marka rengi).
+   Gradient <shape> drawable ile bedava. */
+.b .card {
+  margin: var(--sp-4); padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  background: linear-gradient(180deg, var(--surface) 0%, #11141B 100%);
+  border: 1px solid var(--line); border-left: 3px solid var(--brand);
+  border-radius: var(--r-md);
+}
+.b .bal-label {
+  font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.b .bal {
+  font-size: 34px; font-weight: 400; letter-spacing: -1px;
+  margin-top: var(--sp-2); font-variant-numeric: tabular-nums;
+}
+.b .sub { font-size: 12px; color: var(--text-dim); margin-top: var(--sp-2); }
+.b .sub .up { color: var(--index); }
+
+/* Sparkline. XML: custom View (~60 satır, Path + LinearGradient).
+   Burada SVG ile taklit — çizim mantığı birebir aynı. */
+.spark { margin-top: var(--sp-4); display: block; }
+
+.b .list { flex: 1; }
+.b .row + .row { border-top: 1px solid var(--line); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   VARYANT C — "Ayrık"
+   Satırlar da kendi yüzeyinde. Daha "uygulama" gibi, daha az "belge" gibi.
+   Bakiye başlıkta küçük duruyor, ekranın odağı liste.
+   ═══════════════════════════════════════════════════════════════════════ */
+.c .head {
+  padding: var(--sp-2) var(--sp-4) var(--sp-5);
+  display: flex; justify-content: space-between; align-items: flex-end;
+}
+.c .name { font-size: 20px; font-weight: 600; }
+.c .phone-no { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.c .bal-label {
+  font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--text-dim); text-align: right;
+}
+.c .bal {
+  font-size: 24px; font-weight: 600; text-align: right;
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+.c .list { flex: 1; padding: 0 var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-2); }
+/* XML: item_transaction.xml'in kök elemanı MaterialCardView olur. */
+.c .row {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-sm); padding: var(--sp-3) var(--sp-4);
+}
+/* Endeks satırı: sol kenarda ince işaret. XML: <shape> drawable, background. */
+.c .row.idx { border-left: 2px solid var(--index); }
+</style>
+</head>
+<body>
+
+<div class="col">
+  <div class="label"><b>A — Sakin</b>Kart yok. Hiyerarşi sadece tipografi ve boşlukla. Bakiye 40sp, ince ağırlıkta. Marka mavisi yalnız butonda ve kırılım linkinde.</div>
+  <div class="phone a">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+
+    <div class="head">
+      <div class="name">Fatma Şahin</div>
+      <div class="phone-no">+90 555 666 77 88</div>
+      <div class="bal-label">Güncel bakiye</div>
+      <div class="bal" style="color:var(--debt)">2.616,00 ₺</div>
+      <div class="breakdown">Neyden oluşuyor? →</div>
+    </div>
+
+    <div class="chips">
+      <div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div>
+    </div>
+
+    <div class="list">
+      <div class="row">
+        <div><div class="desc">Çay, şeker</div><div class="date">23 Tem 2026 · 08:45</div></div>
+        <div class="amt debt">+255,00</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Ağustos 2026 enflasyon farkı</div><div class="date">1 Ağu 2026</div><span class="tag">%2,51 · endeks</span></div>
+        <div class="amt index">+6,40</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Market alışverişi</div><div class="date">18 Tem 2026 · 11:20</div></div>
+        <div class="amt debt">+1.200,00</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Nakit ödeme</div><div class="date">15 Tem 2026 · 17:30</div></div>
+        <div class="amt paid">−800,00</div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div>
+    </div>
+  </div>
+</div>
+
+<div class="col">
+  <div class="label"><b>B — Kart</b>Bakiye kendi yüzeyinde: sol kenarda marka şeridi, altında 12 aylık sparkline. Liste yine kartsız — iki kat kutu ferahlığı öldürür.</div>
+  <div class="phone b">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+
+    <div class="head">
+      <div class="name">Fatma Şahin</div>
+      <div class="phone-no">+90 555 666 77 88</div>
+    </div>
+
+    <div class="card">
+      <div class="bal-label">Güncel bakiye</div>
+      <div class="bal" style="color:var(--debt)">2.616,00 ₺</div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı · <span style="color:var(--brand-light)">detay →</span></div>
+      <svg class="spark" width="100%" height="44" viewBox="0 0 300 44" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#2151F3" stop-opacity=".28"/>
+            <stop offset="100%" stop-color="#2151F3" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d="M0,36 L27,33 L55,34 L82,28 L109,25 L136,27 L164,20 L191,22 L218,15 L245,17 L273,9 L300,6 L300,44 L0,44 Z" fill="url(#g)"/>
+        <path d="M0,36 L27,33 L55,34 L82,28 L109,25 L136,27 L164,20 L191,22 L218,15 L245,17 L273,9 L300,6"
+              fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="6" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+
+    <div class="chips">
+      <div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div>
+    </div>
+
+    <div class="list">
+      <div class="row">
+        <div><div class="desc">Çay, şeker</div><div class="date">23 Tem 2026 · 08:45</div></div>
+        <div class="amt debt">+255,00</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Ağustos 2026 enflasyon farkı</div><div class="date">1 Ağu 2026</div><span class="tag">%2,51 · endeks</span></div>
+        <div class="amt index">+6,40</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Market alışverişi</div><div class="date">18 Tem 2026 · 11:20</div></div>
+        <div class="amt debt">+1.200,00</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Nakit ödeme</div><div class="date">15 Tem 2026 · 17:30</div></div>
+        <div class="amt paid">−800,00</div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div>
+    </div>
+  </div>
+</div>
+
+<div class="col">
+  <div class="label"><b>C — Ayrık</b>Satırlar kendi yüzeyinde, endeks satırının sol kenarında ince işaret. Bakiye başlıkta küçük — ekranın odağı liste.</div>
+  <div class="phone c">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+
+    <div class="head">
+      <div>
+        <div class="name">Fatma Şahin</div>
+        <div class="phone-no">+90 555 666 77 88</div>
+      </div>
+      <div>
+        <div class="bal-label">Bakiye</div>
+        <div class="bal" style="color:var(--debt)">2.616,00 ₺</div>
+      </div>
+    </div>
+
+    <div class="chips">
+      <div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div>
+    </div>
+
+    <div class="list">
+      <div class="row">
+        <div><div class="desc">Çay, şeker</div><div class="date">23 Tem 2026 · 08:45</div></div>
+        <div class="amt debt">+255,00</div>
+      </div>
+      <div class="row idx">
+        <div><div class="desc">Ağustos 2026 enflasyon farkı</div><div class="date">1 Ağu 2026 · %2,51</div></div>
+        <div class="amt index">+6,40</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Market alışverişi</div><div class="date">18 Tem 2026 · 11:20</div></div>
+        <div class="amt debt">+1.200,00</div>
+      </div>
+      <div class="row">
+        <div><div class="desc">Nakit ödeme</div><div class="date">15 Tem 2026 · 17:30</div></div>
+        <div class="amt paid">−800,00</div>
+      </div>
+    </div>
+
+    <div class="btns">
+      <div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
