@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tur 44 — Tema draftı 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   TUR 44 — TEMA DRAFTI, 3. TUR
+
+   B seçildi. Üzerinden iki deneme:
+     B1 → aynı yapı, küçültülmüş: daha az doluluk, daha çok nefes
+     B2 → aynı yapı, farklı font: Space Grotesk ile futuristik ton
+
+   C'deki üç sütunlu kırılım kaldırıldı. Yerine: karta BASINCA açılıyor.
+   Varsayılanda tek satırlık özet duruyor, detay isteyen dokunuyor.
+   (Aşağıda B2'nin kartı açık halde gösteriliyor.)
+   ───────────────────────────────────────────────────────────────────────── */
+
+:root {
+  --brand: #2151F3;  --brand-light: #5B87FF;
+  --bg: #0B0D12;     --surface: #14171F;  --surface-2: #1B1F29;  --line: #262B36;
+  --text: #E8EAF0;   --text-dim: #8B92A4;
+  --debt: #FF6B6B;   --paid: #22C55E;     --index: #C77A7A;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:24px; --sp-6:32px;
+  --r-sm:8px; --r-md:14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background:#06070A; color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding:var(--sp-5); display:flex; flex-wrap:wrap; gap:var(--sp-6);
+  justify-content:center; align-items:flex-start;
+}
+.phone { width:360px; min-height:730px; background:var(--bg); border-radius:28px;
+         border:1px solid #1E222C; overflow:hidden; display:flex; flex-direction:column; }
+.label { width:360px; margin-bottom:var(--sp-3); font-size:13px; color:var(--text-dim); line-height:1.55; }
+.label b { color:var(--brand-light); font-size:15px; display:block; margin-bottom:2px; }
+.label i { color:#6B7280; font-style:normal; }
+.col { display:flex; flex-direction:column; align-items:center; }
+
+.bar { display:flex; align-items:center; gap:var(--sp-3); padding:var(--sp-4) var(--sp-4) var(--sp-2); }
+.bar .back { color:var(--text-dim); font-size:20px; line-height:1; }
+.bar .who { font-size:13px; color:var(--text-dim); }
+
+.row { display:flex; align-items:center; justify-content:space-between; }
+.amt { font-variant-numeric:tabular-nums; font-weight:600; }
+.amt.debt{color:var(--debt)} .amt.paid{color:var(--paid)} .amt.index{color:var(--index)}
+
+.chip { border-radius:999px; border:1px solid var(--line); color:var(--text-dim); }
+.chip.on { background:var(--brand); border-color:var(--brand); color:#fff; }
+
+.btn { border-radius:var(--r-md); display:flex; align-items:center; justify-content:center; font-weight:600; }
+.btn.ghost { background:var(--surface-2); color:var(--text); }
+.btn.solid { background:var(--brand); color:#fff; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B0 — orijinal ölçüler (referans)
+   ═══════════════════════════════════════════════════════════════════════ */
+.b0 .head { padding:var(--sp-2) var(--sp-4) var(--sp-4); }
+.b0 .name { font-size:22px; font-weight:600; letter-spacing:-.3px; }
+.b0 .phone-no { font-size:13px; color:var(--text-dim); margin-top:2px; }
+.b0 .card { margin:var(--sp-4); padding:var(--sp-5) var(--sp-5) var(--sp-4);
+  background:linear-gradient(180deg,var(--surface) 0%,#11141B 100%);
+  border:1px solid var(--line); border-left:3px solid var(--brand); border-radius:var(--r-md); }
+.b0 .bal-label { font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-dim); }
+.b0 .bal { font-size:34px; font-weight:400; letter-spacing:-1px; margin-top:var(--sp-2); font-variant-numeric:tabular-nums; }
+.b0 .sub { font-size:12px; color:var(--text-dim); margin-top:var(--sp-2); }
+.b0 .chips { display:flex; gap:var(--sp-2); padding:0 var(--sp-4) var(--sp-4); }
+.b0 .chip { font-size:13px; padding:6px 14px; }
+.b0 .list { flex:1; }
+.b0 .list .row { padding:var(--sp-3) var(--sp-4); }
+.b0 .list .row + .row { border-top:1px solid var(--line); }
+.b0 .desc { font-size:15px; } .b0 .date { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.b0 .amt { font-size:16px; }
+.b0 .tag { display:inline-block; margin-top:var(--sp-1); font-size:10px; letter-spacing:.4px;
+  text-transform:uppercase; color:var(--index); border:1px solid rgba(199,122,122,.35);
+  border-radius:4px; padding:1px 6px; }
+.b0 .btns { display:flex; gap:var(--sp-3); padding:var(--sp-4); }
+.b0 .btn { flex:1; height:52px; font-size:15px; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B1 — "Hafif"  (küçültülmüş)
+
+   Her ölçü bir kademe küçüldü, ama boşluklar KÜÇÜLMEDİ — bir kısmı büyüdü.
+   Doluluğu azaltan şey yazının küçülmesi değil, küçülen yazının etrafında
+   kalan yer. Küçültüp boşluğu da kısmak sadece "sıkışık ve okunmaz" verir.
+
+   Ölçüler:  isim 22→19  bakiye 34→30  satır 15→14  tarih 12→11
+   Boşluk:   kart içi 24→20 ama satır yüksekliği 12→14 (liste nefes alıyor)
+   ═══════════════════════════════════════════════════════════════════════ */
+.b1 .head { padding:var(--sp-2) var(--sp-4) var(--sp-3); }
+.b1 .name { font-size:19px; font-weight:600; letter-spacing:-.2px; }
+.b1 .phone-no { font-size:12px; color:var(--text-dim); margin-top:2px; }
+.b1 .card { margin:var(--sp-3) var(--sp-4) var(--sp-4); padding:20px 20px var(--sp-3);
+  background:linear-gradient(180deg,var(--surface) 0%,#11141B 100%);
+  border:1px solid var(--line); border-left:3px solid var(--brand); border-radius:var(--r-md); }
+.b1 .bal-label { font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-dim); }
+.b1 .bal { font-size:30px; font-weight:400; letter-spacing:-.8px; margin-top:6px; font-variant-numeric:tabular-nums; }
+.b1 .bal small { font-size:16px; color:var(--text-dim); margin-left:3px; }
+.b1 .sub { font-size:11px; color:var(--text-dim); margin-top:6px; }
+.b1 .sub .up { color:var(--index); }
+.b1 .chips { display:flex; gap:6px; padding:0 var(--sp-4) var(--sp-3); }
+.b1 .chip { font-size:12px; padding:5px 12px; }
+.b1 .list { flex:1; }
+.b1 .list .row { padding:14px var(--sp-4); }   /* dikey boşluk ARTTI */
+.b1 .list .row + .row { border-top:1px solid var(--line); }
+.b1 .desc { font-size:14px; } .b1 .date { font-size:11px; color:var(--text-dim); margin-top:2px; }
+.b1 .amt { font-size:15px; }
+/* Rozet gitti: aynı bilgiyi tarih satırına yazmak bir satır kazandırıyor. */
+.b1 .btns { display:flex; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4) var(--sp-4); }
+.b1 .btn { flex:1; height:46px; font-size:14px; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   B2 — "Grotesk"  (font denemesi)
+
+   Space Grotesk: geometrik, hafif teknik, ama insani. Rakamları geniş ve
+   düz — para göstermek için iyi. Başlık ve rakamlarda kullanılıyor.
+   Küçük metin ve etiketler sistem fontunda kalıyor: uzun listelerde
+   okunaklılık marka hissinden önce gelir.
+
+   Etiketlerde JetBrains Mono — "ölçüm" tonunu tek satırla veriyor.
+
+   ⚠️ XML MALİYETİ: res/font/ altına .ttf koymak gerekiyor.
+      Space Grotesk 4 ağırlık ≈ 260 KB, JetBrains Mono 2 ağırlık ≈ 190 KB.
+      APK'ya ~450 KB ekler. Tek ağırlıkla (500) ≈ 70 KB'ye iner.
+   ═══════════════════════════════════════════════════════════════════════ */
+.b2 { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+.b2 .head { padding:var(--sp-2) var(--sp-4) var(--sp-3); }
+.b2 .name { font-family:'Space Grotesk',sans-serif; font-size:21px; font-weight:500; letter-spacing:-.3px; }
+.b2 .phone-no { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-dim); margin-top:3px; letter-spacing:-.2px; }
+.b2 .card { margin:var(--sp-3) var(--sp-4) var(--sp-4); padding:20px 20px var(--sp-3);
+  background:linear-gradient(180deg,var(--surface) 0%,#11141B 100%);
+  border:1px solid var(--line); border-left:3px solid var(--brand); border-radius:var(--r-md); }
+.b2 .bal-label { font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:1.2px;
+  text-transform:uppercase; color:var(--text-dim); }
+.b2 .bal { font-family:'Space Grotesk',sans-serif; font-size:32px; font-weight:500;
+  letter-spacing:-1px; margin-top:6px; font-variant-numeric:tabular-nums; }
+.b2 .bal small { font-size:17px; font-weight:400; color:var(--text-dim); margin-left:3px; }
+.b2 .sub { font-size:11px; color:var(--text-dim); margin-top:8px; display:flex;
+  justify-content:space-between; align-items:center; }
+.b2 .sub .up { color:var(--index); }
+.b2 .sub .more { color:var(--brand-light); }
+
+/* Açılan kırılım. XML: kartın içinde bir LinearLayout, başta visibility="gone".
+   Karta tıklayınca görünür olur; TransitionManager.beginDelayedTransition ile
+   yumuşak açılır (tek satır kod, kütüphane gerekmez). */
+.b2 .expand { margin-top:var(--sp-3); padding-top:var(--sp-3); border-top:1px solid var(--line); }
+.b2 .expand .er { display:flex; justify-content:space-between; padding:5px 0; font-size:12px; }
+.b2 .expand .er .k { color:var(--text-dim); }
+.b2 .expand .er .v { font-family:'Space Grotesk',sans-serif; font-variant-numeric:tabular-nums; font-weight:500; }
+.b2 .expand .er.total { border-top:1px solid var(--line); margin-top:5px; padding-top:8px; }
+.b2 .expand .fx { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim);
+  margin-top:var(--sp-3); letter-spacing:-.2px; line-height:1.7; }
+
+.b2 .chips { display:flex; gap:6px; padding:0 var(--sp-4) var(--sp-3); }
+.b2 .chip { font-size:12px; padding:5px 12px; }
+.b2 .list { flex:1; }
+.b2 .list .row { padding:13px var(--sp-4); }
+.b2 .list .row + .row { border-top:1px solid var(--line); }
+.b2 .desc { font-size:14px; }
+.b2 .date { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); margin-top:3px; letter-spacing:-.2px; }
+.b2 .amt { font-family:'Space Grotesk',sans-serif; font-size:15px; font-weight:500; }
+.b2 .btns { display:flex; gap:var(--sp-2); padding:var(--sp-3) var(--sp-4) var(--sp-4); }
+.b2 .btn { flex:1; height:48px; font-size:14px; font-family:'Space Grotesk',sans-serif; font-weight:500; }
+</style>
+</head>
+<body>
+
+<!-- ══════════ B0 referans ══════════ -->
+<div class="col">
+  <div class="label"><b>B0 — Referans</b> <i>(seçilen hali, değişmedi)</i></div>
+  <div class="phone b0">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card">
+      <div class="bal-label">Güncel bakiye</div>
+      <div class="bal" style="color:var(--debt)">2.616,00 ₺</div>
+      <div class="sub">Bunun <span style="color:var(--index)">66,00 ₺</span>'si enflasyon farkı · <span style="color:var(--brand-light)">detay →</span></div>
+      <svg width="100%" height="44" viewBox="0 0 300 44" preserveAspectRatio="none" style="margin-top:16px;display:block">
+        <defs><linearGradient id="g0" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".28"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,36 L27,33 L55,34 L82,28 L109,25 L136,27 L164,20 L191,22 L218,15 L245,17 L273,9 L300,6 L300,44 L0,44 Z" fill="url(#g0)"/>
+        <path d="M0,36 L27,33 L55,34 L82,28 L109,25 L136,27 L164,20 L191,22 L218,15 L245,17 L273,9 L300,6" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="6" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem 2026 · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos 2026 enflasyon farkı</div><div class="date">1 Ağu 2026</div><span class="tag">%2,51 · endeks</span></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem 2026 · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem 2026 · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ══════════ B1 hafif ══════════ -->
+<div class="col">
+  <div class="label"><b>B1 — Hafif</b>Her ölçü bir kademe küçük (isim 22→19, bakiye 34→30, satır 15→14) ama satır yüksekliği <i>arttı</i> (12→14dp). Doluluğu azaltan şey yazının küçülmesi değil, etrafında kalan yer.<br><i>Endeks rozeti gitti — aynı bilgi tarih satırında, bir satır kazanıyor.</i></div>
+  <div class="phone b1">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card">
+      <div class="bal-label">Güncel bakiye</div>
+      <div class="bal" style="color:var(--debt)">2.616,00<small>₺</small></div>
+      <div class="sub">Bunun <span class="up">66,00 ₺</span>'si enflasyon · <span style="color:var(--brand-light)">detay →</span></div>
+      <svg width="100%" height="38" viewBox="0 0 300 38" preserveAspectRatio="none" style="margin-top:14px;display:block">
+        <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".26"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,31 L27,28 L55,29 L82,24 L109,21 L136,23 L164,17 L191,19 L218,12 L245,14 L273,7 L300,4 L300,38 L0,38 Z" fill="url(#g1)"/>
+        <path d="M0,31 L27,28 L55,29 L82,24 L109,21 L136,23 L164,17 L191,19 L218,12 L245,14 L273,7 L300,4" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="4" r="2.5" fill="#5B87FF"/>
+      </svg>
+    </div>
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 Tem · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">1 Ağu · endeks %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 Tem · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 Tem · 17:30</div></div><div class="amt paid">−800,00</div></div>
+      <div class="row"><div><div class="desc">Peynir, zeytin</div><div class="date">11 Tem · 09:05</div></div><div class="amt debt">+340,00</div></div>
+      <div class="row"><div><div class="desc">Temmuz enflasyon farkı</div><div class="date">1 Tem · endeks %2,48</div></div><div class="amt index">+5,90</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+<!-- ══════════ B2 grotesk ══════════ -->
+<div class="col">
+  <div class="label"><b>B2 — Grotesk</b>Space Grotesk (başlık + rakam) ve JetBrains Mono (etiket + tarih). Küçük metin sistem fontunda kaldı — uzun listede okunaklılık marka hissinden önce gelir.<br><i>Kart AÇIK halde gösteriliyor: kırılım varsayılanda gizli, karta basınca iniyor.</i></div>
+  <div class="phone b2">
+    <div class="bar"><span class="back">←</span><span class="who">Ahmet Bakkal</span></div>
+    <div class="head"><div class="name">Fatma Şahin</div><div class="phone-no">+90 555 666 77 88</div></div>
+    <div class="card">
+      <div class="bal-label">GÜNCEL BAKİYE</div>
+      <div class="bal" style="color:var(--debt)">2.616,00<small>₺</small></div>
+      <div class="sub"><span>Bunun <span class="up">66,00 ₺</span>'si enflasyon farkı</span><span class="more">kapat ↑</span></div>
+
+      <svg width="100%" height="40" viewBox="0 0 300 40" preserveAspectRatio="none" style="margin-top:14px;display:block">
+        <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#2151F3" stop-opacity=".26"/><stop offset="100%" stop-color="#2151F3" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5 L300,40 L0,40 Z" fill="url(#g2)"/>
+        <path d="M0,33 L27,30 L55,31 L82,25 L109,22 L136,24 L164,18 L191,20 L218,13 L245,15 L273,8 L300,5" fill="none" stroke="#5B87FF" stroke-width="1.5" stroke-linejoin="round"/>
+        <circle cx="300" cy="5" r="2.5" fill="#5B87FF"/>
+      </svg>
+
+      <div class="expand">
+        <div class="er"><span class="k">Anapara</span><span class="v">2.550,00 ₺</span></div>
+        <div class="er"><span class="k">Enflasyon farkı</span><span class="v" style="color:var(--index)">+66,00 ₺</span></div>
+        <div class="er"><span class="k">Ödenen</span><span class="v" style="color:var(--paid)">0,00 ₺</span></div>
+        <div class="er total"><span class="k" style="color:var(--text)">Kalan</span><span class="v" style="color:var(--debt)">2.616,00 ₺</span></div>
+        <div class="fx">
+          ALINDIĞINDA &nbsp;1 USD = 37,60 ₺<br>
+          BUGÜN &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1 USD = 44,19 ₺<br>
+          3 AY SONRA &nbsp;&nbsp;≈ 2.812,00 ₺
+        </div>
+      </div>
+    </div>
+
+    <div class="chips"><div class="chip on">Tümü</div><div class="chip">Borç</div><div class="chip">Ödeme</div></div>
+    <div class="list">
+      <div class="row"><div><div class="desc">Çay, şeker</div><div class="date">23 TEM · 08:45</div></div><div class="amt debt">+255,00</div></div>
+      <div class="row"><div><div class="desc">Ağustos enflasyon farkı</div><div class="date">01 AĞU · ENDEKS %2,51</div></div><div class="amt index">+6,40</div></div>
+      <div class="row"><div><div class="desc">Market alışverişi</div><div class="date">18 TEM · 11:20</div></div><div class="amt debt">+1.200,00</div></div>
+      <div class="row"><div><div class="desc">Nakit ödeme</div><div class="date">15 TEM · 17:30</div></div><div class="amt paid">−800,00</div></div>
+    </div>
+    <div class="btns"><div class="btn ghost">Veresiye yaz</div><div class="btn solid">Ödeme al</div></div>
+  </div>
+</div>
+
+</body>
+</html>
