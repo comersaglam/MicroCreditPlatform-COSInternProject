@@ -4,9 +4,9 @@
 > değil. Ama altı ay sonra koda bakan (sen dahil) "burası neden yarım?" diye soracak. Cevaplar
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
-> ⚠️ **Tek istisna [§J](#j-yol-1in-sepeti-hiç-kaydedilmiyor--açık-bug--tur-42)** — o bilinçli
-> bir erteleme değil, **gerçek bir bug**: PGW'den gelen sepet hiç kaydedilmiyor, düzeltmesi
-> Tur 42'ye bırakıldı.
+> ⚠️ **Tek istisna §J** — o bilinçli bir erteleme değil, **gerçek bir bug**: PGW'den gelen
+> sepet hiç kaydedilmiyordu. Düzeltme Tur 42'de yazıldı (§J.5), ama **cihazda
+> doğrulanmadı** — §J.3'ün DB sorgusu ilk kez satır döndüğünde kapanır.
 >
 > 🔒 **[§K](#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) tersini anlatır:** §A–§J
 > neyi **ertelediğimiz**, §K neye **dokunmadığımız** — gerçek terminalde çalıştığı
@@ -67,7 +67,8 @@ POS'un `?role=SELLER` filtresi ve telefonun filtresiz kutusu.
 **Kalan iş:** §H.1'de listeli (OTP, UNCLAIMED için SMS-OTP, PGW handshake, yol 1 timeout)
 + cihaz testinden çıkan iki not: **§C.3.1** (logout 401 log gürültüsü) ve **§F.5** (pullBook
 N+1). İkisi de kullanıcı kararıyla ertelendi: *"sunuma az kaldı, kozmetik yerlere
-odaklanacağız."* **Ayrıca §J: sepet bug'ı (açık, Tur 42).**
+odaklanacağız."* **Ayrıca §J: sepet bug'ı — kod yazıldı (Tur 42, §J.5), cihaz
+doğrulaması bekliyor.**
 
 ---
 
@@ -819,13 +820,18 @@ bağ sadece bir doc yorumu).
 
 ---
 
-## J. Yol 1'in sepeti hiç kaydedilmiyor  🐞 **AÇIK BUG — Tur 42**
+## J. Yol 1'in sepeti hiç kaydedilmiyor  🐞 **KOD YAZILDI — cihaz doğrulaması bekliyor (Tur 42)**
 
 > Bu bölüm §A–§I'den **farklı**: oradakiler bilinçli ertelemeler, bu **gerçek bir hata**.
 > 2026-08-20'de DB sorgusuyla bulundu — Ayşe Demir'in (`c2`) 35,00 TL'lik veresiyesinin
 > sepeti soruldu, `basket_id` NULL çıktı. Sonra tüm tablo tarandı: **`baskets` 0 satır,
 > `basket_items` 0 satır.** Yani PGW'den intent'le gelen hiçbir sepet bugüne kadar
 > kaydedilmemiş.
+>
+> **2026-08-31 durumu:** düzeltme yazıldı (backend + iki Kotlin halkası, aşağıda §J.5).
+> Derleme ve testler yeşil, ama **§J.3'ün DB sorgusu henüz koşturulmadı** — bu bölüm
+> ancak o sorgu ilk kez satır döndüğünde kapanır. Kaynağa bakarak kapatma
+> ([[verify-running-artifact-not-source]]).
 
 ### J.1 Teşhis: zincirin İLK halkası bağlı değil
 
@@ -896,6 +902,40 @@ Bugün bu sorgu **0 satır** dönüyor; düzeltmenin ölçütü ilk kez satır d
 Şimdiye kadar yazılmış veresiyelerin sepetleri **kalıcı olarak kayıp**: JSON hiçbir yere
 yazılmadı, ne outbox payload'ında ne Room'da. `transactions` append-only olduğu için geriye
 dönük `basket_id` doldurmak da yok. Düzeltme yalnız **bundan sonraki** satışlar için geçerli.
+
+### J.5 Düzeltme — ve teşhisin KAÇIRDIĞI ikinci halka (2026-08-31)
+
+§J.1'in teşhisi doğruydu ama **eksikti**: bir değil **iki** kopuk halka vardı, ikisi de
+zincirin ayrı ucunda ve **her biri tek başına** sepeti kaybetmeye yetiyordu.
+
+**1. halka — §J.3'ün tarif ettiği (intent → SaleViewModel).** Ham JSON artık tutarın
+yanında nav argümanı olarak taşınıyor; `KeypadFragment.routeByEntry()` DEBT dalında
+`setAmount`'ın yanında `setOrderBody(OrderBodyParser.parse(args.orderBody))` çağırıyor.
+**İki** giriş noktası da bağlandı (`handleIntent` ve `onLoginSucceeded`).
+
+**2. halka — teşhiste YOK: `requestApproval` sepeti taşımıyordu.** Yol 1'in veresiyesi
+`addTransaction`'a **hiç uğramıyor** — onaya gidiyor ve ledger'a **sunucu** yazıyor
+(müşteri onayladığında). §J.1'in tablosu 4. satırda `OtpFragment` → `orderBody` diyor ama
+o değer `verifyAndWrite` içinde **yalnız PAYMENT dalına** (`collectPayment`) gidiyordu;
+DEBT dalı `sendForApproval`'a sepeti geçirmiyordu bile. Yani **sadece 1. halka bağlansaydı
+yol 1 aynen bozuk kalırdı** — sepet artık ViewModel'de dolu olurdu ama onu göndermeyen bir
+çağrıya ulaşırdı.
+
+Eklenen (hepsi **opsiyonel**, para-only çağıranlar değişmedi):
+`ApprovalCreateDto.basket` → `approvalCreateDto(orderBody=)` → `RemoteDataSource.sendForApproval`
+→ `Repository.requestApproval` (+ `OfflineFirstRepository`, `RoomLocalDataSource`, iki test
+fake'i) → `OtpViewModel.sendForApproval`. Sunucu tarafı (`ApprovalCreate.basket`,
+`approvals.basket_id`, migration 0005, onayda ledger'a taşıma) bir önceki commit'te hazırdı.
+
+**Test boşluğu neden bu kadar uzun sürdü:** `TransactionMapperTest` bunların hepsini
+`POST /transactions` için doğruluyordu — yani PGW veresiyesinin **hiç geçmediği** yolda.
+Yeni `ApprovalMapperTest` eksik yarıyı kapatıyor (5 test: sepet gidiyor mu, `basket`
+anahtarı altında mı, ×1000 ölçek korunuyor mu, null sepet gövdeden düşüyor mu).
+
+**Ders:** §J.1 "boru hattının geri kalanı baştan sona doğru" demişti — doğruydu, ama
+*izlenen* boru hattı yol 2'ninkiydi. Bir zincirde kopukluk ararken **hangi yolun** gerçekten
+koştuğunu doğrula: bu sistemde beş yol var ve ikisi ledger'a farklı uçlardan yazıyor
+([[approval-five-paths-turn41]]).
 
 ---
 
