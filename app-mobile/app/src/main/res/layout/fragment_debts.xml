@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What I owe, grouped by shop. The buyer's home screen.
+
+  A FOCUS CARD screen (theme B-a). The card used to be tinted red to state the role at a
+  glance; the tint is gone because the figure itself now carries the direction in its
+  gradient, and a red panel plus a red number was saying the same thing twice.
+-->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -6,49 +13,65 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Red-tinted: this screen is what I OWE (I am the buyer here). The colour states
-         the role at a glance, since the same person can also be a seller. -->
-    <com.google.android.material.card.MaterialCardView
+    <View
         android:id="@+id/totalCard"
-        style="@style/Widget.Appmobile.DirectionCard.Debt"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_4"
+        android:background="@drawable/bg_card_focus"
+        app:layout_constraintBottom_toBottomOf="@id/totalSpark"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+    <View
+        android:id="@+id/totalStripe"
+        android:layout_width="@dimen/stripe_width"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_card_stripe"
+        app:layout_constraintBottom_toBottomOf="@id/totalCard"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toTopOf="@id/totalCard" />
 
-            <TextView
-                android:id="@+id/totalLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/debts_total_label"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:textSize="14sp" />
+    <TextView
+        android:id="@+id/totalLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_5"
+        android:text="@string/debts_total_label"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toTopOf="@id/totalCard" />
 
-            <TextView
-                android:id="@+id/totalAmount"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="?attr/colorPrimary"
-                android:textSize="28sp"
-                android:textStyle="bold"
-                tools:text="140,00 TL" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+    <com.example.app_mobile.view.MoneyText
+        android:id="@+id/totalAmount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Display"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toBottomOf="@id/totalLabel"
+        tools:text="143,64 TL" />
+
+    <com.example.app_mobile.view.SparklineView
+        android:id="@+id/totalSpark"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/sparkline_height"
+        android:layout_marginHorizontal="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_3"
+        android:layout_marginBottom="@dimen/space_4"
+        app:layout_constraintEnd_toEndOf="@id/totalCard"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toBottomOf="@id/totalAmount" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/debtList"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="@dimen/space_3"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -61,6 +84,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/debts_empty"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/debtList"
         app:layout_constraintEnd_toEndOf="parent"

@@ -82,9 +82,11 @@ class FakeSyncRepository(
     override fun observeTransactions(sellerId: String, customerId: String): Flow<List<Transaction>> =
         flowOf(emptyList())
     override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> = flowOf(0L)
+    override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> = flowOf(emptyList())
 
     override fun observeMyDebtsBySeller(userId: String): Flow<List<SellerDebt>> = flowOf(emptyList())
     override fun observeMyTotalDebtMinor(userId: String): Flow<Long> = flowOf(0L)
+    override fun observeAllForBuyer(userId: String): Flow<List<Transaction>> = flowOf(emptyList())
     override fun observeMyTransactions(userId: String, sellerId: String): Flow<List<Transaction>> =
         flowOf(emptyList())
     override fun observeMyBalanceWithSeller(userId: String, sellerId: String): Flow<Long> = flowOf(0L)

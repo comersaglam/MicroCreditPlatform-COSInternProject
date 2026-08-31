@@ -2,12 +2,14 @@ package com.example.app_mobile.ui.debts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.app_mobile.util.BalanceSeries
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.example.app_pos.model.SellerDebt
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -38,6 +40,18 @@ class DebtsViewModel @Inject constructor(
         repo.observeCurrentUser().flatMapLatest { user ->
             if (user == null) flowOf(0L) else repo.observeMyTotalDebtMinor(user.userId)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    /**
+     * The last twelve closing balances across every shop, for the trend line.
+     *
+     * Reads the entries rather than the per-shop totals above, because a total says where
+     * the figure stands and this has to say where it has been.
+     */
+    val totalSeries: StateFlow<List<Long>> =
+        repo.observeCurrentUser().flatMapLatest { user ->
+            if (user == null) flowOf(emptyList()) else repo.observeAllForBuyer(user.userId)
+        }.map { BalanceSeries.monthly(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Pulls the ledger from the server while this screen is open.

@@ -248,6 +248,9 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> =
         transactions.observeTotalReceivable(sellerId)
 
+    override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> =
+        transactions.observeAllForSeller(sellerId).map { list -> list.map { it.toDomain() } }
+
     // --- ledger (buyer-scoped) -----------------------------------------------
 
     override fun observeMyDebtsBySeller(userId: String): Flow<List<SellerDebt>> =
@@ -256,6 +259,9 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             // stay in one place (mirrors the fake's sortedByDescending).
             rows.map { it.toDomain() }.sortedByDescending { it.balanceMinor }
         }
+
+    override fun observeAllForBuyer(userId: String): Flow<List<Transaction>> =
+        transactions.observeAllForBuyer(userId).map { list -> list.map { it.toDomain() } }
 
     override fun observeMyTotalDebtMinor(userId: String): Flow<Long> =
         transactions.observeBuyerTotalDebt(userId)

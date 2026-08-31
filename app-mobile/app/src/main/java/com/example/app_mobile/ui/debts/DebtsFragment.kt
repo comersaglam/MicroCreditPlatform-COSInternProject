@@ -13,6 +13,7 @@ import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_pos.model.SellerDebt
 import com.example.app_mobile.databinding.FragmentDebtsBinding
+import com.example.app_mobile.R
 import com.example.app_mobile.util.toTlString
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -41,6 +42,14 @@ class DebtsFragment : Fragment() {
         binding.debtList.layoutManager = LinearLayoutManager(requireContext())
         binding.debtList.adapter = adapter
 
+        binding.totalAmount.format = { it.toTlString() }
+        // Always a debt on this screen -- it lists what I owe -- so the direction is
+        // fixed rather than read off the sign.
+        binding.totalAmount.setGradientColors(
+            requireContext().getColor(R.color.debt_grad_top),
+            requireContext().getColor(R.color.debt_grad_bottom),
+        )
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
@@ -50,9 +59,10 @@ class DebtsFragment : Fragment() {
                     }
                 }
                 launch {
-                    viewModel.totalDebtMinor.collect { total ->
-                        binding.totalAmount.text = total.toTlString()
-                    }
+                    viewModel.totalDebtMinor.collect { binding.totalAmount.setAmount(it) }
+                }
+                launch {
+                    viewModel.totalSeries.collect { binding.totalSpark.values = it }
                 }
                 // Keeps the list fed from the server while the screen is open. Cancelled
                 // with the lifecycle, so a backgrounded app stops asking.

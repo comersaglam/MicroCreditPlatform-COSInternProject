@@ -56,6 +56,14 @@ class CustomersFragment : Fragment() {
             viewModel.onFilterChanged(filter)
         }
 
+        binding.totalAmount.format = { it.toTlString() }
+        // Always money coming IN on this screen -- it lists what the shop is owed -- so
+        // the direction is fixed rather than read off the sign.
+        binding.totalAmount.setGradientColors(
+            requireContext().getColor(R.color.credit_grad_top),
+            requireContext().getColor(R.color.credit_grad_bottom),
+        )
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
@@ -66,9 +74,10 @@ class CustomersFragment : Fragment() {
                     }
                 }
                 launch {
-                    viewModel.totalReceivableMinor.collect { total ->
-                        binding.totalAmount.text = total.toTlString()
-                    }
+                    viewModel.totalReceivableMinor.collect { binding.totalAmount.setAmount(it) }
+                }
+                launch {
+                    viewModel.totalSeries.collect { binding.totalSpark.values = it }
                 }
                 // Keeps the book fed from the server while the screen is open. Cancelled
                 // with the lifecycle, so a backgrounded app stops asking.

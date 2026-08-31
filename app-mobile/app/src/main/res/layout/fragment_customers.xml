@@ -6,51 +6,76 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Green-tinted: this screen is what I AM OWED (I am the seller here) — the
-         mirror of the red header on Borçlarım. -->
-    <com.google.android.material.card.MaterialCardView
+    <!--
+      A FOCUS CARD (theme B-a). The green tint that used to state the role is gone: the
+      figure carries its direction in its own gradient now, and a green panel behind a
+      green number said it twice.
+
+      Shorter than the one on the detail screens — this screen also carries a search
+      field, a filter row and a list, and the card has to leave them room.
+    -->
+    <View
         android:id="@+id/totalCard"
-        style="@style/Widget.Appmobile.DirectionCard.Credit"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_4"
+        android:background="@drawable/bg_card_focus"
+        app:layout_constraintBottom_toBottomOf="@id/totalSpark"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintTop_toTopOf="parent" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+    <View
+        android:id="@+id/totalStripe"
+        android:layout_width="@dimen/stripe_width"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_card_stripe"
+        app:layout_constraintBottom_toBottomOf="@id/totalCard"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toTopOf="@id/totalCard" />
 
-            <TextView
-                android:id="@+id/totalLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/total_receivable"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:textSize="14sp" />
+    <TextView
+        android:id="@+id/totalLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_4"
+        android:text="@string/total_receivable"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toTopOf="@id/totalCard" />
 
-            <TextView
-                android:id="@+id/totalAmount"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="?attr/colorPrimary"
-                android:textSize="28sp"
-                android:textStyle="bold"
-                tools:text="235,50 TL" />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
+    <com.example.app_mobile.view.MoneyText
+        android:id="@+id/totalAmount"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Display"
+        android:textSize="30sp"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toBottomOf="@id/totalLabel"
+        tools:text="235,50 TL" />
+
+    <com.example.app_mobile.view.SparklineView
+        android:id="@+id/totalSpark"
+        android:layout_width="0dp"
+        android:layout_height="32dp"
+        android:layout_marginHorizontal="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:layout_marginBottom="@dimen/space_3"
+        app:layout_constraintEnd_toEndOf="@id/totalCard"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toBottomOf="@id/totalAmount" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchLayout"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_3"
         android:hint="@string/search_customer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -69,8 +94,8 @@
         android:id="@+id/filterGroup"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_2"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/searchLayout"
@@ -97,7 +122,7 @@
         android:id="@+id/customerList"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_2"
         android:clipToPadding="false"
         android:paddingBottom="88dp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -112,6 +137,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/no_customer_found"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@id/customerList"
         app:layout_constraintEnd_toEndOf="parent"
@@ -123,7 +150,7 @@
         android:id="@+id/fabAddCustomer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
+        android:layout_margin="@dimen/screen_edge"
         android:contentDescription="@string/add_customer_title"
         android:src="@android:drawable/ic_input_add"
         app:layout_constraintBottom_toBottomOf="parent"

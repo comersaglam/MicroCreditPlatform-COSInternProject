@@ -98,12 +98,24 @@ interface Repository {
     fun observeTransactions(sellerId: String, customerId: String): Flow<List<Transaction>>
     fun observeTotalReceivableMinor(sellerId: String): Flow<Long>
 
+    /**
+     * Every entry in this seller's book, across all customers.
+     *
+     * For the trend line beside the book's total: that figure sums every customer, so its
+     * history has to as well. Kept separate from the per-customer read because asking
+     * that one repeatedly would issue a query per customer for a single line.
+     */
+    fun observeAllForSeller(sellerId: String): Flow<List<Transaction>>
+
     // --- ledger (buyer-scoped: the mirror of the reads above) ---
     /** This buyer's debts grouped by shop — one row per seller they owe. */
     fun observeMyDebtsBySeller(userId: String): Flow<List<SellerDebt>>
     fun observeMyTotalDebtMinor(userId: String): Flow<Long>
     fun observeMyTransactions(userId: String, sellerId: String): Flow<List<Transaction>>
     fun observeMyBalanceWithSeller(userId: String, sellerId: String): Flow<Long>
+
+    /** Every entry against this buyer, across all shops. The mirror of the read above. */
+    fun observeAllForBuyer(userId: String): Flow<List<Transaction>>
 
     // --- approvals (every write passes through here) ---
     fun observePendingApprovals(userId: String): Flow<List<PendingApproval>>

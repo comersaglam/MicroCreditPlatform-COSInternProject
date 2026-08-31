@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.PhoneFormat
+import com.example.app_mobile.util.BalanceSeries
 import com.example.app_pos.model.Repository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -20,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -65,6 +67,18 @@ class CustomersViewModel @Inject constructor(
         repo.observeCurrentUser().flatMapLatest { user ->
             if (user == null) flowOf(0L) else repo.observeTotalReceivableMinor(user.userId)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    /**
+     * The last twelve closing balances for the whole book, for the trend line.
+     *
+     * Reads every entry rather than the per-customer balances: the total sums all of
+     * them, so its history has to as well.
+     */
+    val totalSeries: StateFlow<List<Long>> =
+        repo.observeCurrentUser().flatMapLatest { user ->
+            if (user == null) flowOf(emptyList()) else repo.observeAllForSeller(user.userId)
+        }.map { BalanceSeries.monthly(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Adding a customer resolves to one of three cases, because a phone number means
