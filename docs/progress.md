@@ -5,6 +5,10 @@ Bu dosya her adımda güncellenir: ne yaptık, neden, sıradaki ne. Amaç: unutm
 > **Yarım bırakılanlar için: [deferred.md](deferred.md)** — bilinçli olarak ertelenen her şey
 > (mock kalan login/OTP, app-mobile'ın FAZ 4 eksiği, `future` uçlar) gerekçesi ve kod
 > konumuyla orada. Bu dosya *ne yaptığımızı*, o dosya *neyi bıraktığımızı* anlatır.
+>
+> **Sunum fazının planı: [faz6-sunum-plani.md](faz6-sunum-plani.md)** — Tur 43–50'nin
+> kapsamı, sırası ve alınmış kararları. Faz birden fazla oturuma yayılıyor; yeni bir
+> oturuma başlarken önce oraya bak (§0 tablosu nerede kaldığımızı gösterir).
 
 Sıra: **app-pos + shared-contracts → app-mobile → backend.**
 Yöntem: kısa parçalar, her adımda açıklama + onay, XML views, Clean Architecture,

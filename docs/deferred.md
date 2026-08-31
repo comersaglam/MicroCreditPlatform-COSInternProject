@@ -12,7 +12,12 @@
 > neyi **ertelediğimiz**, §K neye **dokunmadığımız** — gerçek terminalde çalıştığı
 > kanıtlanmış PGW/intent değerleri. Sepete veya geçide dokunacak her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-08-31, PGW sözleşmesinin dondurulması (§K) sonrası.
+> 📋 **[§L](#l-sunum-fazı-faz-6-mockları--bilinçli-hepsi-burada) sunum fazının mock'ları:**
+> FAZ 6'nın (Tur 43–50) işi vizyon göstermek, tam implementasyon değil — o fazın kasten
+> mock bıraktığı ne varsa gerekçesiyle orada. Fazın planı:
+> [faz6-sunum-plani.md](faz6-sunum-plani.md).
+>
+> Son güncelleme: 2026-08-31, sunum fazı planlandı (§L açıldı).
 > Kalıcı adım günlüğü: [progress.md](progress.md). Uygulama planı ve §0 kararları:
 > [faz5-backend-plan.md](faz5-backend-plan.md). Kararların gerekçesi:
 > [architecture-pos.md](architecture-pos.md), [veresiye-platform-tasarim.md](veresiye-platform-tasarim.md).
@@ -1081,3 +1086,103 @@ Kaynak incelemesi bu bölümün hiçbirini doğrulayamaz.
 Tek otomatik bekçi sunucu tarafında:
 `backend/tests/test_pgw_jobs.py::test_the_receipt_body_matches_the_gateway_shape`
 fiş gövdesini alan alan doğruluyor. Cihaz tarafının karşılığı yok — bu üç kontrol elle.
+
+---
+
+## L. Sunum fazı (FAZ 6) mock'ları — bilinçli, hepsi burada
+
+> **Bu bölüm neden var:** [faz6-sunum-plani.md](faz6-sunum-plani.md)'nin işi vizyon
+> göstermek, tam implementasyon değil. Yani bu fazın ürettiği parçaların **çoğu
+> kasten mock**. §A–§K'nın kurduğu gelenek gereği, mock olan her şey gerekçesiyle
+> burada duruyor — altı ay sonra bunlara bakan (sen dahil) "burası neden yarım
+> kalmış?" diye sormasın.
+>
+> Aşağıdaki maddeler **planlandı, henüz uygulanmadı**. Her tur kapandıkça ilgili
+> madde gerçekleşen haline güncellenir (kod konumu + hangi turda yazıldığı eklenir).
+> Fazın nerede kaldığı: [faz6-sunum-plani.md §0](faz6-sunum-plani.md).
+
+### L.1 `audit_log` sadece seed'den doluyor — canlı yazan yok  ⬜ PLANLANDI (Tur 43)
+
+Admin panelinin "Trafik" sekmesi `audit_log` tablosunu okuyacak, ama tabloyu **hiçbir
+şey canlı doldurmayacak**: satırların tamamı `seed_demo.py`'dan gelir (~3000 sahte
+geçmiş kayıt).
+
+**Neden:** sistem canlıya alınmadı, yani gerçek trafik zaten yok. Demoda 5–10 istek
+atılacağı için grafik canlı yazmayla da dolmazdı; hacim seed'den gelmek zorunda.
+Kullanıcının kararı: middleware'i yazmayalım, ama eksik olduğu yazılı olsun.
+
+**Sonucu:** panel **geçmiş** trafiği gösterir, **canlı olay göstermez**. Sunumda
+"şimdi POS'tan işlem yapayım, panelde görelim" **çalışmaz**.
+
+**Yapılması gereken (ileride):** `backend/app/middleware/audit.py` — tek bir
+`@app.middleware("http")`, yazma metodları + `/auth` için satır düşürür (~40 satır,
+mevcut uçlara dokunmaz).
+
+### L.2 Ödeme düzeltme mock — ledger append-only  ⬜ PLANLANDI (Tur 48)
+
+Admin panelindeki "ödemeyi düzelt" butonu `POST /admin/transactions/{id}/adjust`'a
+gider, uç **501 döner** ve nedenini açıklar.
+
+**Neden:** `transactions` DB seviyesinde append-only (migration 0001'deki
+`trg_transactions_append_only` trigger'ı). Bir satırı düzeltmek mimarinin en temel
+kararını bozar. Doğru yol **ters kayıt**: düzeltme, ters yönde yeni bir satırdır.
+
+**Bu faz için karar:** ters kayıt yeni bir transaction type + migration + iki app'te
+görüntüleme demek — sunum kapsamı dışında. Panelde bunu **açıklayan bir not** gösterilir;
+"yapılamadı" değil, "bilerek böyle" mesajı verir.
+
+### L.3 TokenFlex / Odero / Yapı Kredi butonları görsel  ⬜ PLANLANDI (Tur 47)
+
+Ödeme yöntemi seçicideki ilk üç kart ve profildeki üç "hesabını bağla" butonu **hiçbir
+entegrasyona bağlı değil** — seçilince "yakında" kartı çıkar.
+
+**Neden:** bunlar Token/Koç grubu ödeme sistemlerinin **vizyon göstergesi**. Gerçek
+entegrasyon ayrı bir iş kolu (sözleşme, anahtar, sertifikasyon).
+
+⚠️ **Bozulmaması gereken:** dördüncü kart **"Normal Ödeme"** mevcut `initiatePayment`
+akışını sürdürür. Yani **çalışan yol seçicinin arkasında duruyor**, mock'lar onun
+önüne geçmiyor.
+
+### L.4 `fx_rates` verisi mock — gerçek web-fetch yok  ⬜ PLANLANDI (Tur 43)
+
+`fx_rates` tablosu ve `fx.py` hesap katmanı **gerçek**: tablo Postgres'te, migration
+0006 ile geliyor, hesaplar tek yerde. Ama **içindeki 365 günlük seri uydurma** (USD
+32→41, CPI aylık ~%3).
+
+**Neden:** kullanıcının orijinal notu (`veresiye-platform-tasarim.md`, "Ek özellik
+updateleri") kur/altın değerlerinin **web fetch ile** toplanmasını öngörüyordu. Bu faz
+için önemli olan **verinin nereden geldiği değil, mimarinin çalıştığı**: her işlem
+kendi tarihindeki kurla eşleşiyor mu, hesap tek yerde mi.
+
+**Yapılması gereken (ileride):** günlük bir job (TCMB veya benzeri kaynaktan) satırları
+gerçekten doldursun. Tablo şeması ve `fx.py` arayüzü **değişmez** — sadece veri kaynağı
+değişir.
+
+### L.5 TC / kimlik fotoğrafı yerelde kalıyor — KVKK kararı  ⬜ PLANLANDI (Tur 47)
+
+Profil tamamlama alanları (`tcNo`, `idPhotoUri`, `birthDate`, `address`) Room'a yazılır,
+**backend'e hiç gitmez**. Doluluk yüzdesi gerçek hesaplanır ama veri cihazı terk etmez.
+
+**Neden:** TC kimlik numarası ve kimlik fotoğrafı KVKK'nın **özel nitelikli veri**
+tarafına yakın duruyor. Demo için sunucuya taşımanın hiçbir faydası yok, anlatımı ise
+zorlaştırıyor. Aynı gerekçe `veresiye-platform-tasarim.md` FAZ 7'de zaten yazılı:
+kart verisi saklanmaz, tokenize edilir — **kapsamı küçültme** stratejisi.
+
+**Yapılması gereken (ileride):** gerçek KYC bir kimlik doğrulama sağlayıcısı üzerinden
+yapılır; uygulama ham TC/foto tutmaz, doğrulama sonucunu tutar.
+
+### L.6 Admin auth ayrı `.env` şifresi — `users`'ta rol yok  ⬜ PLANLANDI (Tur 48)
+
+Admin girişi `ADMIN_PASSWORD` ile yapılır ve ayrı imzalı bir admin JWT üretir
+(`typ: "admin"`). `users` tablosunda **`is_admin` / `role` kolonu yok**.
+
+**Neden:** kullanıcı modeline dokunmamak için bilinçli tercih. Bedeli kabul edildi:
+sistemde **iki ayrı auth mekanizması** var (telefon+OTP → kullanıcı JWT'si; şifre →
+admin JWT'si).
+
+⚠️ **Bunun anlamı:** admin bir *kullanıcı* değil, bir *anahtar*. Kim ne yaptı sorusunun
+cevabı yok — birden fazla kişi aynı şifreyi kullanırsa ayırt edilemez.
+
+**Yapılması gereken (ileride):** `users.is_admin` kolonu + `require_admin` bağımlılığı,
+mevcut OTP akışının üstüne. O zaman admin işlemleri de `audit_log`'a gerçek bir
+`actor_user_id` ile düşer (bkz. §L.1).
