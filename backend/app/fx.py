@@ -191,20 +191,31 @@ def average_monthly_growth(db: Session, as_of: date, months: int = 12) -> Fracti
     Geometric, not arithmetic: growth compounds, so the average that matters is the one
     that reproduces the total when applied `months` times.
 
+    Uses a SHORTER window when the series does not reach back far enough, rather than
+    refusing to answer. A projection from nine months of history is worth having; the
+    alternative is a blank screen on any account older than the rate data. Below three
+    months it does give up -- an average over one or two readings is noise wearing the
+    shape of a trend.
+
     Feeds `project_forward`, which is the only thing here that looks ahead -- and does so
     on the assumption that the recent past continues, which is a projection and is labelled
     as one wherever it reaches a screen.
     """
-    total = cpi_ratio(db, months_before(as_of, months), as_of)
+    span = months
+    total = cpi_ratio(db, months_before(as_of, span), as_of)
+
+    while total is None and span > 3:
+        span -= 1
+        total = cpi_ratio(db, months_before(as_of, span), as_of)
+
     if total is None or total <= 0:
         return None
 
-    # The per-month ratio whose `months`-fold product is `total`. Computed as a rational
+    # The per-month ratio whose `span`-fold product is `total`. Computed as a rational
     # approximation of the real root: exact roots of a Fraction are usually irrational, and
     # a limited denominator keeps later multiplication cheap without losing anything a
     # projection could meaningfully use.
-    per_month = Fraction(float(total) ** (1 / months)).limit_denominator(1_000_000)
-    return per_month
+    return Fraction(float(total) ** (1 / span)).limit_denominator(1_000_000)
 
 
 def project_forward(

@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from .. import models, schemas
 from ..deps import CurrentUser, DbSession
+from ..indexation import ensure_indexed, ensure_indexed_book
 from ..ledger import balance_of, balances_by_customer, book_customer_ids
 from ..phone import to_stored
 from ..security import api_error
@@ -102,6 +103,11 @@ def list_customers(current_user: CurrentUser, db: DbSession) -> list[schemas.Cus
     if not customer_ids:
         return []
 
+    # Bring every balance in this book up to date before reading any of them. Indexation
+    # is written when a balance is READ (there is no scheduler), and the shop's main
+    # screen is where a stale figure would be noticed first.
+    ensure_indexed_book(db, current_user.user_id)
+
     balances = balances_by_customer(db, current_user.user_id)
     customers = db.execute(
         select(models.Customer).where(models.Customer.customer_id.in_(customer_ids))
@@ -159,5 +165,7 @@ def get_customer(
     customer = db.get(models.Customer, customer_id)
     if customer is None:
         raise api_error(404, "customer_not_found", "No such customer")
+
+    ensure_indexed(db, current_user.user_id, customer_id)
 
     return _customer_out(customer, balance_of(db, current_user.user_id, customer_id))

@@ -7,12 +7,15 @@ logic, not dialect behaviour. The one thing SQLite cannot check is the append-on
 trigger, which lives in the migration and is verified against the real database instead.
 """
 
+from datetime import date
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
+from app import models
 from app.config import settings
 from app.db import Base, get_db
 from app.main import app
@@ -81,3 +84,31 @@ def buyer_auth(client) -> dict[str, str]:
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['token']}"}
+
+
+@pytest.fixture
+def fx_series(db_session):
+    """
+    Twelve months of index at a clean 3% per month, opt-in.
+
+    Deliberately NOT part of the base seed. Indexation is written whenever a balance is
+    read, so seeding rates globally would silently move the balances every other test
+    asserts on -- and those assertions are the thing that proves the ledger sums the way
+    both clients do.
+
+    Requesting this fixture is how a test says "now let inflation run". The rate is a round
+    3% so an expected figure can be worked out by hand in the test that reads it.
+    """
+    cpi = 100_000
+    for month in range(1, 13):
+        db_session.add(
+            models.FxRate(
+                as_of=date(2026, month, 1),
+                usd_minor=3_200 + month * 50,
+                eur_minor=3_500 + month * 50,
+                gold_minor=400_000 + month * 5_000,
+                cpi_index=cpi,
+            )
+        )
+        cpi = round(cpi * 1.03)
+    db_session.commit()

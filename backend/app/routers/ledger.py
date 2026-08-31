@@ -16,6 +16,7 @@ from sqlalchemy import select
 from .. import models, schemas
 from ..baskets import write_basket
 from ..deps import CurrentUser, DbSession
+from ..indexation import ensure_indexed
 from ..ledger import balance_of, is_in_book
 from ..security import api_error
 from ..serializers import transaction_out, transactions_out
@@ -139,6 +140,10 @@ def transaction_history(
     Scoped by the token, so the same customer's entries at another shop are invisible
     here -- the history screen and the balance must agree about which book they describe.
     """
+    # The indexation rows belong in this list, so they are brought up to date before it is
+    # read rather than only when a balance is asked for.
+    ensure_indexed(db, current_user.user_id, customer_id)
+
     rows = db.execute(
         select(models.Transaction)
         .where(
@@ -165,6 +170,8 @@ def customer_balance(
     correct reading of an empty book, and it keeps this endpoint agreeing with the sum
     the device computes locally over the same (empty) set of rows.
     """
+    ensure_indexed(db, current_user.user_id, customer_id)
+
     return schemas.Balance(
         seller_id=current_user.user_id,
         customer_id=customer_id,

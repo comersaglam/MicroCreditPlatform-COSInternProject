@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from .. import models, schemas
 from ..deps import CurrentUser, DbSession
+from ..indexation import ensure_indexed, ensure_indexed_for_buyer
 from ..ledger import debts_by_seller
 from ..ledger import balance_of as _seller_scoped_balance
 from ..serializers import transactions_out
@@ -67,6 +68,12 @@ def my_debts(current_user: CurrentUser, db: DbSession) -> list[schemas.SellerDeb
     named their shop must still produce something a human recognises.
     """
     my_ids = _my_customer_ids(db, current_user.user_id)
+
+    # Every shop this person deals with, brought up to date in one pass. This is
+    # app-mobile's main screen, and it is the one place a buyer sees all their debts at
+    # once -- a figure that lagged here would contradict the shop's own screen.
+    ensure_indexed_for_buyer(db, my_ids)
+
     balances = debts_by_seller(db, my_ids)
     if not balances:
         return []
@@ -112,6 +119,11 @@ def my_history(
         # never dealt with should see an empty list, not a failure.
         return []
 
+    # Indexed here too, not just on the balance endpoints: this is the screen that lists
+    # the entries, and a balance carrying adjustments the history does not show would look
+    # like an arithmetic error.
+    ensure_indexed(db, seller_id, customer_id)
+
     rows = db.execute(
         select(models.Transaction)
         .where(
@@ -134,6 +146,8 @@ def my_balance(
 ) -> schemas.Balance:
     """This buyer's balance with one shop -- the same sum the seller sees, from the other side."""
     customer_id = _my_customer_id_with(db, current_user.user_id, seller_id)
+    if customer_id is not None:
+        ensure_indexed(db, seller_id, customer_id)
 
     return schemas.Balance(
         seller_id=seller_id,
