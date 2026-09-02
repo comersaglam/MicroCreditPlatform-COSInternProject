@@ -20,6 +20,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -203,6 +204,60 @@ class PullPathTest {
         assertEquals("t1", local.storedBuyerLedger?.single()?.transactionId)
         // The name comes off /me/debts: a buyer cannot read another account.
         assertEquals(mapOf("u_owner" to ("Ahmet Bakkal" to "+902121112233")), local.storedShopNames)
+    }
+
+    /**
+     * The basket survives the pull, as far as this test can see.
+     *
+     * ⚠️ WHAT THIS DOES **NOT** COVER, and it is the more important half. This asserts that
+     * PullEngine hands the basket to the local source. It does NOT assert that the local
+     * source writes it — the fake records whatever it is given, so
+     * RoomLocalDataSource.storeBuyerLedger could go back to discarding baskets and this
+     * test would stay green. Verified by doing exactly that: the defect was reintroduced,
+     * the suite passed, and the defect was reverted.
+     *
+     * The gap is structural, not an oversight: covering the Room write needs an
+     * instrumented test, and this repo has none. Until it does, the write path is checked
+     * on a device (docs/faz6-sunum-plani.md, Turn 45 verification) — a basket_items count
+     * that does not grow across two pulls.
+     *
+     * What it DOES catch is a real regression all the same: the wire-to-domain-to-store
+     * chain losing the basket, or mangling it on the way. The scales are asserted rather
+     * than just the line's presence, because 2500 read as 2500 units would still look like
+     * a basket.
+     */
+    @Test
+    fun `a pulled entry keeps the basket it arrived with`() = runTest {
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """[{"seller_id":"u_owner","shop_name":"Ahmet Bakkal",
+                    "shop_phone":null,"balance_minor":3000}]"""
+            )
+        )
+        server.enqueue(
+            MockResponse().setResponseCode(200).setBody(
+                """[{"transaction_id":"t1","seller_id":"u_owner","customer_id":"c1",
+                    "amount_minor":3000,"type":"DEBT","description":"Veresiye",
+                    "created_at":"2026-08-14T09:00:00Z",
+                    "basket":{"basket_id":"b1","create_invoice":false,"document_type":0,
+                      "is_void":false,"items":[
+                        {"name":"Ekmek","price":1500,"quantity":2000,"tax_percent":1000,
+                         "section_no":1,"status":1,"type":0,"item_limit":0}]}}]"""
+            )
+        )
+        val local = FakeLocalSource()
+
+        engine(local).pullMyLedger("u1")
+
+        val basket = local.storedBuyerLedger?.single()?.basket
+        assertNotNull("the basket was dropped between the wire and storage", basket)
+        val item = basket!!.items.single()
+        assertEquals("Ekmek", item.name)
+        assertEquals(1500L, item.price)
+        assertEquals(2000L, item.quantity)     // ×1000: two loaves
+        assertEquals(1000L, item.taxPercent)   // ×1000: 10%
+        // And the arithmetic still agrees with the entry it belongs to.
+        assertEquals(3000L, basket.totalMinor())
     }
 
     /**

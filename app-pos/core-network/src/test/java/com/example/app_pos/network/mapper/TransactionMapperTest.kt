@@ -3,6 +3,8 @@ package com.example.app_pos.network.mapper
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.OrderItem
 import com.example.app_pos.model.TransactionType
+import com.example.app_pos.network.dto.OrderBodyDto
+import com.example.app_pos.network.dto.OrderItemDto
 import com.example.app_pos.network.dto.TransactionCreateDto
 import com.example.app_pos.network.dto.TransactionDto
 import com.squareup.moshi.Moshi
@@ -81,6 +83,67 @@ class TransactionMapperTest {
         assertEquals("u_owner", domain.sellerId)
         assertEquals(TransactionType.DEBT, domain.type)
         assertEquals(5000L, domain.amountMinor)
+    }
+
+    /**
+     * The INBOUND basket — the direction the tests above did not cover.
+     *
+     * Everything here was asserted for the outgoing body only, which is the asymmetry §J.5
+     * named: the test verified the path a gateway veresiye never takes. A basket arriving
+     * on a response is the one the buyer's phone shows back to them, and until Turn 45
+     * nothing downstream kept it.
+     *
+     * The scales are checked, not just the line's presence: mangling 2000 into 2 units
+     * would still produce something that looks like a basket.
+     */
+    @Test
+    fun `a response entry brings its basket back with the scales intact`() {
+        val domain = TransactionDto(
+            transactionId = "t1",
+            sellerId = "u_owner",
+            customerId = "c1",
+            amountMinor = 3000,
+            type = "DEBT",
+            description = "Veresiye",
+            createdAt = STAMP,
+            basket = OrderBodyDto(
+                basketId = "b1",
+                items = listOf(
+                    OrderItemDto(
+                        name = "Ekmek",
+                        price = 1500,
+                        quantity = 2000,
+                        taxPercent = 1000,
+                        itemLimit = 0
+                    )
+                )
+            )
+        ).toDomainOrNull()!!
+
+        val item = domain.basket!!.items.single()
+        assertEquals("Ekmek", item.name)
+        assertEquals(1500L, item.price)
+        assertEquals(2000L, item.quantity)     // ×1000: two loaves
+        assertEquals(1000L, item.taxPercent)   // ×1000: 10%
+        // The lines add up to the entry they arrived on.
+        assertEquals(domain.amountMinor, domain.basket!!.totalMinor())
+    }
+
+    @Test
+    fun `a response entry without a basket carries none`() {
+        // Money-only handoffs, payments and the server's indexation rows all land here,
+        // and null has to stay distinguishable from an empty basket.
+        val domain = TransactionDto(
+            transactionId = "t1",
+            sellerId = "u_owner",
+            customerId = "c1",
+            amountMinor = 5000,
+            type = "PAYMENT",
+            description = "Ödeme",
+            createdAt = STAMP
+        ).toDomainOrNull()!!
+
+        assertNull(domain.basket)
     }
 
     @Test
