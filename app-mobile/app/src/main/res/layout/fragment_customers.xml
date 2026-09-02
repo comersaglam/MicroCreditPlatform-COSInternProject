@@ -6,68 +6,74 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!--
-      A FOCUS CARD (theme B-a). The green tint that used to state the role is gone: the
-      figure carries its direction in its own gradient now, and a green panel behind a
-      green number said it twice.
+        <!--
+      The focus card, as a WRAPPER rather than a flat sibling.
 
-      Shorter than the one on the detail screens — this screen also carries a search
-      field, a filter row and a list, and the card has to leave them room.
+      It began as a bare View whose Top was tied to the label, while the label's Start was
+      tied back to the card. Neither could be resolved before the other, so the card
+      enclosed nothing: the sparkline ran past its right edge and the label sat outside it.
+
+      PADDING IS ON THE CHILDREN, not here. The stripe has to touch the card's own edge,
+      and padding on this container would push it inward along with everything else.
     -->
-    <View
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/totalCard"
         android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_height="wrap_content"
         android:layout_marginHorizontal="@dimen/screen_edge"
         android:layout_marginTop="@dimen/space_4"
         android:background="@drawable/bg_card_focus"
-        app:layout_constraintBottom_toBottomOf="@id/totalSpark"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
 
-    <View
-        android:id="@+id/totalStripe"
-        android:layout_width="@dimen/stripe_width"
-        android:layout_height="0dp"
-        android:background="@drawable/bg_card_stripe"
-        app:layout_constraintBottom_toBottomOf="@id/totalCard"
-        app:layout_constraintStart_toStartOf="@id/totalCard"
-        app:layout_constraintTop_toTopOf="@id/totalCard" />
+        <!-- The stripe: its own view because a border cannot carry a gradient. -->
+        <View
+            android:id="@+id/totalStripe"
+            android:layout_width="@dimen/stripe_width"
+            android:layout_height="0dp"
+            android:background="@drawable/bg_card_stripe"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/totalLabel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_4"
-        android:text="@string/total_receivable"
-        android:textAppearance="@style/TextAppearance.Fides.Label"
-        app:layout_constraintStart_toStartOf="@id/totalCard"
-        app:layout_constraintTop_toTopOf="@id/totalCard" />
+        <TextView
+            android:id="@+id/totalLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_5"
+            android:text="@string/total_receivable"
+            android:textAppearance="@style/TextAppearance.Fides.Label"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-    <com.example.app_mobile.view.MoneyText
-        android:id="@+id/totalAmount"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_1"
-        android:textAppearance="@style/TextAppearance.Fides.Display"
-        android:textSize="30sp"
-        app:layout_constraintStart_toStartOf="@id/totalCard"
-        app:layout_constraintTop_toBottomOf="@id/totalLabel"
-        tools:text="235,50 TL" />
+        <com.example.app_mobile.view.MoneyText
+            android:id="@+id/totalAmount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_2"
+            android:textAppearance="@style/TextAppearance.Fides.Display"
+            android:textSize="30sp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/totalLabel"
+            tools:text="235,50 TL" />
 
-    <com.example.app_mobile.view.SparklineView
-        android:id="@+id/totalSpark"
-        android:layout_width="0dp"
-        android:layout_height="32dp"
-        android:layout_marginHorizontal="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_2"
-        android:layout_marginBottom="@dimen/space_3"
-        app:layout_constraintEnd_toEndOf="@id/totalCard"
-        app:layout_constraintStart_toStartOf="@id/totalCard"
-        app:layout_constraintTop_toBottomOf="@id/totalAmount" />
+        <com.example.app_mobile.view.SparklineView
+            android:id="@+id/totalSpark"
+            android:layout_width="0dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_3"
+            android:layout_marginEnd="@dimen/space_5"
+            android:layout_marginBottom="@dimen/space_5"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/totalAmount" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchLayout"

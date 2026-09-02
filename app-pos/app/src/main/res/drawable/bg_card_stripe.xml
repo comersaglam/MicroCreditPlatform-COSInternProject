@@ -6,8 +6,17 @@
   a hard vertical rule that cut the card in two; fading it means the eye reads it as
   where the card begins rather than as a border.
 
-  Placed as a 3dp-wide View pinned to the card's start edge, not as a border on the
-  card itself — a border cannot be given a gradient.
+  Placed as a View pinned to the card's start edge, not as a border on the card itself —
+  a border cannot be given a gradient.
+
+  THE LEFT CORNERS ARE ROUNDED, and they have to be: the card behind it is drawn with a
+  14dp radius, and a square stripe sits outside that curve at the top and bottom, which
+  reads as a rendering fault rather than as a design.
+
+  The radius here is SMALLER than the card's (8dp against 14dp) and the stripe is 4dp
+  rather than 3dp. At the card's own radius a stripe this narrow rounds away to nothing
+  at both ends; a slightly gentler curve follows the card's edge while staying visible
+  along its whole height.
 -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
@@ -17,4 +26,12 @@
         android:startColor="@color/stripe_top"
         android:endColor="@color/stripe_bottom"
         android:type="linear" />
+
+    <!-- Left corners follow the card; the right edge stays square because the stripe
+         continues into the card rather than ending there. -->
+    <corners
+        android:bottomLeftRadius="@dimen/radius_sm"
+        android:bottomRightRadius="0dp"
+        android:topLeftRadius="@dimen/radius_sm"
+        android:topRightRadius="0dp" />
 </shape>

@@ -33,79 +33,101 @@
         tools:text="+90 555 111 22 33" />
 
     <!--
-      The focus card (theme B-a). Same shape as app-mobile's: the shopkeeper reads this
-      figure off the terminal and the customer reads it off their phone, and the two
-      should not look like different products.
+      The focus card, as a WRAPPER rather than a flat sibling.
+
+      It began as a bare View whose Top was tied to the label, while the label's Start was
+      tied back to the card. Neither could be resolved before the other, so the card
+      enclosed nothing: the sparkline ran past its right edge and the label sat outside it.
+      Containing the children removes the question entirely.
+
+      A ConstraintLayout with a drawable background rather than a MaterialCardView: a card
+      view brings an elevation shadow, and on this ground a shadow is a smudge.
+
+      PADDING IS ON THE CHILDREN, not here. The stripe has to touch the card's own edge,
+      and padding on this container would push it inward along with everything else.
     -->
-    <View
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/balanceCard"
         android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_height="wrap_content"
         android:layout_marginHorizontal="@dimen/screen_edge"
-        android:layout_marginTop="@dimen/space_3"
+        android:layout_marginTop="@dimen/space_4"
         android:background="@drawable/bg_card_focus"
-        app:layout_constraintBottom_toBottomOf="@id/balanceSpark"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="@id/detailBalanceLabel" />
+        app:layout_constraintTop_toBottomOf="@id/detailPhone">
 
-    <View
-        android:id="@+id/balanceStripe"
-        android:layout_width="@dimen/stripe_width"
-        android:layout_height="0dp"
-        android:background="@drawable/bg_card_stripe"
-        app:layout_constraintBottom_toBottomOf="@id/balanceCard"
-        app:layout_constraintStart_toStartOf="@id/balanceCard"
-        app:layout_constraintTop_toTopOf="@id/balanceCard" />
+        <!-- The stripe: its own view because a border cannot carry a gradient. Pinned to
+             the card's edge with no margin, which is what the missing padding above buys. -->
+        <View
+            android:id="@+id/balanceStripe"
+            android:layout_width="@dimen/stripe_width"
+            android:layout_height="0dp"
+            android:background="@drawable/bg_card_stripe"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/detailBalanceLabel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_6"
-        android:text="@string/current_balance"
-        android:textAppearance="@style/TextAppearance.Fides.Label"
-        app:layout_constraintStart_toStartOf="@id/balanceCard"
-        app:layout_constraintTop_toBottomOf="@id/detailPhone" />
+        <TextView
+            android:id="@+id/detailBalanceLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_5"
+            android:text="@string/current_balance"
+            android:textAppearance="@style/TextAppearance.Fides.Label"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-    <com.example.app_pos.view.MoneyText
-        android:id="@+id/detailBalance"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_2"
-        android:textAppearance="@style/TextAppearance.Fides.Display"
-        app:layout_constraintStart_toStartOf="@id/balanceCard"
-        app:layout_constraintTop_toBottomOf="@id/detailBalanceLabel"
-        tools:text="40,00 TL" />
+        <!--
+          MoneyText, not TextView: counts up on arrival, then takes a gradient. The id is
+          unchanged, so the fragment finds the same field; only its type differs.
+        -->
+        <com.example.app_pos.view.MoneyText
+            android:id="@+id/detailBalance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_2"
+            android:textAppearance="@style/TextAppearance.Fides.Display"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/detailBalanceLabel"
+            tools:text="130,95 TL" />
 
-    <TextView
-        android:id="@+id/detailIndexationNote"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="@dimen/space_5"
-        android:layout_marginEnd="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_2"
-        android:textAppearance="@style/TextAppearance.Fides.Caption"
-        android:textSize="12sp"
-        android:visibility="gone"
-        app:layout_constraintEnd_toEndOf="@id/balanceCard"
-        app:layout_constraintStart_toStartOf="@id/balanceCard"
-        app:layout_constraintTop_toBottomOf="@id/detailBalance"
-        tools:text="Bunun 66,00 TL'si enflasyon farkı"
-        tools:visibility="visible" />
+        <!--
+          The inflation line: what part of this balance is indexation rather than goods.
+          Gone until there is any, so a debt made entirely of goods is not shown a zero.
+        -->
+        <TextView
+            android:id="@+id/detailIndexationNote"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginEnd="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_2"
+            android:textAppearance="@style/TextAppearance.Fides.Caption"
+            android:textSize="12sp"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/detailBalance"
+            tools:text="Bunun 2,07 TL'si enflasyon farkı"
+            tools:visibility="visible" />
 
-    <com.example.app_pos.view.SparklineView
-        android:id="@+id/balanceSpark"
-        android:layout_width="0dp"
-        android:layout_height="@dimen/sparkline_height"
-        android:layout_marginHorizontal="@dimen/space_5"
-        android:layout_marginTop="@dimen/space_3"
-        android:layout_marginBottom="@dimen/space_4"
-        app:layout_constraintEnd_toEndOf="@id/balanceCard"
-        app:layout_constraintStart_toStartOf="@id/balanceCard"
-        app:layout_constraintTop_toBottomOf="@id/detailIndexationNote" />
+        <com.example.app_pos.view.SparklineView
+            android:id="@+id/balanceSpark"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/sparkline_height"
+            android:layout_marginStart="@dimen/space_5"
+            android:layout_marginTop="@dimen/space_3"
+            android:layout_marginEnd="@dimen/space_5"
+            android:layout_marginBottom="@dimen/space_5"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/detailIndexationNote" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <TextView
         android:id="@+id/historyLabel"

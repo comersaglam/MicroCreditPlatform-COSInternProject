@@ -39,7 +39,7 @@
     <dimen name="stroke_hairline">1dp</dimen>
 
     <!-- The brand stripe down the left edge of a focus card. -->
-    <dimen name="stripe_width">3dp</dimen>
+    <dimen name="stripe_width">4dp</dimen>
 
     <!--
       Vertical rhythm for list rows. Note this is LARGER than the 12dp the layouts used
