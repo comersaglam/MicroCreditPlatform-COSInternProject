@@ -7,6 +7,7 @@ import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
+import com.example.app_pos.network.api.FxApi
 import com.example.app_pos.network.api.LedgerApi
 import com.example.app_pos.network.api.SyncApi
 import com.example.app_pos.network.api.UserApi
@@ -131,6 +132,9 @@ object NetworkModule {
 
     @Provides @Singleton fun providePgwJobApi(@ApiClient retrofit: Retrofit): PgwJobApi =
         retrofit.create(PgwJobApi::class.java)
+
+    @Provides @Singleton fun provideFxApi(@ApiClient retrofit: Retrofit): FxApi =
+        retrofit.create(FxApi::class.java)
 
     @Provides @Singleton fun provideSyncApi(@ApiClient retrofit: Retrofit): SyncApi =
         retrofit.create(SyncApi::class.java)

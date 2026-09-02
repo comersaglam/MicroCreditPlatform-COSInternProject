@@ -1,5 +1,6 @@
 package com.example.app_pos.data.remote
 
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.ApprovalStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.OrderBody
@@ -14,6 +15,7 @@ import com.example.app_pos.network.api.ApprovalApi
 import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
+import com.example.app_pos.network.api.FxApi
 import com.example.app_pos.network.api.LedgerApi
 import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.SyncApi
@@ -73,6 +75,7 @@ class RemoteDataSource @Inject constructor(
     private val approvalApi: ApprovalApi,
     private val pgwJobApi: PgwJobApi,
     private val syncApi: SyncApi,
+    private val fxApi: FxApi,
     // apiCall parses the error envelope with it, so the same Moshi that decodes responses
     // also decodes failures — one configuration, not two.
     private val moshi: Moshi
@@ -283,4 +286,16 @@ class RemoteDataSource @Inject constructor(
             syncApi.settle(transactionId, SettleRequestDto(receiptNo, settledViaPgw = true))
                 .toDomainOrNull()
         }
+
+    // --- reference data (nobody's records; the same series for every user) -----
+
+    /**
+     * What a lira was worth on [asOf] (yyyy-MM-dd), or today when null.
+     *
+     * The 404 the server answers when the series does not reach a date arrives here as an
+     * ApiError like any other, and the caller treats it as "no reading", not as a fault.
+     * The alternative would be zeros, which a client would divide by.
+     */
+    suspend fun fxRate(asOf: String? = null): ApiResult<FxSnapshot> =
+        apiCall(moshi) { fxApi.rate(asOf).toDomain() }
 }
