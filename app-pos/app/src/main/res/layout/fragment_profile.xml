@@ -20,7 +20,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/space_4">
 
         <!-- Read-only account card -->
         <com.google.android.material.card.MaterialCardView
@@ -81,7 +81,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_phone_label"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="13sp" />
@@ -108,7 +108,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="@dimen/space_3"
                         android:text="@string/profile_email_label"
                         android:textColor="?attr/colorOnSurfaceVariant"
                         android:textSize="13sp" />
@@ -128,7 +128,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_shop_label"
                     android:textColor="?attr/colorOnSurfaceVariant"
                     android:textSize="13sp" />
@@ -163,7 +163,7 @@
             android:id="@+id/pairCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/space_4"
             android:visibility="gone"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
@@ -186,7 +186,7 @@
                     android:id="@+id/btnPair"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_pair_button" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -196,7 +196,7 @@
             android:id="@+id/pairedText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/space_4"
             android:gravity="center"
             android:text="@string/profile_paired"
             android:textColor="?attr/colorPrimary"
@@ -209,7 +209,7 @@
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="@dimen/space_5"
             android:text="@string/profile_logout" />
 
     </LinearLayout>

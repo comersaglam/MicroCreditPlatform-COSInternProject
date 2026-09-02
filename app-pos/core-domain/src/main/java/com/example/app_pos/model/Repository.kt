@@ -70,6 +70,13 @@ interface Repository {
     // --- ledger ---
     fun observeTransactions(sellerId: String, customerId: String): Flow<List<Transaction>>
     fun observeTotalReceivableMinor(sellerId: String): Flow<Long>
+
+    /**
+     * Every entry in this seller's book. For the trend line beside the total: that figure
+     * sums every customer, so its history has to as well. Kept apart from the per-customer
+     * read because repeating that one would issue a query per customer for a single line.
+     */
+    fun observeAllForSeller(sellerId: String): Flow<List<Transaction>>
     fun observeBalance(sellerId: String, customerId: String): Flow<Long>
     /**
      * Appends a ledger entry. If [orderBody] is present (a basket handoff), its basket

@@ -63,6 +63,7 @@ class CustomerDetailFragment : Fragment() {
         setupPayButton()
         observePhone()
         observeBalance()
+        observeCardExtras()
         observeTransactions()
         observeGatewayRequests()
     }
@@ -179,15 +180,45 @@ class CustomerDetailFragment : Fragment() {
     }
 
     private fun observeBalance() {
+        binding.detailBalance.format = { it.toTlString() }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.balanceMinor.collect { balance ->
-                    binding.detailBalance.text = balance.toTlString()
-                    // Same convention as the list: red while a debt is outstanding
-                    // (>0), green once settled or overpaid (<=0).
-                    val balanceColor =
-                        if (balance > 0) R.color.balance_due else R.color.payment_received
-                    binding.detailBalance.setTextColor(requireContext().getColor(balanceColor))
+                    // Three states, not two. Zero used to take the same green as a fresh
+                    // payment, announcing an event that had not happened; nothing
+                    // outstanding is neither a debt nor a credit.
+                    val (top, bottom) = when {
+                        balance > 0 -> R.color.debt_grad_top to R.color.debt_grad_bottom
+                        balance < 0 -> R.color.credit_grad_top to R.color.credit_grad_bottom
+                        else -> R.color.neutral_grad_top to R.color.neutral_grad_bottom
+                    }
+                    binding.detailBalance.setGradientColors(
+                        requireContext().getColor(top),
+                        requireContext().getColor(bottom),
+                    )
+                    binding.detailBalance.setAmount(balance)
+                }
+            }
+        }
+    }
+
+    /** The trend line and the inflation share — the focus card's two ornaments. */
+    private fun observeCardExtras() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.balanceSeries.collect { binding.balanceSpark.values = it }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.indexationMinor.collect { indexation ->
+                    binding.detailIndexationNote.visibility =
+                        if (indexation > 0) View.VISIBLE else View.GONE
+                    if (indexation > 0) {
+                        binding.detailIndexationNote.text =
+                            getString(R.string.detail_indexation_note, indexation.toTlString())
+                    }
                 }
             }
         }

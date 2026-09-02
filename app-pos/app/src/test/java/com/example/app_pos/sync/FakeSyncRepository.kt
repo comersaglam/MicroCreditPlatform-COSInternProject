@@ -73,6 +73,7 @@ open class FakeSyncRepository(
     override fun observeTransactions(sellerId: String, customerId: String): Flow<List<Transaction>> =
         flowOf(emptyList())
     override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> = flowOf(0L)
+    override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> = flowOf(emptyList())
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> = flowOf(0L)
     override suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody?) = Unit
     override fun observeUnsentCount(): Flow<Int> = flowOf(0)

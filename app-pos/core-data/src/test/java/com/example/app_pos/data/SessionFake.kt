@@ -183,6 +183,10 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
     override fun observeTransactions(sellerId: String, customerId: String): Flow<List<Transaction>> =
         flowOf(emptyList())
     override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> = flowOf(0L)
+
+    // Only the trend line reads this, and no test asserts on a sparkline.
+    override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> =
+        flowOf(emptyList())
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> = flowOf(0L)
     override suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody?) = Unit
 }

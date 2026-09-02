@@ -12,16 +12,15 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="24dp">
+    android:padding="@dimen/space_5">
 
     <TextView
         android:id="@+id/confirmCustomerLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="@dimen/space_4"
         android:text="@string/confirm_customer"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
@@ -29,10 +28,10 @@
         android:id="@+id/confirmCustomerName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="@dimen/space_1"
         android:textColor="?attr/colorOnSurface"
+        android:textAppearance="@style/TextAppearance.Fides.Title"
         android:textSize="24sp"
-        android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/confirmCustomerLabel"
@@ -43,9 +42,8 @@
         android:id="@+id/confirmAmountLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
+        android:layout_marginTop="@dimen/space_6"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/confirmCustomerName"
         tools:text="@string/confirm_amount_debt" />
@@ -54,7 +52,7 @@
         android:id="@+id/confirmAmount"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="@dimen/space_1"
         android:textColor="@color/balance_due"
         android:textSize="40sp"
         android:textStyle="bold"
@@ -68,10 +66,9 @@
         android:id="@+id/confirmCurrentBalanceLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="@dimen/space_6"
         android:text="@string/confirm_current_balance"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/confirmAmount" />
 
@@ -79,7 +76,7 @@
         android:id="@+id/confirmCurrentBalance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
+        android:layout_marginTop="@dimen/space_6"
         android:textColor="?attr/colorOnSurface"
         android:textSize="14sp"
         app:layout_constraintBaseline_toBaselineOf="@id/confirmCurrentBalanceLabel"
@@ -90,11 +87,10 @@
         android:id="@+id/confirmNewBalanceLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="@dimen/space_3"
         android:text="@string/confirm_new_balance"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/confirmCurrentBalanceLabel" />
 
@@ -102,10 +98,9 @@
         android:id="@+id/confirmNewBalance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="@dimen/space_3"
         android:textColor="@color/balance_due"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
         app:layout_constraintBaseline_toBaselineOf="@id/confirmNewBalanceLabel"
         app:layout_constraintEnd_toEndOf="parent"
         tools:text="90,00 TL" />
@@ -115,12 +110,11 @@
         android:id="@+id/btnConfirm"
         android:layout_width="0dp"
         android:layout_height="56dp"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
         app:layout_constraintBottom_toTopOf="@id/btnCancel"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        android:layout_marginBottom="12dp"
+        android:layout_marginBottom="@dimen/space_3"
         tools:text="@string/confirm_write_debt" />
 
     <com.google.android.material.button.MaterialButton

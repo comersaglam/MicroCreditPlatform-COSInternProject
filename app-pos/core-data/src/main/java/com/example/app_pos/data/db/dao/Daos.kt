@@ -156,6 +156,13 @@ interface TransactionDao {
     suspend fun allOnce(): List<TransactionEntity>
 
     /**
+     * Every entry in this seller's book, across all customers. Feeds the trend line beside
+     * the book's total, which sums every customer and so needs a history that does too.
+     */
+    @Query("SELECT * FROM transactions WHERE sellerId = :sellerId ORDER BY createdAt")
+    fun observeAllForSeller(sellerId: String): Flow<List<TransactionEntity>>
+
+    /**
      * The (seller, customer) balance: DEBT and INDEXATION add, PAYMENT subtracts. Never
      * stored.
      *

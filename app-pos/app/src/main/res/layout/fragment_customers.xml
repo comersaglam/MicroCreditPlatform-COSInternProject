@@ -6,42 +6,76 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Header: what the merchant is owed in total -->
+    <!--
+      Header: what the merchant is owed in total. A focus card (theme B-a), kept short
+      because this screen also carries a search field, a filter row and a list.
+    -->
+    <View
+        android:id="@+id/totalCard"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_4"
+        android:background="@drawable/bg_card_focus"
+        app:layout_constraintBottom_toBottomOf="@id/totalSpark"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <View
+        android:id="@+id/totalStripe"
+        android:layout_width="@dimen/stripe_width"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_card_stripe"
+        app:layout_constraintBottom_toBottomOf="@id/totalCard"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toTopOf="@id/totalCard" />
+
     <TextView
         android:id="@+id/totalLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="16dp"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_4"
         android:text="@string/total_receivable"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:textAppearance="@style/TextAppearance.Fides.Label"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toTopOf="@id/totalCard" />
 
-    <TextView
+    <com.example.app_pos.view.MoneyText
         android:id="@+id/totalAmount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:textColor="?attr/colorPrimary"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Display"
+        android:textSize="30sp"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
         app:layout_constraintTop_toBottomOf="@id/totalLabel"
         tools:text="440,50 TL" />
+
+    <com.example.app_pos.view.SparklineView
+        android:id="@+id/totalSpark"
+        android:layout_width="0dp"
+        android:layout_height="32dp"
+        android:layout_marginHorizontal="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:layout_marginBottom="@dimen/space_3"
+        app:layout_constraintEnd_toEndOf="@id/totalCard"
+        app:layout_constraintStart_toStartOf="@id/totalCard"
+        app:layout_constraintTop_toBottomOf="@id/totalAmount" />
 
     <com.google.android.material.textfield.TextInputLayout
         android:id="@+id/searchLayout"
         style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginHorizontal="@dimen/space_4"
+        android:layout_marginTop="@dimen/space_3"
         android:hint="@string/search_customer"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/totalAmount">
+        app:layout_constraintTop_toBottomOf="@id/totalCard">
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/searchInput"
@@ -57,8 +91,8 @@
         android:id="@+id/filterGroup"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginHorizontal="@dimen/space_4"
+        android:layout_marginTop="@dimen/space_2"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/searchLayout"
@@ -85,7 +119,7 @@
         android:id="@+id/customerList"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_2"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

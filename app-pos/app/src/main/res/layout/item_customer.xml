@@ -10,15 +10,14 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="?attr/selectableItemBackground"
-    android:paddingHorizontal="16dp"
-    android:paddingVertical="12dp">
+    android:paddingHorizontal="@dimen/space_4"
+    android:paddingVertical="@dimen/row_vertical">
 
     <TextView
         android:id="@+id/customerName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
         app:layout_constraintEnd_toStartOf="@id/customerBalance"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -29,8 +28,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="12sp"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
         app:layout_constraintEnd_toStartOf="@id/customerBalance"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/customerName"
@@ -40,8 +38,7 @@
         android:id="@+id/customerBalance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -50,7 +47,7 @@
     <!-- Hairline separator: on a dark surface rows otherwise blur together -->
     <View
         android:layout_width="0dp"
-        android:layout_height="1dp"
+        android:layout_height="@dimen/stroke_hairline"
         android:background="?attr/colorOutline"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

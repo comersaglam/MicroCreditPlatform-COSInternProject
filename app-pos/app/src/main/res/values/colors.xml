@@ -2,24 +2,57 @@
 <resources>
 
     <!--
-      Dark fintech palette. Trust reads as blue, positive money as green,
-      debt as red. Backgrounds avoid pure black and text avoids pure white so
-      the screen stays readable during a long shift at the till.
+      T-Fides dark palette (Tur 44). Identical to app-mobile's: the shopkeeper reads a
+      balance off this terminal and the customer reads the same figure off their phone,
+      and the two should not look like different products.
+
+      Trust reads as blue, positive money as green, debt as red. Backgrounds avoid pure
+      black and text avoids pure white so the screen stays readable during a long shift
+      at the till.
     -->
-    <color name="background">#121212</color>
-    <color name="surface">#1C1C1E</color>
-    <color name="surface_elevated">#242428</color>
-    <color name="primary">#4C8BFF</color>
-    <color name="primary_container">#1A3A6B</color>
-    <color name="accent">#00C896</color>
-    <color name="error">#FF5C5C</color>
-    <color name="on_background">#E4E4E7</color>
-    <color name="on_surface_variant">#9B9BA1</color>
-    <color name="outline">#2C2C2E</color>
+    <color name="background">#0B0D12</color>
+    <color name="surface">#14171F</color>
+    <color name="surface_elevated">#1B1F29</color>
+
+    <!--
+      Token blue, used as a FILL: buttons, the selected chip, a focus card's stripe.
+      White on it clears 8:1. NOT used for text on this ground, where it measures about
+      3:1 and fails AA — primary_light is the same hue opened up for that.
+    -->
+    <color name="primary">#2151F3</color>
+    <color name="primary_light">#5B87FF</color>
+    <color name="primary_container">#152A5E</color>
+
+    <color name="accent">#22C55E</color>
+    <color name="error">#FF6B6B</color>
+    <color name="on_background">#E8EAF0</color>
+    <color name="on_surface_variant">#8B92A4</color>
+    <color name="outline">#262B36</color>
+
+    <!-- Focus-card gradient: lifted at the top, settling into the page at its base.
+         No elevation anywhere in this theme — on a dark ground a shadow is a smudge. -->
+    <color name="card_top">#1A1E28</color>
+    <color name="card_mid">#14171F</color>
+    <color name="card_bottom">#0F1219</color>
+
+    <!-- The balance figure's own gradient, applied as a shader on the text paint. -->
+    <color name="debt_grad_top">#FF9090</color>
+    <color name="debt_grad_bottom">#D94A4A</color>
+    <color name="credit_grad_top">#4ADE80</color>
+    <color name="credit_grad_bottom">#16A34A</color>
+    <color name="neutral_grad_top">#A8AEBD</color>
+    <color name="neutral_grad_bottom">#6B7280</color>
+
+    <color name="spark_line">@color/primary_light</color>
+    <color name="spark_fill_top">#4D2151F3</color>
+    <color name="spark_fill_bottom">#002151F3</color>
+
+    <color name="stripe_top">#2151F3</color>
+    <color name="stripe_bottom">#402151F3</color>
 
     <!-- Container tones: the dimmed backdrop versions of the accent colours,
          used behind buttons and chips rather than for text. -->
-    <color name="error_container">#5C1F1F</color>
+    <color name="error_container">#4A1D1D</color>
 
     <color name="on_primary">#FFFFFF</color>
     <color name="on_accent">#00120C</color>

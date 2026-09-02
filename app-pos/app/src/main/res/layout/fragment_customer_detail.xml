@@ -10,10 +10,9 @@
         android:id="@+id/detailName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="16dp"
-        android:textSize="22sp"
-        android:textStyle="bold"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Title"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -24,56 +23,107 @@
         android:id="@+id/detailPhone"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="2dp"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        android:textSize="13sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/detailName"
         tools:text="+90 555 111 22 33" />
 
+    <!--
+      The focus card (theme B-a). Same shape as app-mobile's: the shopkeeper reads this
+      figure off the terminal and the customer reads it off their phone, and the two
+      should not look like different products.
+    -->
+    <View
+        android:id="@+id/balanceCard"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_3"
+        android:background="@drawable/bg_card_focus"
+        app:layout_constraintBottom_toBottomOf="@id/balanceSpark"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/detailBalanceLabel" />
+
+    <View
+        android:id="@+id/balanceStripe"
+        android:layout_width="@dimen/stripe_width"
+        android:layout_height="0dp"
+        android:background="@drawable/bg_card_stripe"
+        app:layout_constraintBottom_toBottomOf="@id/balanceCard"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
+        app:layout_constraintTop_toTopOf="@id/balanceCard" />
+
     <TextView
         android:id="@+id/detailBalanceLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_6"
         android:text="@string/current_balance"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="14sp"
-        app:layout_constraintStart_toStartOf="parent"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
         app:layout_constraintTop_toBottomOf="@id/detailPhone" />
 
-    <TextView
+    <com.example.app_pos.view.MoneyText
         android:id="@+id/detailBalance"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:textSize="28sp"
-        android:textStyle="bold"
-        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Display"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
         app:layout_constraintTop_toBottomOf="@id/detailBalanceLabel"
         tools:text="40,00 TL" />
+
+    <TextView
+        android:id="@+id/detailIndexationNote"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_5"
+        android:layout_marginEnd="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_2"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        android:textSize="12sp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@id/balanceCard"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
+        app:layout_constraintTop_toBottomOf="@id/detailBalance"
+        tools:text="Bunun 66,00 TL'si enflasyon farkı"
+        tools:visibility="visible" />
+
+    <com.example.app_pos.view.SparklineView
+        android:id="@+id/balanceSpark"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/sparkline_height"
+        android:layout_marginHorizontal="@dimen/space_5"
+        android:layout_marginTop="@dimen/space_3"
+        android:layout_marginBottom="@dimen/space_4"
+        app:layout_constraintEnd_toEndOf="@id/balanceCard"
+        app:layout_constraintStart_toStartOf="@id/balanceCard"
+        app:layout_constraintTop_toBottomOf="@id/detailIndexationNote" />
 
     <TextView
         android:id="@+id/historyLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginStart="@dimen/space_4"
+        android:layout_marginTop="@dimen/space_4"
         android:text="@string/transaction_history"
-        android:textSize="16sp"
-        android:textStyle="bold"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/detailBalance" />
+        app:layout_constraintTop_toBottomOf="@id/balanceCard" />
 
     <com.google.android.material.chip.ChipGroup
         android:id="@+id/txFilterGroup"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginHorizontal="@dimen/space_4"
+        android:layout_marginTop="@dimen/space_2"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/historyLabel"
@@ -107,7 +157,7 @@
         android:id="@+id/transactionList"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="@dimen/space_2"
         app:layout_constraintBottom_toTopOf="@id/btnPay"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -121,8 +171,8 @@
         android:id="@+id/btnPay"
         android:layout_width="0dp"
         android:layout_height="56dp"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="16dp"
+        android:layout_marginHorizontal="@dimen/space_4"
+        android:layout_marginBottom="@dimen/space_4"
         android:text="@string/detail_pay"
         android:textSize="16sp"
         android:textStyle="bold"

@@ -164,6 +164,10 @@
     <!-- Customer detail screen -->
     <string name="customer_detail_title">Müşteri Detayı</string>
     <string name="current_balance">Güncel Bakiye</string>
+    <!-- Shown under a balance only when indexation actually contributed to it. Names
+         the inflation share so the figure above never looks larger than what was
+         bought. -->
+    <string name="detail_indexation_note">Bunun %1$s\'si enflasyon farkı</string>
     <string name="transaction_history">Hareket Geçmişi</string>
     <string name="filter_debts">Borçlar</string>
     <string name="filter_payments">Ödemeler</string>

@@ -202,6 +202,9 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> =
         transactions.observeTotalReceivable(sellerId)
 
+    override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> =
+        transactions.observeAllForSeller(sellerId).map { list -> list.map { it.toDomain() } }
+
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> =
         transactions.observeBalance(sellerId, customerId)
 

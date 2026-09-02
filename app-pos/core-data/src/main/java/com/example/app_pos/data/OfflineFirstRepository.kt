@@ -300,6 +300,9 @@ class OfflineFirstRepository @Inject constructor(
     override fun observeTotalReceivableMinor(sellerId: String): Flow<Long> =
         local.observeTotalReceivableMinor(sellerId)
 
+    override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> =
+        local.observeAllForSeller(sellerId)
+
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> =
         local.observeBalance(sellerId, customerId)
 

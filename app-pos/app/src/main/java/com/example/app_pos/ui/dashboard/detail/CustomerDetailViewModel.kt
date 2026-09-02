@@ -3,6 +3,7 @@ package com.example.app_pos.ui.dashboard.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.SavedStateHandle
+import com.example.app_pos.util.BalanceSeries
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
@@ -132,6 +133,21 @@ class CustomerDetailViewModel @Inject constructor(
                     TransactionType.PAYMENT -> -tx.amountMinor
                 }
             }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
+
+    /**
+     * The last twelve closing balances, for the sparkline. Built from ALL entries, not
+     * the filtered list: what a customer owes does not trend differently because the
+     * screen is showing only payments.
+     */
+    val balanceSeries: StateFlow<List<Long>> =
+        allTransactions.map { BalanceSeries.monthly(it) }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** How much of the balance is indexation rather than goods. */
+    val indexationMinor: StateFlow<Long> =
+        allTransactions.map { txs ->
+            txs.filter { it.type == TransactionType.INDEXATION }.sumOf { it.amountMinor }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     fun onFilterChanged(newFilter: TransactionFilter) {

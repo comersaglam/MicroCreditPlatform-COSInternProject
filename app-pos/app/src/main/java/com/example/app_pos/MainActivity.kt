@@ -94,6 +94,15 @@ class MainActivity : AppCompatActivity() {
         appBarConfiguration = AppBarConfiguration(navController.graph)
         setupActionBarWithNavController(navController, appBarConfiguration)
 
+        // The T-Fides mark in the bar, on every screen. On the activity rather than in a
+        // layout, because the bar belongs to the activity: putting it in one screen's
+        // layout would lose it everywhere else.
+        supportActionBar?.apply {
+            setDisplayShowHomeEnabled(true)
+            setLogo(R.drawable.logo_fides)
+            setDisplayUseLogoEnabled(true)
+        }
+
         // onPrepareOptionsMenu only runs when the menu is about to be shown, so
         // the action bar has to be told to rebuild it whenever the screen —
         // and with it the dashboard icon's relevance — changes.
