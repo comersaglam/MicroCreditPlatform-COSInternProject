@@ -38,6 +38,7 @@
     <string name="filter_all">Tümü</string>
     <string name="filter_debt">Borçlar</string>
     <string name="filter_payment">Ödemeler</string>
+    <string name="filter_indexation">Enflasyon</string>
     <string name="detail_empty">Bu satıcıyla henüz bir hareket yok.</string>
 
     <!-- Pay dialog -->

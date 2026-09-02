@@ -76,6 +76,7 @@ class CustomerDetailFragment : Fragment() {
             val filter = when (checkedIds.firstOrNull()) {
                 R.id.chipTxDebt -> TransactionFilter.DEBT
                 R.id.chipTxPayment -> TransactionFilter.PAYMENT
+                R.id.chipTxIndexation -> TransactionFilter.INDEXATION
                 else -> TransactionFilter.ALL
             }
             viewModel.onFilterChanged(filter)

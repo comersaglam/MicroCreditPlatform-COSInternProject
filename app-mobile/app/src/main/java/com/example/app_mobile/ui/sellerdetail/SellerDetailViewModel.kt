@@ -22,8 +22,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Which ledger entries the history should show. */
-enum class TransactionFilter { ALL, DEBT, PAYMENT }
+/**
+ * Which ledger entries the history should show.
+ *
+ * INDEXATION is its own filter rather than folded into DEBT, and that changes what DEBT
+ * means. Before this chip existed, DEBT included indexation on the reasoning that someone
+ * asking for "what I owe" means the whole of it. With a chip of its own that reasoning
+ * inverts: leaving indexation in both would show those rows twice and the three filters
+ * would no longer partition the ledger. Now DEBT + PAYMENT + INDEXATION == ALL, exactly.
+ */
+enum class TransactionFilter { ALL, DEBT, PAYMENT, INDEXATION }
 
 /**
  * The buyer's ledger history with ONE seller, plus the balance owed to them.
@@ -70,14 +78,10 @@ class SellerDetailViewModel @Inject constructor(
         combine(allTransactions, filter) { txs, f ->
             when (f) {
                 TransactionFilter.ALL -> txs
-                // Indexation belongs under DEBT: someone filtering for what they owe means
-                // the whole debt, and the inflation on it is part of that. Given a filter
-                // of its own it would vanish from both lists and the two would stop adding
-                // up to the balance shown above them.
-                TransactionFilter.DEBT -> txs.filter {
-                    it.type == TransactionType.DEBT || it.type == TransactionType.INDEXATION
-                }
+                TransactionFilter.DEBT -> txs.filter { it.type == TransactionType.DEBT }
                 TransactionFilter.PAYMENT -> txs.filter { it.type == TransactionType.PAYMENT }
+                TransactionFilter.INDEXATION ->
+                    txs.filter { it.type == TransactionType.INDEXATION }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

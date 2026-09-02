@@ -171,6 +171,7 @@
     <string name="transaction_history">Hareket Geçmişi</string>
     <string name="filter_debts">Borçlar</string>
     <string name="filter_payments">Ödemeler</string>
+    <string name="filter_indexation">Enflasyon</string>
 
 
     <!-- Onaylar: requests waiting on this shop's answer (Turn 39). -->

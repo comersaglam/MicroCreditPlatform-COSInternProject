@@ -30,8 +30,16 @@ import java.util.TimeZone
 import java.util.UUID
 import javax.inject.Inject
 
-/** Which ledger entries the history should show. */
-enum class TransactionFilter { ALL, DEBT, PAYMENT }
+/**
+ * Which ledger entries the history should show.
+ *
+ * INDEXATION is its own filter rather than folded into DEBT, and that changes what DEBT
+ * means. Before this chip existed, DEBT included indexation on the reasoning that someone
+ * asking for "what I owe" means the whole of it. With a chip of its own that reasoning
+ * inverts: leaving indexation in both would show those rows twice and the three filters
+ * would no longer partition the ledger. Now DEBT + PAYMENT + INDEXATION == ALL, exactly.
+ */
+enum class TransactionFilter { ALL, DEBT, PAYMENT, INDEXATION }
 
 /**
  * One payment to hand to the gateway: the amount, and who it is from.
@@ -109,13 +117,10 @@ class CustomerDetailViewModel @Inject constructor(
         combine(allTransactions, filter) { txs, f ->
             when (f) {
                 TransactionFilter.ALL -> txs
-                // Indexation counts as debt: filtering for what is owed means the whole
-                // debt, inflation included. Left out of both lists it would go missing
-                // while still being part of the balance shown above them.
-                TransactionFilter.DEBT -> txs.filter {
-                    it.type == TransactionType.DEBT || it.type == TransactionType.INDEXATION
-                }
+                TransactionFilter.DEBT -> txs.filter { it.type == TransactionType.DEBT }
                 TransactionFilter.PAYMENT -> txs.filter { it.type == TransactionType.PAYMENT }
+                TransactionFilter.INDEXATION ->
+                    txs.filter { it.type == TransactionType.INDEXATION }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
