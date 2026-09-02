@@ -8,6 +8,7 @@ import com.example.app_pos.network.api.PgwJobApi
 import com.example.app_pos.network.api.AuthApi
 import com.example.app_pos.network.api.BuyerApi
 import com.example.app_pos.network.api.CustomerApi
+import com.example.app_pos.network.api.FxApi
 import com.example.app_pos.network.api.LedgerApi
 import com.example.app_pos.network.api.SyncApi
 import com.example.app_pos.network.api.UserApi
@@ -57,6 +58,7 @@ class SyncEngineTest {
             approvalApi = retrofit.create(ApprovalApi::class.java),
             pgwJobApi = retrofit.create(PgwJobApi::class.java),
             syncApi = retrofit.create(SyncApi::class.java),
+            fxApi = retrofit.create(FxApi::class.java),
             moshi = moshi
         )
         local = FakeLocalSource()

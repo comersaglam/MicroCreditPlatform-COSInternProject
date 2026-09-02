@@ -3,6 +3,7 @@ package com.example.app_pos.data
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.local.LocalSource
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
@@ -251,4 +252,9 @@ class FakeLocalSource(
         sellerId: String,
         amountMinor: Long
     ): ApprovalOutcome = ApprovalOutcome.NoCustomerRecord
+
+    // The fx cache is not what these tests are about; an empty series is the honest stub.
+    override suspend fun fxRateAt(asOf: String): FxSnapshot? = null
+    override suspend fun cachedFxRate(asOf: String): FxSnapshot? = null
+    override suspend fun cacheFxRate(snapshot: FxSnapshot) = Unit
 }

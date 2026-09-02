@@ -2,6 +2,7 @@ package com.example.app_pos.data.local
 
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.OrderBody
 import com.example.app_pos.model.Repository
@@ -120,4 +121,16 @@ interface LocalSource : Repository {
 
     // observeUnsentCount() is inherited from Repository — the queue depth is a fact about
     // stored data, so the local source is where it is actually answered.
+
+    /**
+     * The most recent cached reading on or before [asOf], or null when there is none.
+     *
+     * The same fallback the server applies, so a cached Friday answers a Sunday without a
+     * round trip. Rates for a past date never change, which is what makes caching them
+     * indefinitely correct rather than merely convenient.
+     */
+    suspend fun cachedFxRate(asOf: String): FxSnapshot?
+
+    /** Stores a reading under ITS OWN date, never under the date it was asked for. */
+    suspend fun cacheFxRate(snapshot: FxSnapshot)
 }

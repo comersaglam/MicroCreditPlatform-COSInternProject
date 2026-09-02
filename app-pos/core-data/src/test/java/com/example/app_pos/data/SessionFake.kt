@@ -3,6 +3,7 @@ package com.example.app_pos.data
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.local.LocalSource
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.ApprovalStatus
@@ -190,6 +191,11 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
         flowOf(emptyList())
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> = flowOf(0L)
     override suspend fun transactionDetail(transactionId: String): TransactionDetail? = null
+
+    // The fx cache is not what these tests are about; an empty series is the honest stub.
+    override suspend fun fxRateAt(asOf: String): FxSnapshot? = null
+    override suspend fun cachedFxRate(asOf: String): FxSnapshot? = null
+    override suspend fun cacheFxRate(snapshot: FxSnapshot) = Unit
     override suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody?) = Unit
 }
 

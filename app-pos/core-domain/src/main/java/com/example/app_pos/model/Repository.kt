@@ -91,6 +91,20 @@ interface Repository {
      * the last rebuild. That is a state to render, not a failure to report.
      */
     suspend fun transactionDetail(transactionId: String): TransactionDetail?
+
+    /**
+     * What a lira was worth on [asOf] (yyyy-MM-dd), or null when the series does not say.
+     *
+     * Null is an ordinary answer and covers three different situations on purpose — the
+     * date is outside the series, there is no signal, the server is down. The screen does
+     * the same thing with all three: it hides the line. Distinguishing them would only let
+     * a caller explain to the reader why a piece of context is missing, which is worse than
+     * simply not showing context.
+     *
+     * The one thing this must not do is put the network on a screen's critical path. Rates
+     * decorate a figure; they never produce one.
+     */
+    suspend fun fxRateAt(asOf: String): FxSnapshot?
     /**
      * Appends a ledger entry. If [orderBody] is present (a basket handoff), its basket
      * and items are stored and the entry is linked to them; a money-only entry passes

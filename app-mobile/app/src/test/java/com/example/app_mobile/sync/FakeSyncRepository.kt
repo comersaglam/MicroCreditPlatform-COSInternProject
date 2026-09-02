@@ -1,5 +1,6 @@
 package com.example.app_mobile.sync
 
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.Customer
@@ -124,4 +125,7 @@ class FakeSyncRepository(
     override suspend fun refreshApprovals(): PullOutcome = PullOutcome.Unreachable
     override suspend fun refreshMyLedger(): PullOutcome = PullOutcome.Unreachable
     override suspend fun refreshBook(): PullOutcome = PullOutcome.Unreachable
+
+    // Reference data, not what these tests are about.
+    override suspend fun fxRateAt(asOf: String): FxSnapshot? = null
 }

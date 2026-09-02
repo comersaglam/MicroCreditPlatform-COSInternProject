@@ -58,6 +58,32 @@ class TransactionDetailFragment : Fragment() {
                 viewModel.uiState.collect(::render)
             }
         }
+
+        observeFxNote()
+    }
+
+    /**
+     * The exchange-rate line: shown when both readings arrive, absent otherwise.
+     *
+     * It stays GONE on every failure — no signal, a date the series does not reach, a
+     * server that is down. This is context, not content: the basket came off the disk and
+     * is already on screen, and an error where a nice-to-have would have been teaches the
+     * reader that the screen is broken when it is complete.
+     */
+    private fun observeFxNote() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.fxNote.collect { note ->
+                    if (note == null) {
+                        binding.txDetailFx.visibility = View.GONE
+                    } else {
+                        binding.txDetailFx.text =
+                            getString(R.string.tx_detail_fx, note.thenUsd, note.nowUsd)
+                        binding.txDetailFx.visibility = View.VISIBLE
+                    }
+                }
+            }
+        }
     }
 
     private fun render(state: TransactionDetailUiState) = when (state) {

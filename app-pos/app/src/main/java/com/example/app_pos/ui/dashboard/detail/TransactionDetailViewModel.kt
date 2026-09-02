@@ -10,6 +10,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import javax.inject.Inject
 
 /**
@@ -60,12 +64,69 @@ class TransactionDetailViewModel @Inject constructor(
     )
     val uiState: StateFlow<TransactionDetailUiState> = _uiState.asStateFlow()
 
+    /**
+     * What the entry was worth in dollars then, and what the same lira are worth now.
+     *
+     * A separate flow from [uiState] on purpose: this one may never arrive. The basket is
+     * on disk and renders immediately; the rates come from the server, so binding them
+     * together would hold a local read hostage to a network call.
+     *
+     * Null means no line. That covers a date the series does not reach, no signal, and a
+     * server that is down — the screen does the same thing with all three, and explaining
+     * which one to the reader would be explaining the absence of something they were never
+     * promised.
+     */
+    private val _fxNote = MutableStateFlow<FxNote?>(null)
+    val fxNote: StateFlow<FxNote?> = _fxNote.asStateFlow()
+
     init {
         viewModelScope.launch {
             val detail = repo.transactionDetail(transactionId)
-            _uiState.value =
-                if (detail == null) TransactionDetailUiState.Missing
-                else TransactionDetailUiState.Content(detail)
+            if (detail == null) {
+                _uiState.value = TransactionDetailUiState.Missing
+                return@launch
+            }
+
+            _uiState.value = TransactionDetailUiState.Content(detail)
+            loadFxNote(detail.transaction.amountMinor, detail.transaction.createdAt)
         }
     }
+
+    private suspend fun loadFxNote(amountMinor: Long, createdAt: String) {
+        // createdAt is ISO-8601 UTC and the server indexes fx_rates by its own dates, so
+        // the first ten characters ARE the key to ask for. Converting to local time first
+        // would shift an entry booked just after midnight onto the previous day and quote
+        // the wrong reading — this substring is correct, not lazy.
+        val then = repo.fxRateAt(createdAt.take(10)) ?: return
+        val now = repo.fxRateAt(todayIsoDate()) ?: return
+
+        // Both or neither. One half of a comparison is not a comparison, and "worth 33,4
+        // dollars then" with nothing to weigh it against says less than silence.
+        _fxNote.value = FxNote(
+            thenUsd = usdOf(amountMinor, then.usdMinor),
+            nowUsd = usdOf(amountMinor, now.usdMinor)
+        )
+    }
+
+    /**
+     * How many dollars a kuruş amount was worth at a rate — the ONE place money becomes a
+     * Double in this app.
+     *
+     * Deliberate and contained: this is a display ratio, it is rounded to one decimal
+     * because that is all anyone reads off it, and it never re-enters the ledger. Every
+     * other figure stays an integer count of kuruş.
+     */
+    private fun usdOf(amountMinor: Long, usdMinor: Long): String {
+        if (usdMinor <= 0L) return "0,0"
+        val dollars = amountMinor.toDouble() / usdMinor
+        return String.format(Locale("tr", "TR"), "%.1f", dollars)
+    }
+
+    private fun todayIsoDate(): String =
+        SimpleDateFormat("yyyy-MM-dd", Locale.ROOT)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }
+            .format(Date())
 }
+
+/** The two figures the exchange-rate line compares, already formatted. */
+data class FxNote(val thenUsd: String, val nowUsd: String)

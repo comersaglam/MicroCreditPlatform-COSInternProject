@@ -4,6 +4,7 @@ import androidx.room.withTransaction
 import com.example.app_pos.data.db.AppDatabase
 import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.CustomerEntity
+import com.example.app_pos.data.db.entity.FxRateEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.db.toBasketEntity
 import com.example.app_pos.data.db.toDomain
@@ -16,6 +17,7 @@ import com.example.app_pos.model.CustomerCreateOutcome
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.PhoneFormat
 import com.example.app_pos.model.OtpRequestResult
@@ -57,6 +59,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     private val baskets = db.basketDao()
     private val approvals = db.approvalDao()
     private val outbox = db.outboxDao()
+    private val fxRates = db.fxRateDao()
 
     // --- session + pairing (RAM, mock — see class doc) -----------------------
     private data class Session(val userId: String, val token: String, val expiresAt: Long)
@@ -227,6 +230,43 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             }
             TransactionDetail(entity.toDomain(), basket)
         }
+
+    /**
+     * Storage has no network, and the fx table is a cache the repository fills.
+     *
+     * Null here rather than a read of fx_rates: this class is also the substitute a JVM
+     * test swaps in, and answering from a table nothing has populated would look like a
+     * series with no readings rather than like storage that was never asked to keep one.
+     * The composing repository owns the cache and overrides this.
+     */
+    override suspend fun fxRateAt(asOf: String): FxSnapshot? = null
+
+    /**
+     * The fx cache. Reference data the repository fills from the server, kept so a screen
+     * that showed context once can show it again with no signal.
+     *
+     * A past date's rate never changes, so there is nothing to invalidate: a row here is
+     * correct for as long as the table survives.
+     */
+    override suspend fun cachedFxRate(asOf: String): FxSnapshot? =
+        fxRates.nearest(asOf)?.let {
+            FxSnapshot(
+                asOf = it.asOf,
+                usdMinor = it.usdMinor,
+                eurMinor = it.eurMinor,
+                goldMinor = it.goldMinor
+            )
+        }
+
+    override suspend fun cacheFxRate(snapshot: FxSnapshot) =
+        fxRates.insert(
+            FxRateEntity(
+                asOf = snapshot.asOf,
+                usdMinor = snapshot.usdMinor,
+                eurMinor = snapshot.eurMinor,
+                goldMinor = snapshot.goldMinor
+            )
+        )
 
     /**
      * Books a ledger entry AND queues it for the server, atomically.

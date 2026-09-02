@@ -12,6 +12,7 @@ import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.CustomerLookup
 import com.example.app_pos.model.DecisionOutcome
 import com.example.app_pos.model.PAYMENT_DESCRIPTION
+import com.example.app_pos.model.FxSnapshot
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.OtpRequestResult
@@ -326,6 +327,33 @@ class OfflineFirstRepository @Inject constructor(
      */
     override suspend fun transactionDetail(transactionId: String): TransactionDetail? =
         local.transactionDetail(transactionId)
+
+    /**
+     * A rate, from the local cache when it is there and from the server otherwise.
+     *
+     * Read-through, and the cache matters more than it looks: the fx series is reference
+     * data that never changes for a past date, so a rate fetched once is correct forever.
+     * That is what lets this screen keep its context offline after a single online visit.
+     *
+     * nearest() answers with the most recent reading on or before the date, which is the
+     * same fallback the server applies -- so a cached Friday satisfies a Sunday without a
+     * round trip, exactly as the endpoint would have.
+     *
+     * Every failure returns null, deliberately flattening three cases into one: the date is
+     * outside the series (404), there is no signal, the server is unwell. The caller hides
+     * a line in all three, so telling them apart would only buy an explanation nobody needs
+     * for context they were not promised.
+     */
+    override suspend fun fxRateAt(asOf: String): FxSnapshot? {
+        local.cachedFxRate(asOf)?.let { return it }
+
+        val snapshot = (remote.fxRate(asOf) as? ApiResult.Success)?.data ?: return null
+        // Keyed by the row's OWN date, which may be earlier than the day asked for. Storing
+        // it under the requested date would invent a reading for a day the series skipped,
+        // and the next lookup would find it and believe it.
+        local.cacheFxRate(snapshot)
+        return snapshot
+    }
 
     override fun observeMyTransactions(userId: String, sellerId: String): Flow<List<Transaction>> =
         local.observeMyTransactions(userId, sellerId)
