@@ -1,8 +1,11 @@
 <resources>
-    <string name="app_name">Veresiye</string>
+    <!-- The launcher label and the title bar. NOT the applicationId, which stays
+     com.example.app_mobile: the package name is part of no contract here, but
+     changing it would orphan every installed build. -->
+    <string name="app_name">T-Fides Mobile</string>
 
     <!-- Login / register -->
-    <string name="login_title">Veresiye</string>
+    <string name="login_title">T-Fides</string>
     <string name="login_subtitle">Telefon numaranızla giriş yapın</string>
     <string name="login_phone_hint">Telefon (0555 444 3322)</string>
     <string name="login_button">Kod gönder</string>
@@ -19,7 +22,7 @@
     <string name="register_confirm_negative">Vazgeç</string>
 
     <!-- Dashboard tabs -->
-    <string name="dashboard_title">Veresiye</string>
+    <string name="dashboard_title">T-Fides</string>
     <string name="nav_debts">Borçlarım</string>
     <string name="nav_approvals">Onaylar</string>
     <string name="nav_profile">Profil</string>

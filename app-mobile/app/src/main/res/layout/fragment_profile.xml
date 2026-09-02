@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/space_4">
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -23,7 +23,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/space_4">
 
                 <!-- Name row (editable) -->
                 <TextView
@@ -31,7 +31,8 @@
                     android:layout_height="wrap_content"
                     android:text="@string/profile_name_label"
                     android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="13sp" />
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    android:textSize="12sp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -44,7 +45,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:textSize="17sp"
+                        android:textAppearance="@style/TextAppearance.Fides.Body"
                         tools:text="Ahmet Yılmaz" />
 
                     <com.google.android.material.button.MaterialButton
@@ -61,16 +62,17 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_phone_label"
                     android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="13sp" />
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/phoneText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="17sp"
+                    android:textAppearance="@style/TextAppearance.Fides.Body"
                     tools:text="+90 555 111 22 33" />
 
                 <View style="@style/ProfileDivider" />
@@ -79,10 +81,11 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_email_label"
                     android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="13sp" />
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    android:textSize="12sp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -95,7 +98,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:textSize="17sp"
+                        android:textAppearance="@style/TextAppearance.Fides.Body"
                         tools:text="ahmet@example.com" />
 
                     <com.google.android.material.button.MaterialButton
@@ -112,16 +115,17 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_roles_label"
                     android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textSize="13sp" />
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/rolesText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="17sp"
+                    android:textAppearance="@style/TextAppearance.Fides.Body"
                     tools:text="Alıcı, Satıcı" />
 
                 <!-- Shop row: seller only (gone until "Satıcı ol"). -->
@@ -138,10 +142,11 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="@dimen/space_3"
                         android:text="@string/profile_shop_label"
                         android:textColor="?attr/colorOnSurfaceVariant"
-                        android:textSize="13sp" />
+                        android:textAppearance="@style/TextAppearance.Fides.Caption"
+                        android:textSize="12sp" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -154,7 +159,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:textSize="17sp"
+                            android:textAppearance="@style/TextAppearance.Fides.Body"
                             tools:text="Ahmet Bakkal" />
 
                         <com.google.android.material.button.MaterialButton
@@ -174,16 +179,16 @@
             style="@style/Widget.Material3.Button.TonalButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/space_4"
             android:text="@string/profile_become_seller"
-            android:textSize="16sp" />
+            android:textAppearance="@style/TextAppearance.Fides.Body" />
 
         <!-- Pairing card: seller + not paired. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/pairCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/space_4"
             android:visibility="gone"
             app:cardCornerRadius="12dp"
             app:cardElevation="1dp"
@@ -193,20 +198,20 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="@dimen/space_4">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="@string/profile_pair_prompt"
                     android:textColor="?attr/colorOnSurface"
-                    android:textSize="15sp" />
+                    android:textAppearance="@style/TextAppearance.Fides.Body" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnPair"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="@dimen/space_3"
                     android:text="@string/profile_pair_button" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
@@ -216,11 +221,11 @@
             android:id="@+id/pairedText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/space_4"
             android:gravity="center"
             android:text="@string/profile_paired"
             android:textColor="?attr/colorPrimary"
-            android:textSize="15sp"
+            android:textAppearance="@style/TextAppearance.Fides.Body"
             android:visibility="gone"
             tools:visibility="visible" />
 
@@ -229,9 +234,9 @@
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="56dp"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="@dimen/space_3"
             android:text="@string/profile_logout"
-            android:textSize="16sp" />
+            android:textAppearance="@style/TextAppearance.Fides.Body" />
 
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>

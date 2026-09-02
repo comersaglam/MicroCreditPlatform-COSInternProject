@@ -1,5 +1,8 @@
 <resources>
-    <string name="app_name">app-pos</string>
+    <!-- The launcher label only. The applicationId stays com.example.app_pos and
+     so does the CREDIT action: the payment gateway addresses this app by
+     package and component name, and both are frozen (deferred.md K). -->
+    <string name="app_name">T-Fides POS</string>
 
     <!-- Customer select (sale flow) -->
     <string name="customer_select_title">Müşteri Seç</string>

@@ -5,18 +5,17 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginTop="20dp"
-    android:paddingHorizontal="16dp">
+    android:layout_marginTop="@dimen/space_5"
+    android:paddingHorizontal="@dimen/space_4">
 
     <TextView
         android:id="@+id/sectionTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_section_label"
-        android:paddingHorizontal="12dp"
-        android:paddingVertical="6dp"
+        android:paddingHorizontal="@dimen/space_3"
+        android:paddingVertical="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
         android:textColor="?attr/colorOnSurface"
-        android:textSize="13sp"
-        android:textStyle="bold"
         tools:text="Satıcı olarak onaylarınız" />
 </FrameLayout>

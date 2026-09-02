@@ -9,20 +9,20 @@
     style="@style/Widget.Appmobile.DirectionCard"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginHorizontal="16dp"
-    android:layout_marginTop="12dp">
+    android:layout_marginHorizontal="@dimen/space_4"
+    android:layout_marginTop="@dimen/space_3">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp">
+        android:padding="@dimen/space_4">
 
         <TextView
             android:id="@+id/approvalKind"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:textSize="13sp"
+            android:textAppearance="@style/TextAppearance.Fides.Caption"
+            android:textSize="12sp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             tools:text="Veresiye onayı" />
@@ -31,11 +31,11 @@
             android:id="@+id/approvalShop"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="@dimen/space_1"
             android:ellipsize="end"
             android:maxLines="1"
+            android:textAppearance="@style/TextAppearance.Fides.Title"
             android:textSize="18sp"
-            android:textStyle="bold"
             app:layout_constraintEnd_toStartOf="@id/approvalAmount"
             app:layout_constraintHorizontal_bias="0"
             app:layout_constraintStart_toStartOf="parent"
@@ -48,8 +48,7 @@
             android:id="@+id/approvalPhone"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:textSize="13sp"
+            android:textAppearance="@style/TextAppearance.Fides.Caption"
             app:layout_constraintEnd_toStartOf="@id/approvalAmount"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/approvalShop"
@@ -59,9 +58,8 @@
             android:id="@+id/approvalAmount"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="?attr/colorPrimary"
+            android:textAppearance="@style/TextAppearance.Fides.Money"
             android:textSize="20sp"
-            android:textStyle="bold"
             app:layout_constraintBottom_toBottomOf="@id/approvalShop"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="@id/approvalShop"
@@ -71,8 +69,8 @@
             android:id="@+id/approvalDescription"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textSize="14sp"
+            android:layout_marginTop="@dimen/space_2"
+            android:textAppearance="@style/TextAppearance.Fides.Body"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/approvalPhone"
@@ -83,7 +81,7 @@
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="@dimen/space_3"
             android:text="@string/approval_reject"
             app:layout_constraintEnd_toStartOf="@id/btnApprove"
             app:layout_constraintTop_toBottomOf="@id/approvalDescription" />
@@ -92,8 +90,8 @@
             android:id="@+id/btnApprove"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginTop="12dp"
+            android:layout_marginStart="@dimen/space_2"
+            android:layout_marginTop="@dimen/space_3"
             android:text="@string/approval_approve"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toBottomOf="@id/approvalDescription" />
