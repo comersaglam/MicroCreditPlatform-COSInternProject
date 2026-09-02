@@ -58,6 +58,6 @@
 
     <!-- The T-Fides mark. Large on the sign-in screen, small in the dashboard corner. -->
     <dimen name="logo_login">72dp</dimen>
-    <dimen name="logo_bar">28dp</dimen>
+    <dimen name="logo_bar">34dp</dimen>
 
 </resources>

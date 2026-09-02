@@ -20,6 +20,7 @@
         android:id="@+id/totalCard"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:clipToOutline="true"
         android:layout_marginHorizontal="@dimen/screen_edge"
         android:layout_marginTop="@dimen/space_4"
         android:background="@drawable/bg_card_focus"

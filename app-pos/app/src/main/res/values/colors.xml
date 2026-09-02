@@ -48,6 +48,15 @@
     <color name="spark_fill_bottom">#002151F3</color>
 
     <color name="stripe_top">#2151F3</color>
+
+    <!--
+      The wordmark's gradient. Lighter than the stripe's because this is TEXT on the dark
+      ground: #2151F3 measures about 3:1 there and fails AA, so the mark runs between two
+      opened-up tones of the same hue instead.
+    -->
+    <color name="brand_text_top">#7BA0FF</color>
+    <color name="brand_text_bottom">#3D6BE8</color>
+
     <color name="stripe_bottom">#402151F3</color>
 
     <!-- Container tones: the dimmed backdrop versions of the accent colours,

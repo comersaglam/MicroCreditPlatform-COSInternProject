@@ -64,6 +64,13 @@ class MainActivity : AppCompatActivity() {
         supportActionBar?.apply {
             setDisplayShowCustomEnabled(true)
             setCustomView(R.layout.actionbar_logo)
+            // The custom view fills the bar so its own gravity can push the mark to the
+            // right end; without explicit params it is measured as wrap_content and lands
+            // wherever the title leaves room, which is the drift this replaced.
+            customView.layoutParams = androidx.appcompat.app.ActionBar.LayoutParams(
+                androidx.appcompat.app.ActionBar.LayoutParams.MATCH_PARENT,
+                androidx.appcompat.app.ActionBar.LayoutParams.MATCH_PARENT,
+            )
         }
     }
 

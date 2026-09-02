@@ -61,6 +61,7 @@
         android:id="@+id/balanceCard"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:clipToOutline="true"
         android:layout_marginHorizontal="@dimen/screen_edge"
         android:layout_marginTop="@dimen/space_4"
         android:background="@drawable/bg_card_focus"
@@ -140,8 +141,16 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <com.google.android.material.chip.ChipGroup
-        android:id="@+id/txFilterGroup"
+    <!--
+      The filter row scrolls sideways.
+
+      A ChipGroup wraps to a second line by default, and the fourth chip did exactly that:
+      "Enflasyon" dropped below the other three and pushed the list down. singleLine keeps
+      them on one row, and the scroll view is what makes that safe — on a narrow screen or
+      at a large font scale the row can now run past the edge instead of being cut off.
+    -->
+    <HorizontalScrollView
+        android:id="@+id/txFilterScroll"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="@dimen/screen_edge"
@@ -149,38 +158,47 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/balanceCard"
-        app:selectionRequired="true"
-        app:singleSelection="true">
+        android:scrollbars="none">
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipTxAll"
-            style="@style/Widget.Material3.Chip.Filter"
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/txFilterGroup"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:checked="true"
-            android:text="@string/filter_all" />
+            app:selectionRequired="true"
+            app:singleLine="true"
+            app:singleSelection="true">
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipTxDebt"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/filter_debt" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipTxAll"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="@string/filter_all" />
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipTxPayment"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/filter_payment" />
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipTxDebt"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_debt" />
 
-        <com.google.android.material.chip.Chip
-            android:id="@+id/chipTxIndexation"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/filter_indexation" />
-    </com.google.android.material.chip.ChipGroup>
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipTxPayment"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_payment" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chipTxIndexation"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/filter_indexation" />
+        </com.google.android.material.chip.ChipGroup>
+
+    </HorizontalScrollView>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/transactionList"
@@ -190,7 +208,7 @@
         app:layout_constraintBottom_toTopOf="@id/buttonRow"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/txFilterGroup"
+        app:layout_constraintTop_toBottomOf="@id/txFilterScroll"
         tools:itemCount="3"
         tools:listitem="@layout/item_transaction" />
 
