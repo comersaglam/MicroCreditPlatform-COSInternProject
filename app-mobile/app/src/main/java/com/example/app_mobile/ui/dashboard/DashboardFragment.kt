@@ -65,7 +65,13 @@ class DashboardFragment : Fragment() {
     }
 
     /**
-     * Keeps a tab highlighted while the user is on one of its sub-screens.
+     * Keeps a tab highlighted while the user is on one of its sub-screens, and puts that
+     * screen's name in the action bar.
+     *
+     * THE TITLE HALF matters because there are two nav graphs. The action bar is wired to
+     * the OUTER one, whose only destination here is the dashboard itself -- so every tab
+     * and every detail screen showed that outer label and nothing ever changed it. The
+     * inner destinations already carry the right labels; this is what reads them.
      *
      * setupWithNavController only highlights a destination that IS a tab, so opening a
      * detail screen left the whole bar unselected — and it stayed that way after coming
@@ -83,6 +89,11 @@ class DashboardFragment : Fragment() {
                 R.id.pairingFragment -> R.id.profileFragment
                 else -> destination.id
             }
+            // The label declared on the inner destination, not the outer graph's.
+            destination.label?.let {
+                (activity as? AppCompatActivity)?.supportActionBar?.title = it
+            }
+
             val item = binding.bottomNav.menu.findItem(tabId) ?: return@addOnDestinationChangedListener
             // isChecked, NOT selectedItemId: assigning the id makes the view act as though
             // the tab were tapped, which navigates away from the detail screen the user just

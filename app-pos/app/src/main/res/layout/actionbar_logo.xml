@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The T-Fides mark, pinned to the right end of the action bar.
+
+  setLogo() puts the mark INSIDE the bar's title block, where it flows with the text: it
+  drifted toward the middle on short titles and moved again whenever the screen changed,
+  which is the opposite of what a fixed mark is for.
+
+  A custom view is positioned by its own gravity instead, so it stays put regardless of
+  the title beside it. The right end rather than the left: the left is where the up arrow
+  lives, and the centre belongs to the title.
+
+  match_parent width so the gravity has the whole bar to align within — wrap_content would
+  shrink the frame to the image and leave nothing to push against.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/actionBarLogo"
+        android:layout_width="@dimen/logo_bar"
+        android:layout_height="@dimen/logo_bar"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="@dimen/space_4"
+        android:contentDescription="@string/app_name"
+        android:src="@drawable/logo_fides" />
+
+</FrameLayout>

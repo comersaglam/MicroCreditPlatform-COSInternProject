@@ -99,7 +99,7 @@
     <string name="detail_pay">Ödeme Al</string>
 
     <!-- Dashboard -->
-    <string name="dashboard_title">Dashboard</string>
+    <string name="dashboard_title">T-Fides POS</string>
     <string name="nav_customers">Müşteriler</string>
     <string name="nav_reports">Detaylı Bilgiler</string>
     <string name="nav_approvals">Onaylar</string>

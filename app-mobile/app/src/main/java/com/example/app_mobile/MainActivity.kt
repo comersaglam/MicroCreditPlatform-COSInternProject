@@ -53,14 +53,17 @@ class MainActivity : AppCompatActivity() {
         appBarConfiguration = AppBarConfiguration(navController.graph)
         setupActionBarWithNavController(navController, appBarConfiguration)
 
-        // The T-Fides mark in the bar, on every screen. Placed here rather than in a
-        // layout because the action bar belongs to the activity: putting it in the
-        // dashboard would lose it on the detail screens, which is where someone is most
-        // likely to be looking at money and want to know whose app they are in.
+        // The T-Fides mark in the bar, on every screen. On the activity rather than in a
+        // layout because the bar belongs to the activity: in the dashboard's layout it
+        // would vanish on the detail screens, which is where someone is looking at money
+        // and most wants to know whose app they are in.
+        //
+        // A custom view, NOT setLogo(): that places the mark inside the title block, where
+        // it flows with the text and drifts as the title changes length. This one is
+        // positioned by its own gravity and stays at the right end.
         supportActionBar?.apply {
-            setDisplayShowHomeEnabled(true)
-            setLogo(R.drawable.logo_fides)
-            setDisplayUseLogoEnabled(true)
+            setDisplayShowCustomEnabled(true)
+            setCustomView(R.layout.actionbar_logo)
         }
     }
 
