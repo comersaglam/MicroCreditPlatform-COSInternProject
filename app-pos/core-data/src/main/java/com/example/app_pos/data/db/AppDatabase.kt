@@ -53,7 +53,12 @@ import com.example.app_pos.data.db.entity.UserEntity
     // v3: customers.createdBySellerId added, so a customer who has been written down but
     // not yet charged still belongs to a book. Dropping the local copy costs nothing now:
     // the server owns every row and the next pull restores them.
-    version = 3,
+    // v4: basket_items ids became deterministic ("<basketId>#<index>"). They used to be a
+    // fresh UUID per call, so insert-IGNORE never matched anything and re-pulling a basket
+    // appended its lines again -- invisible while nothing read them back, and Turn 45 is
+    // what starts reading them back. Rows already on disk carry the old random ids and the
+    // duplicates they caused; rebuilding is the only way to be rid of both.
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

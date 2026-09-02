@@ -30,13 +30,25 @@ import com.example.app_pos.data.db.entity.UserEntity
  * since the data is still seeded/mock).
  *
  * Forward-phase entities (outbox, fx_rates, credit_offers, audit_log, devices) are
- * registered so their tables exist, even though nothing reads them yet. baskets /
- * basket_items are in the same group here: app-mobile has no PGW handoff, but the
- * schema is kept identical to app-pos's so both sides stay one design.
+ * registered so their tables exist, even though nothing reads them yet. baskets and
+ * basket_items are NOT in that group any more — see v4.
  *
  * v2 — createdAt moved from "dd.MM.yyyy HH:mm" (local) to ISO-8601 UTC, the format the
  * wire contract publishes. The two are not comparable as text, so the rows are rebuilt
  * rather than migrated; app-pos made the same jump for the same reason.
+ *
+ * v4 — baskets became live data on this side. This app raises no basket of its own, but
+ * GET /me/transactions has been returning them all along and the store path was dropping
+ * them on the floor, so every transaction row already on disk has basketId = NULL. The
+ * pull writes with IGNORE keyed on the server's transaction id, which is what makes
+ * polling safe -- and also means those rows would never be corrected by any number of
+ * re-pulls. An UPDATE would fix them, but transactions is append-only by design (this
+ * DAO has @Insert and deliberately no update/delete), and adding a mutation verb there
+ * to repair a caching artifact leaves it lying around for the next person. Rebuilding
+ * costs nothing: the server owns every row.
+ *
+ * The same bump also carries basket_items' switch to deterministic ids -- see app-pos's
+ * AppDatabase for that half; both apps shared the bug and share the fix.
  */
 @Database(
     entities = [
@@ -56,7 +68,7 @@ import com.example.app_pos.data.db.entity.UserEntity
     // v3: customers.createdBySellerId added, so a customer who has been written down but
     // not yet charged still belongs to a book. Dropping the local copy costs nothing now:
     // the server owns every row and the next pull restores them.
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
