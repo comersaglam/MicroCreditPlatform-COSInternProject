@@ -1249,3 +1249,81 @@ endeksi teknik olarak faize yakın duruyor. *Token ekibine erken sorulmalı.*
 
 Kod tarafında hepsi tek yerden değişir: `indexation.py`'ın ay döngüsü ve `fx.cpi_ratio`.
 Karar verildiğinde uygulama küçük; asıl iş kararın kendisi.
+
+### L.9 Üst barda marka adı geri okuyla birlikte kayıyor  ⚠️ AÇIK (Tur 44b)
+
+Marka adı ActionBar'ın **custom view**'inde ve ortalanmış. Ama ekranda geri oku olup
+olmamasına göre **yeri değişiyor**.
+
+**Ölçüm (cihazdan, `dumpsys activity top`):**
+
+```
+Toolbar        0 .. 1080     ← barın tamamı
+FrameLayout   44 .. 1036     ← custom view'a verilen kutu
+```
+
+Toolbar çocuklarını `[geri oku] [logo] [başlık] [custom view] [menü]` sırasıyla diziyor ve
+custom view'a **arta kalan** alanı veriyor. `layout_width="match_parent"` bu kutuyu
+doldurur, barı değil — yani içindeki `center` kutunun ortasını buluyor. Geri oku gelince
+kutu daralıyor, ad kayıyor.
+
+**Denenip işe yaramayanlar:**
+- `contentInsetStart` / `contentInsetStartWithNavigation` = `0dp` → kutu yine `44..1036`;
+  bu inset değil, `ActionBar.LayoutParams`'ın kendi margin'i.
+- İki `Space` + ağırlıkla ortalama → ad kutunun ortasında doğru duruyor ama kutu
+  asimetrikse yine kayıyor.
+- `setDisplayHomeAsUpEnabled(true)` ile geri okunu her ekranda göstermek →
+  `setupActionBarWithNavController` her hedef değişiminde kendi kararını uyguluyor ve
+  bunu **eziyor**. Her `addOnDestinationChangedListener`'da yeniden uygulamak gerekiyor,
+  denendi ama bu turda tamamlanmadı.
+
+⚠️ **Kullanıcının önerisi (denenmedi):** geri okunu **her ekranda** göster, ana ekranda
+hiçbir şey yapmasın. Kutu her yerde aynı genişlikte olur, ad sabit kalır.
+`onSupportNavigateUp` başlangıç hedefinde zaten `false` dönüyor, yani basılınca bir şey
+olmuyor — görsel bir tutarlılık çözümü.
+
+**Asıl doğru çözüm (daha pahalı):** ActionBar'ı bırakıp layout'lara `MaterialToolbar`
+koymak. O zaman ad `Toolbar`'ın çocuğu olur ve konumu tamamen bizim kontrolümüzde.
+Bedeli: 6 ekran layout'u + iki `MainActivity` + `setupActionBarWithNavController`
+yeniden bağlanması.
+
+### L.10 Kart kenarı draft'taki gibi "sarmıyor"  ⚠️ AÇIK (Tur 44b)
+
+Odak kartının sol kenarındaki marka şeridi, HTML draft'ta kartın köşe kavisini takip edip
+kartı **sarıyormuş gibi** duruyor. XML'de düz bir bant olarak kalıyor: üstte ve altta kart
+kıvrılırken şerit kıvrılmıyor.
+
+**Kök neden — CSS ile XML'in farkı:**
+
+```css
+border-left: 5px solid brand;
+border-radius: 14px;
+```
+
+Tarayıcı burada kenarlığı **köşede inceltiyor**: sol kenarda 5px olan çizgi, üst-sol
+köşeye doğru 1px'e (üst kenarlığın kalınlığına) doğrusal olarak geçiyor. Sarma hissini
+veren şey bu geçiş.
+
+XML `<shape>` bunu yapamaz: `<stroke>` tek kalınlıktadır ve `layer-list`'te üst üste binen
+iki dikdörtgen arasında köşe geçişi oluşmaz.
+
+**Denenip yetersiz kalanlar:**
+- Şeride kendi `<corners>`'ını vermek → iki farklı yarıçapta eğri yan yana, uyuşmuyor.
+- Karta `clipToOutline` + düz şerit → şerit kırpılıyor ama kart *arkasında* kalıyor.
+- `layer-list` + `android:start` inset → şerit yalnızca soldan giriyor, üst/alt kenarda
+  kartın kavisine karışmıyor; **"yandan eklenmiş parça"** görüntüsü.
+- Dört taraftan inset (`top`/`end`/`bottom`=1dp, `start`=5dp) → CSS'e en yakını, ama köşe
+  geçişi yine yok; bu turda cihazda doğrulanamadı.
+
+**Yapılabilecekler (ileride, sırayla denenmeli):**
+1. **`VectorDrawable`** — şeridi kavisiyle birlikte elle `pathData` olarak çizmek.
+   ⚠️ Vektörün viewport'u sabit; kart yüksekliği içeriğe göre değiştiği için şerit
+   esnemez. `MaterialShapeDrawable` ile çalışma zamanında üretmek gerekebilir.
+2. **`MaterialShapeDrawable`** (Material 1.12'de var) — `ShapeAppearanceModel` ile köşe
+   başına farklı davranış tanımlanabiliyor; kod tarafında kurulur, `<shape>`'in
+   yapamadığını yapabilir.
+3. **Tasarımı değiştirmek** — kullanıcının açık seçeneği: sarma etkisi XML'de pahalıysa
+   şeridi bırakıp farklı bir vurgu (üst kenarda çizgi, köşede işaret) denenebilir.
+
+⚠️ **Not:** ikisi de saf görsel; hiçbir işlevi etkilemiyor. Sunumda kart yine okunaklı ve
+tutarlı duruyor, sadece draft'taki incelik yakalanamadı.
