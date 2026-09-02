@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  One line of a basket: what it was, how much of it, and what that came to.
+
+  A plain row, like item_transaction — not a card. This screen is already a list of things
+  belonging to one purchase; boxing each line would suggest they are separate records.
+
+  The quantity and the tax rate share a caption line rather than taking one each. They
+  answer the same question ("how was this priced?") and splitting them across two lines
+  makes a three-item basket scroll.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingHorizontal="@dimen/screen_edge"
+    android:paddingVertical="@dimen/row_vertical">
+
+    <TextView
+        android:id="@+id/itemName"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        app:layout_constraintEnd_toStartOf="@id/itemLineTotal"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="Ekmek" />
+
+    <!--
+      "2 × 15,00 TL · KDV %10" — the arithmetic spelled out, so the figure on the right is
+      checkable rather than asserted. The tax rate is the tail of the same line and is
+      dropped entirely when it is zero (see BasketItemAdapter): a money-only handoff has no
+      tax, and "KDV %0" would read as a claim rather than an absence.
+    -->
+    <TextView
+        android:id="@+id/itemQuantity"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        app:layout_constraintEnd_toStartOf="@id/itemLineTotal"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/itemName"
+        tools:text="2 × 15,00 TL · KDV %10" />
+
+    <!--
+      Not coloured. On the ledger screens the amount carries direction — money in, money
+      out — and the colour says which. A basket line has no direction: it is part of one
+      purchase whose direction the entry above already stated. Colouring these would repeat
+      that message once per line and dilute it.
+    -->
+    <TextView
+        android:id="@+id/itemLineTotal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/space_3"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        tools:text="30,00 TL" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

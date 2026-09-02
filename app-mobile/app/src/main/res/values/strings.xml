@@ -174,4 +174,19 @@
          (routers/approvals.py: a BUYER initiator makes seller_id the approver), so a
          card in the buyer's section is never one the buyer raised. -->
     <string name="approval_line_payment_buyer">%1$s sizden ödeme aldığını bildiriyor</string>
+
+    <!-- Transaction detail: what one ledger entry was made of -->
+    <string name="transaction_detail_title">İşlem detayı</string>
+    <string name="basket_section_label">SEPET</string>
+    <string name="basket_total_label">Sepet toplamı</string>
+    <!-- Not phrased as a failure. A money-only handoff, a payment and a server-written
+         indexation row all legitimately have nothing to itemise, and those are most of a
+         normal history — an error tone here would call half of it broken. -->
+    <string name="basket_empty">Bu işlemde sepet bilgisi yok.\nÜrün ayrıntısı olmadan, yalnız tutar devredilmiş.</string>
+    <!-- "2 × 15,00 TL" / "2 × 15,00 TL · KDV %18". Two forms rather than one with an
+         empty tail, so a zero-rated line does not trail a stray separator. -->
+    <string name="basket_line_pricing">%1$s × %2$s</string>
+    <string name="basket_line_pricing_tax">%1$s × %2$s · KDV %%%3$s</string>
+    <!-- Turkish quotes the currency, not the rate: "worth 33,4 dollars then, 26,1 now". -->
+    <string name="tx_detail_fx">Alındığı gün %1$s USD — bugün %2$s USD</string>
 </resources>

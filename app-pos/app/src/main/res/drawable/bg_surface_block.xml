@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A lifted block with a hairline outline. No gradient, no brand stripe.
+
+  Deliberately NOT bg_card_focus. The focus card is capped at six screens across the two
+  apps, and both budgets are spent; this screen is the detail of a row on one of those, so
+  giving it a stripe too would put two of them in the same navigation stack and the stripe
+  would stop meaning "look here". Flat elevation is enough to group the header apart from
+  the lines below it.
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/surface_elevated" />
+    <stroke
+        android:width="@dimen/stroke_hairline"
+        android:color="@color/outline" />
+    <corners android:radius="@dimen/radius_md" />
+</shape>

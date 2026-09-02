@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  What was in one ledger entry.
+
+  The question §J spent three turns making answerable and could still only answer in SQL:
+  the basket reached the server and came back, and no screen ever showed it.
+
+  NOT a focus card screen. The theme caps those at six across the two apps and both budgets
+  are spent; this is the detail of a row on one of them, and a second brand stripe in the
+  same navigation stack would stop being emphasis. A flat lifted block groups the header.
+
+  Three states, and only one of them is a list:
+    - a basket with lines      -> header + lines + total
+    - an entry with no basket  -> header + a sentence saying so
+  The second is ORDINARY, not an error: money-only handoffs, payments, and the indexation
+  rows the server writes all have nothing to itemise. An error style here would teach the
+  reader that half their history is broken.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- The entry itself: what it was called, what it came to, when. -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/detailHeader"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_4"
+        android:background="@drawable/bg_surface_block"
+        android:padding="@dimen/space_4"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/txDetailDescription"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.Fides.Body"
+            app:layout_constraintEnd_toStartOf="@id/txDetailAmount"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="Veresiye" />
+
+        <TextView
+            android:id="@+id/txDetailDate"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_1"
+            android:textAppearance="@style/TextAppearance.Fides.Caption"
+            app:layout_constraintEnd_toStartOf="@id/txDetailAmount"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/txDetailDescription"
+            tools:text="31.08.2026 14:22" />
+
+        <!--
+          A plain TextView, not MoneyText. The count-up animation is for a balance the
+          reader is arriving at; this figure is one they arrived here BECAUSE of, having
+          just tapped the row that showed it. Counting it up again would animate a number
+          that was already on screen a moment ago.
+
+          Coloured by entry type, matching the row that was tapped: the same amount must
+          not change colour between the list and the screen it opens.
+        -->
+        <TextView
+            android:id="@+id/txDetailAmount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/space_3"
+            android:textAppearance="@style/TextAppearance.Fides.Title"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="+107,00 TL" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!--
+      What the money was worth in dollars the day it was taken on, against today.
+
+      GONE by default and shown only when both readings arrive. The rates come from the
+      server and the basket does not: this screen has to open and be useful with no signal,
+      so the strip is an addition to it, never a precondition. Hidden on a 404 too — the
+      series does not reach every date, and inventing a rate is worse than saying nothing.
+    -->
+    <TextView
+        android:id="@+id/txDetailFx"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_3"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/detailHeader"
+        tools:text="Alındığı gün 33,4 USD — bugün 26,1 USD"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/basketLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_5"
+        android:background="@drawable/bg_section_label"
+        android:paddingHorizontal="@dimen/space_3"
+        android:paddingVertical="@dimen/space_1"
+        android:text="@string/basket_section_label"
+        android:textAppearance="@style/TextAppearance.Fides.Label"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/txDetailFx" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/basketList"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="@dimen/space_2"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/space_4"
+        app:layout_constraintBottom_toTopOf="@id/basketTotalDivider"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/basketLabel"
+        tools:listitem="@layout/item_basket_row" />
+
+    <!--
+      The empty state, in the RecyclerView's own place. Centred rather than left-aligned:
+      a single sentence pinned to the top edge reads as a row that failed to load.
+    -->
+    <TextView
+        android:id="@+id/basketEmpty"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/space_6"
+        android:gravity="center"
+        android:text="@string/basket_empty"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        android:textColor="@color/on_surface_variant"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="@id/basketList"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="@id/basketList"
+        tools:visibility="visible" />
+
+    <View
+        android:id="@+id/basketTotalDivider"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/stroke_hairline"
+        android:background="@color/outline"
+        app:layout_constraintBottom_toTopOf="@id/basketTotalLabel"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!--
+      The lines' own sum, shown so it can be compared with the entry above.
+
+      It equals the amount in the header, and that is the point of printing it twice: a
+      receipt whose lines do not add up to its total is the one thing this screen must make
+      visible rather than hide. Tax is displayed per line and never enters this figure:
+      the ledger holds price × quantity, so anything else here would describe an amount
+      that was never booked.
+    -->
+    <TextView
+        android:id="@+id/basketTotalLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/screen_edge"
+        android:layout_marginBottom="@dimen/space_4"
+        android:paddingVertical="@dimen/row_vertical"
+        android:text="@string/basket_total_label"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/basketTotal"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/screen_edge"
+        android:textAppearance="@style/TextAppearance.Fides.Money"
+        app:layout_constraintBottom_toBottomOf="@id/basketTotalLabel"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/basketTotalLabel"
+        tools:text="107,00 TL" />
+
+    <!--
+      Everything from the section label down, hidden together when there is no basket.
+      A group rather than four setVisibility calls: four calls is four chances to forget
+      one, and a stray divider above an empty screen is exactly what that looks like.
+    -->
+    <androidx.constraintlayout.widget.Group
+        android:id="@+id/basketGroup"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:constraint_referenced_ids="basketLabel,basketList,basketTotalDivider,basketTotalLabel,basketTotal" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
