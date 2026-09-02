@@ -248,6 +248,17 @@ interface TransactionDao {
     suspend fun allOnce(): List<TransactionEntity>
 
     /**
+     * One entry by id, for the screen that shows what was in it.
+     *
+     * A read, not a mutation -- the append-only rule is about what this DAO refuses to
+     * write, and looking a row up does not touch it. Null when the id is not on this
+     * device, which is a real state and not an error: another device's row, or one from
+     * before the last rebuild.
+     */
+    @Query("SELECT * FROM transactions WHERE transactionId = :transactionId")
+    suspend fun findById(transactionId: String): TransactionEntity?
+
+    /**
      * Every entry against this buyer, across all shops. Feeds the trend line on the
      * totals screen, where the figure is a sum over all shops and its history has to be
      * too.
@@ -306,7 +317,25 @@ interface BasketDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertItems(items: List<BasketItemEntity>)
 
-    @Query("SELECT * FROM basket_items WHERE basketId = :basketId")
+    /**
+     * The basket's own row: which of the PGW's flags it carried.
+     *
+     * itemsFor alone cannot rebuild an OrderBody -- createInvoice, documentType and isVoid
+     * live here, not on the lines -- so the detail screen reads both and joins them in the
+     * mapper.
+     */
+    @Query("SELECT * FROM baskets WHERE basketId = :basketId")
+    suspend fun header(basketId: String): BasketEntity?
+
+    /**
+     * ORDER BY id, and it has to be something: the ids are "<basketId>#<index>", so this
+     * hands the lines back in the order the till rang them up. Without it SQLite is free to
+     * return rowid order, which after a re-pull is not the same thing.
+     *
+     * This sorts as TEXT, which is why the index is zero-padded where it is minted (see
+     * OrderBody.toItemEntities): unpadded, "#10" would sort before "#2".
+     */
+    @Query("SELECT * FROM basket_items WHERE basketId = :basketId ORDER BY id")
     suspend fun itemsFor(basketId: String): List<BasketItemEntity>
 }
 

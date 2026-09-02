@@ -7,8 +7,10 @@ import com.example.app_pos.data.db.entity.ApprovalEntity
 import com.example.app_pos.data.db.entity.CustomerEntity
 import com.example.app_pos.data.db.entity.OutboxEntity
 import com.example.app_pos.data.db.entity.UserEntity
+import com.example.app_pos.data.db.toBasketEntity
 import com.example.app_pos.data.db.toDomain
 import com.example.app_pos.data.db.toEntity
+import com.example.app_pos.data.db.toItemEntities
 import com.example.app_pos.model.ApprovalOutcome
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
@@ -52,6 +54,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
     private val customers = db.customerDao()
     private val transactions = db.transactionDao()
     private val approvals = db.approvalDao()
+    private val baskets = db.basketDao()
     private val outbox = db.outboxDao()
 
     // --- session + pairing (RAM stub — the composing repository overrides these) ----
@@ -375,7 +378,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             // insert-IGNORE, keyed by the server's transaction id: re-pulling the same
             // history is a no-op rather than a duplicate, which is what makes polling this
             // safe. The ledger is append-only, so a row already here is already correct.
-            entries.forEach { transactions.insert(it.toEntity()) }
+            entries.forEach { transactions.insert(it.toEntity(storeBasket(it))) }
         }
     }
 
@@ -387,9 +390,30 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
             //
             // insert-IGNORE keyed by the server's transaction id, so re-pulling the same
             // history is a no-op rather than a duplicate.
-            entries.forEach { transactions.insert(it.toEntity()) }
+            entries.forEach { transactions.insert(it.toEntity(storeBasket(it))) }
         }
     }
+
+    /**
+     * Writes a pulled entry's basket, if it brought one, and reports the id to link.
+     *
+     * This app raises no baskets of its own, but the shop's ride along on every entry the
+     * server hands back, and until now they were parsed off the wire and then dropped here.
+     *
+     * Ordered basket-first so the entry's foreign key has something to point at. Both
+     * inserts IGNORE, which is what makes re-pulling the same history harmless -- and see
+     * OrderBody.toItemEntities for why the line ids have to be derived rather than random
+     * for that to be true.
+     *
+     * Call inside an existing db.withTransaction: a basket committed apart from its entry
+     * could outlive one that failed to write.
+     */
+    private suspend fun storeBasket(transaction: Transaction): String? =
+        transaction.basket?.let { basket ->
+            baskets.insertBasket(basket.toBasketEntity(transaction.createdAt))
+            baskets.insertItems(basket.toItemEntities())
+            basket.basketId
+        }
 
     override suspend fun storeShopNames(shopsBySellerId: Map<String, Pair<String, String?>>) {
         db.withTransaction {
@@ -540,7 +564,13 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
      * its own copy, so queueing a second send would book the entry twice.
      */
     override suspend fun addTransaction(transaction: Transaction) {
-        transactions.insert(transaction.toEntity())
+        // Wrapped, now that a basket may be written alongside: the two rows have to land
+        // together or not at all. Nothing on this side attaches a basket here today -- the
+        // approval path books money-only entries -- but writing `null` in place of the call
+        // would hardcode that assumption one layer below where it is actually decided.
+        db.withTransaction {
+            transactions.insert(transaction.toEntity(storeBasket(transaction)))
+        }
     }
 
     // --- the offline outbox --------------------------------------------------
@@ -550,7 +580,7 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
         // would leave either an entry the server never hears about, or a queued send for an
         // entry that was never booked — and neither is detectable afterwards.
         db.withTransaction {
-            transactions.insert(transaction.toEntity())
+            transactions.insert(transaction.toEntity(storeBasket(transaction)))
             outbox.insert(
                 OutboxEntity(
                     // The transaction id IS the queue id, which is what makes enqueueing

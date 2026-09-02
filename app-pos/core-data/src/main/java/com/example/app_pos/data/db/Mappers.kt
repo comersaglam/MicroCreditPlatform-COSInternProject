@@ -9,13 +9,13 @@ import com.example.app_pos.data.db.entity.UserEntity
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
 import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.OrderItem
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.SellerInfo
 import com.example.app_pos.model.Transaction
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.network.dto.ApprovalDto
-import java.util.UUID
 
 /**
  * Entity <-> domain mappers. The storage shape (Room entity) and the domain model
@@ -98,9 +98,21 @@ fun OrderBody.toBasketEntity(createdAt: String): BasketEntity = BasketEntity(
     createdAt = createdAt
 )
 
-fun OrderBody.toItemEntities(): List<BasketItemEntity> = items.map { item ->
+/**
+ * The lines, with ids derived from where they sit in the basket.
+ *
+ * These used to be a fresh UUID.randomUUID() per line, which quietly defeated the whole
+ * point of insertItems being insert-IGNORE: a conflict can only be ignored if the second
+ * write presents the same key, and a random one never does. So re-pulling a basket -- which
+ * the buyer's app does every fifteen seconds -- appended its lines again, and again. It was
+ * invisible only because nothing read them back.
+ *
+ * The index is zero-padded because BasketDao.itemsFor orders by this column as TEXT, where
+ * "#10" sorts before "#2". Four digits is far past any real till receipt.
+ */
+fun OrderBody.toItemEntities(): List<BasketItemEntity> = items.mapIndexed { index, item ->
     BasketItemEntity(
-        id = UUID.randomUUID().toString(),
+        id = "$basketId#${index.toString().padStart(4, '0')}",
         basketId = basketId,
         name = item.name,
         priceMinor = item.price,
@@ -112,6 +124,39 @@ fun OrderBody.toItemEntities(): List<BasketItemEntity> = items.map { item ->
         itemLimit = item.limit
     )
 }
+
+// --- Basket + items -> OrderBody (the way back, for the detail screen) ---
+
+/**
+ * Rebuilds the basket from its two tables.
+ *
+ * The lines are passed in rather than read here: a mapper that queried would need a DAO,
+ * and this file deliberately knows only about shapes. The caller reads both and joins them.
+ *
+ * Note this is NOT wired into TransactionEntity.toDomain(). The ledger list flows re-emit
+ * on every write, and making that mapper basket-aware would put two queries per row behind
+ * every emission -- for a field only one screen ever looks at. It reads the basket by id
+ * instead, once, when that screen opens.
+ */
+fun BasketEntity.toDomain(items: List<BasketItemEntity>): OrderBody = OrderBody(
+    basketId = basketId,
+    createInvoice = createInvoice,
+    documentType = documentType,
+    isVoid = isVoid,
+    items = items.map { it.toDomain() }
+)
+
+/** One line back. The ×1000 scales are carried across untouched; only the display divides. */
+fun BasketItemEntity.toDomain(): OrderItem = OrderItem(
+    name = name,
+    price = priceMinor,
+    quantity = quantity,
+    taxPercent = taxPercent,
+    sectionNo = sectionNo,
+    status = status,
+    type = type,
+    limit = itemLimit
+)
 
 // --- Approval (the incoming inbox; app-pos grew this side in Turn 39) ---
 

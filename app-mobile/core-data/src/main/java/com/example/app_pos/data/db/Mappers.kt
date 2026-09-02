@@ -2,11 +2,15 @@ package com.example.app_pos.data.db
 
 import com.example.app_pos.data.db.dao.SellerDebtRow
 import com.example.app_pos.data.db.entity.ApprovalEntity
+import com.example.app_pos.data.db.entity.BasketEntity
+import com.example.app_pos.data.db.entity.BasketItemEntity
 import com.example.app_pos.data.db.entity.CustomerEntity
 import com.example.app_pos.data.db.entity.TransactionEntity
 import com.example.app_pos.data.db.entity.UserEntity
 import com.example.app_pos.model.ClaimStatus
 import com.example.app_pos.model.Customer
+import com.example.app_pos.model.OrderBody
+import com.example.app_pos.model.OrderItem
 import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SellerInfo
@@ -73,18 +77,98 @@ fun TransactionEntity.toDomain(): Transaction = Transaction(
     createdAt = createdAt
 )
 
-// app-mobile has no PGW handoff, so an entry never carries a basket (basketId = null).
-fun Transaction.toEntity(): TransactionEntity = TransactionEntity(
+/**
+ * An entry on its way to disk, with the id of the basket it came with, if any.
+ *
+ * This used to hardcode `basketId = null`, on the grounds that app-mobile has no PGW
+ * handoff and so could never raise a basket. True, and beside the point: it does not raise
+ * baskets, it RECEIVES them. GET /me/transactions has been returning the shop's basket all
+ * along, the DTO parses it, and this function was where it got dropped.
+ *
+ * No default value on the parameter, deliberately. A default is exactly how one call site
+ * goes on quietly discarding baskets while the others are fixed; without one the compiler
+ * names every place that has to make the decision.
+ */
+fun Transaction.toEntity(basketId: String?): TransactionEntity = TransactionEntity(
     transactionId = transactionId,
     sellerId = sellerId,
     customerId = customerId,
     amountMinor = amountMinor,
     type = type.name,
     description = description,
-    basketId = null,
+    basketId = basketId,
     settledViaPgw = false,
     receiptNo = null,
     createdAt = createdAt
+)
+
+// --- OrderBody -> Basket + items (for the basket that rode along on a pulled entry) ---
+
+fun OrderBody.toBasketEntity(createdAt: String): BasketEntity = BasketEntity(
+    basketId = basketId,
+    createInvoice = createInvoice,
+    documentType = documentType,
+    isVoid = isVoid,
+    createdAt = createdAt
+)
+
+/**
+ * The lines, with ids derived from where they sit in the basket.
+ *
+ * These used to be a fresh UUID.randomUUID() per line in app-pos, which quietly defeated
+ * the whole point of insertItems being insert-IGNORE: a conflict can only be ignored if the
+ * second write presents the same key, and a random one never does. This app re-pulls its
+ * ledger every fifteen seconds, so it is the side where that would have shown up worst.
+ *
+ * The index is zero-padded because BasketDao.itemsFor orders by this column as TEXT, where
+ * "#10" sorts before "#2". Four digits is far past any real till receipt.
+ */
+fun OrderBody.toItemEntities(): List<BasketItemEntity> = items.mapIndexed { index, item ->
+    BasketItemEntity(
+        id = "$basketId#${index.toString().padStart(4, '0')}",
+        basketId = basketId,
+        name = item.name,
+        priceMinor = item.price,
+        quantity = item.quantity,
+        taxPercent = item.taxPercent,
+        sectionNo = item.sectionNo,
+        status = item.status,
+        type = item.type,
+        itemLimit = item.limit
+    )
+}
+
+// --- Basket + items -> OrderBody (the way back, for the detail screen) ---
+
+/**
+ * Rebuilds the basket from its two tables.
+ *
+ * The lines are passed in rather than read here: a mapper that queried would need a DAO,
+ * and this file deliberately knows only about shapes. The caller reads both and joins them.
+ *
+ * Note this is NOT wired into TransactionEntity.toDomain(). The ledger list flows re-emit
+ * on every write, and making that mapper basket-aware would put two queries per row behind
+ * every emission -- for a field only one screen ever looks at. It reads the basket by id
+ * instead, once, when that screen opens.
+ */
+fun BasketEntity.toDomain(items: List<BasketItemEntity>): OrderBody = OrderBody(
+    basketId = basketId,
+    createInvoice = createInvoice,
+    documentType = documentType,
+    isVoid = isVoid,
+    items = items.map { it.toDomain() }
+)
+
+/** One line back. The ×1000 scales are carried across untouched; only the display divides. */
+fun BasketItemEntity.toDomain(): OrderItem = OrderItem(
+    name = name,
+    price = priceMinor,
+    quantity = quantity,
+    taxPercent = taxPercent,
+    sectionNo = sectionNo,
+    status = status,
+    type = type,
+    limit = itemLimit
 )
 
 // --- Approval ---
