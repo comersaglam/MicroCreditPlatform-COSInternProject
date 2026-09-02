@@ -78,6 +78,19 @@ interface Repository {
      */
     fun observeAllForSeller(sellerId: String): Flow<List<Transaction>>
     fun observeBalance(sellerId: String, customerId: String): Flow<Long>
+
+    /**
+     * One entry and its basket, for the screen that answers "what was in this?".
+     *
+     * A single read rather than two, so the lines and the amount above them can never come
+     * from different moments. Not a Flow: a ledger entry is append-only, so what is read
+     * once is what it will always be, and a screen watching for changes to something that
+     * cannot change is just a subscription to keep alive.
+     *
+     * Null when the id is not on this device -- another device's row, or one from before
+     * the last rebuild. That is a state to render, not a failure to report.
+     */
+    suspend fun transactionDetail(transactionId: String): TransactionDetail?
     /**
      * Appends a ledger entry. If [orderBody] is present (a basket handoff), its basket
      * and items are stored and the entry is linked to them; a money-only entry passes

@@ -20,6 +20,7 @@ import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionDetail
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.network.ApiResult
@@ -315,6 +316,16 @@ class OfflineFirstRepository @Inject constructor(
 
     override fun observeAllForBuyer(userId: String): Flow<List<Transaction>> =
         local.observeAllForBuyer(userId)
+
+    /**
+     * Straight from storage, with no network reach.
+     *
+     * The basket rode in with the entry on the last pull and was written beside it, so there
+     * is nothing left to fetch. A detail screen that had to reach the server to show what
+     * was in a basket would go blank in exactly the places a shopper wants to check one.
+     */
+    override suspend fun transactionDetail(transactionId: String): TransactionDetail? =
+        local.transactionDetail(transactionId)
 
     override fun observeMyTransactions(userId: String, sellerId: String): Flow<List<Transaction>> =
         local.observeMyTransactions(userId, sellerId)

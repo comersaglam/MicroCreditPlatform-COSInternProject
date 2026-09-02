@@ -26,6 +26,7 @@ import com.example.app_pos.model.OtpRequestResult
 import com.example.app_pos.model.Repository
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionDetail
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.network.ApiResult
@@ -305,6 +306,17 @@ class OfflineFirstRepository @Inject constructor(
 
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> =
         local.observeBalance(sellerId, customerId)
+
+    /**
+     * Straight from storage, with no network reach.
+     *
+     * The basket arrived with the entry and was written beside it, so there is nothing left
+     * to fetch. A detail screen that had to reach the server to show what was in a basket
+     * would go blank on the counter's worst days, which are exactly the days the shopkeeper
+     * needs to look something up.
+     */
+    override suspend fun transactionDetail(transactionId: String): TransactionDetail? =
+        local.transactionDetail(transactionId)
 
     /**
      * Books the entry locally and queues it for the server — atomically, in one database

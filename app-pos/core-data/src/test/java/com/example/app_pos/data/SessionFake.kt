@@ -16,6 +16,7 @@ import com.example.app_pos.model.PendingApproval
 import com.example.app_pos.model.PullOutcome
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionDetail
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.Flow
@@ -188,6 +189,7 @@ class FakeLocalSource(users: List<User> = emptyList()) : LocalSource {
     override fun observeAllForSeller(sellerId: String): Flow<List<Transaction>> =
         flowOf(emptyList())
     override fun observeBalance(sellerId: String, customerId: String): Flow<Long> = flowOf(0L)
+    override suspend fun transactionDetail(transactionId: String): TransactionDetail? = null
     override suspend fun addTransaction(transaction: Transaction, orderBody: OrderBody?) = Unit
 }
 

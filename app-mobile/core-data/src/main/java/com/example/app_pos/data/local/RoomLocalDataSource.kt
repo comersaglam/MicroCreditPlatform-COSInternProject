@@ -27,6 +27,7 @@ import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionDetail
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import com.example.app_pos.model.balanceOf
@@ -265,6 +266,25 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
 
     override fun observeAllForBuyer(userId: String): Flow<List<Transaction>> =
         transactions.observeAllForBuyer(userId).map { list -> list.map { it.toDomain() } }
+
+    /**
+     * The entry and its basket, read together.
+     *
+     * Inside one db.withTransaction so all three reads see the same database. They are
+     * reads on an append-only table and the risk is small, but a receipt is exactly the
+     * place where "the lines came from a slightly different moment than the total" is worst.
+     *
+     * A null basketId is the ordinary case: money-only handoffs, payments, and the
+     * server-written indexation rows all have nothing to itemise.
+     */
+    override suspend fun transactionDetail(transactionId: String): TransactionDetail? =
+        db.withTransaction {
+            val entity = transactions.findById(transactionId) ?: return@withTransaction null
+            val basket = entity.basketId?.let { basketId ->
+                baskets.header(basketId)?.toDomain(baskets.itemsFor(basketId))
+            }
+            TransactionDetail(entity.toDomain(), basket)
+        }
 
     override fun observeMyTotalDebtMinor(userId: String): Flow<Long> =
         transactions.observeBuyerTotalDebt(userId)

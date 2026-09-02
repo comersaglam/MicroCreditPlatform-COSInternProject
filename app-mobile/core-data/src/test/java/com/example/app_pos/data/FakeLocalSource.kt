@@ -15,6 +15,7 @@ import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionDetail
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.Flow
@@ -106,6 +107,18 @@ class FakeLocalSource(
     override suspend fun storeShopNames(shopsBySellerId: Map<String, Pair<String, String?>>) {
         storedShopNames = shopsBySellerId
     }
+
+    /**
+     * Served from what was actually stored, not from a canned value.
+     *
+     * That is the point: the real source keeps the basket in its own tables and rebuilds it
+     * on the way out, so a fake that answered null here would let a test pass while the
+     * pull went on dropping baskets -- which is the exact defect this turn exists to fix.
+     */
+    override suspend fun transactionDetail(transactionId: String): TransactionDetail? =
+        (ledger + storedLedger + storedBuyerLedger.orEmpty())
+            .firstOrNull { it.transactionId == transactionId }
+            ?.let { TransactionDetail(it, it.basket) }
 
     override suspend fun addTransaction(transaction: Transaction) {
         ledger += transaction
