@@ -3391,3 +3391,86 @@ ikisini ayırır — yoksa çalışan bir yapıyı bozuk sanıp saatlerce aranı
 
 **Sıradaki:** cihaz testi (tema + Tur 43'ün F bloğu birlikte), sonra Tur 45 — sepet detay
 ekranı.
+
+---
+
+### 2026-09-02 — Tur 45: Sepet detay ekranı (§J.6 kuyruğu kapandı)
+
+**Plan ne diyordu:** *"veri zaten domain'de hazır, sadece ekran yaz."* Yanlıştı — ve turun
+asıl işi bu yanlışın kendisi oldu.
+
+#### Varsayım nasıl çöktü
+
+Sepet verisi **hiçbir UI'a ulaşmıyordu**, iki app'te iki ayrı sebeple:
+
+| App | Kopukluk |
+|---|---|
+| app-pos | Sepeti diske yazıyordu, ama `TransactionEntity.toDomain()` `basket`'i hiç set etmiyordu → veri diskte, geri okunmuyor |
+| app-mobile | Hiç yazmıyordu. `toEntity()` `basketId = null` sabitliyordu; yanındaki yorum *"bu app'in PGW handoff'u yok"* diyordu — **doğru ama alakasız**: sepet üretmiyor, sepet **alıyor** |
+
+⚠️ **Tur 42 bunu neden görmedi:** §J.6'nın kapanış kanıtı **sunucu tarafı SQL**'di.
+Sunucuda satırlar gerçekten vardı. Cihazın onları geri okuyup okumadığı hiç sorulmadı,
+çünkü soracak ekran yoktu. Ayrıntı [deferred.md §J.7](deferred.md).
+
+#### Yanında çıkan ikinci bug
+
+`toItemEntities()` her çağrıda `UUID.randomUUID()` üretiyordu → `insertItems`'ın `IGNORE`'u
+hiç tetiklenmiyor, aynı sepet her pull'da kalemlerini kopyalıyordu. Görünmüyordu **çünkü
+kimse okumuyordu**; bu tur tam da onu görünür yapacaktı (mobile 15 sn'de bir pull ediyor →
+3 kalem 9 satır). Id'ler artık konuma göre türetiliyor, sıfır dolgulu (`"#0002"` — metin
+sıralamasında `#10` < `#2` olmasın diye).
+
+#### Yazılanlar
+
+| Katman | Ne |
+|---|---|
+| DB | version 3→4 (destructive fallback zaten vardı; pull `IGNORE` yazdığı için `basketId = NULL` satırları başka türlü düzelmezdi, append-only tabloya `UPDATE` sokmak istenmedi) |
+| DAO | `BasketDao.header()`, `itemsFor()` artık `ORDER BY id`, `TransactionDao.findById()` |
+| Domain | `TransactionDetail`, `FxSnapshot`, `Repository.transactionDetail()` + `fxRateAt()` |
+| Ölçek | `OrderItem.quantityDisplay()` / `taxPercentDisplay()` — **domain'de, çünkü test oraya ulaşabiliyor** |
+| UI | `TransactionDetailFragment` + ViewModel + `BasketItemAdapter`, iki app'te |
+| Ağ | `FxApi` + DTO + mapper + read-through cache (kullanılmayan `FxRateDao` nihayet bağlandı) |
+
+#### Üç karar (kullanıcı)
+
+1. **Kur notu VAR, lira cinsinden enflasyon farkı YOK.** Bir sepetin kendi enflasyon farkı
+   yok; `INDEXATION` bakiyeye ait ayrı satırlar. Sepete pay biçmek uydurma rakam olurdu ve
+   toplamı bakiyeyle tutmazdı. Kur notu ise tek kaynaktan (`/fx-rates`) ve yerelde rakibi
+   yok → çelişemez. §L.11.
+2. **İki app birden** — [[app-mobile-is-dual-role]], tek uç işin yarısı.
+3. **KDV dahil sepetteki her alan gösterilir**, ama toplama katılmaz.
+
+#### Doğrulama
+
+- 154 test (81 POS + 73 mobile), sıfır hata. 3 yeni test: gelen-yön sepet, sepetsiz kayıt,
+  pull'da sepetin korunması.
+- **APK dex'i grep'lendi**, kontrol grubuyla: 8 sınıf/binding iki APK'da da mevcut,
+  uydurma sınıf 0.
+- §K sözleşmesi APK'dan doğrulandı: `applicationId` sabit, `CREDIT` action duruyor.
+- ⬜ **Cihaz senaryosu bu turda koşulmadı** — kullanıcı kararı, tur sonuna bırakıldı.
+
+#### Öğrenilen
+
+**1. Bir testin yeşil olması bir şey ölçtüğü anlamına gelmiyor.** Sepet-pull testini
+yazdıktan sonra kusuru kasten geri koydum (`toEntity(null)`) — **suite yeşil kaldı**.
+Test `PullEngine`'in ne *verdiğini* ölçüyor, `RoomLocalDataSource`'un ne *yazdığını* değil.
+Bulgu testin kendi yorumuna ve §L.12'ye yazıldı. Aynı yöntem KDV testinde de uygulandı;
+orada bölen değiştirilince üç assertion kırmızıya döndü, yani o test gerçekten koruyor.
+
+**2. `strings` bu makinede bozuk.** Dex doğrulamasında 8 sınıfın hepsi "MISSING" çıktı —
+ama **kontrol grubuna `MoneyText`'i koyduğum için** (Tur 44'te APK'da olduğu kanıtlanmıştı)
+aracın bozuk olduğu anlaşıldı, sınıfların eksik olduğu değil. `grep -a` doğru araç. Tur
+44'ün dersi ikinci kez işe yaradı: **doğrulama aracının kendisi de doğrulanmalı.**
+
+**3. Ölçek tuzağı:** `taxPercent` ×1000 (1800 = %18) ama gösterimde **bölen 100**.
+`QUANTITY_SCALE`'e uzanmak — alan onunla ölçekli olduğu için en doğal hareket — %10'u
+ekranda **"%1"** yapıyor. Makul görünen yanlış bir sayı, hiçbir şey yakalamaz.
+`PERCENT_SCALE` ayrı isimlendirildi.
+
+**4. `processDebugResources`, `compileDebugKotlin`'in görmediğini gördü** — XML yorumunda
+`--` kullanılamaz. Kotlin derlemesi kaynak bağlama yapmıyor; Tur 44'ün launcher ikonu
+dersinin aynısı.
+
+**Sıradaki:** cihaz senaryosu (POS long-press → sepetli veresiye → onay → üç giriş
+noktasında satıra tıkla; artı dört negatif yol ve iki pull sonrası `basket_items` sayısının
+artmaması), sonra Tur 46 — toplam kırılımı + insights.

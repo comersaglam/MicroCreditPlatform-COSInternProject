@@ -5,8 +5,9 @@
 > burada, gerekçesiyle ve nereye bakması gerektiğiyle.
 >
 > ⚠️ **Tek istisna §J** — o bilinçli bir erteleme değil, **gerçek bir bug'dı**: PGW'den
-> gelen sepet hiç kaydedilmiyordu. Tur 42'de düzeltildi (§J.5) ve **cihazda doğrulandı**
-> (§J.6). Kalan iş bug değil, yazılmamış UI: sepeti gösteren ekran yok.
+> gelen sepet hiç kaydedilmiyordu. Tur 42'de düzeltildi (§J.5), **cihazda doğrulandı**
+> (§J.6), ve Tur 45'te ekrana çıktı — ama §J.7'de anlatıldığı gibi, o tur zincirin
+> **okuma** ucunun da kopuk olduğunu ortaya çıkardı.
 >
 > 🔒 **[§K](#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) tersini anlatır:** §A–§J
 > neyi **ertelediğimiz**, §K neye **dokunmadığımız** — gerçek terminalde çalıştığı
@@ -974,10 +975,39 @@ Aynı turda §K.4'ün regresyon kontrolleri de yapıldı: onaylanan veresiye `RE
 **reddedilen** `RESULT_CANCELED` olarak ayrışıyor, tahsilat geçidin ödeme ekranını açıyor.
 Yani sepet düzeltmesi dondurulmuş sözleşmeyi bozmadı.
 
-**Kalan iş — sepet hiçbir EKRANDA görünmüyor.** Veri `Transaction.basket` olarak app-pos ve
-app-mobile'ın domain modeline kadar geliyor, ama onu okuyan tek bir UI yok. §J'yi başlatan
-soru ("bu veresiyede ne vardı?") hâlâ yalnız SQL'den cevaplanabiliyor. Bu bir bug değil,
-yazılmamış iş: [[replace-source-before-removing-it]]'in tersi — kaynak bağlandı, tüketici yok.
+**Kalan iş — sepet hiçbir EKRANDA görünmüyor.** §J'yi başlatan soru ("bu veresiyede ne
+vardı?") hâlâ yalnız SQL'den cevaplanabiliyor.
+
+⚠️ Bu paragraf Tur 42'de *"veri domain modeline kadar geliyor, sadece UI yok"* diyordu.
+**Yanlıştı** — bkz. §J.7.
+
+### J.7 Okuma ucu da kopukmuş (Tur 45, 2026-09-02)
+
+Sepet ekranı yazılmaya başlanınca "veri hazır" varsayımı çöktü. Yazma ucu gerçekten
+düzelmişti; **okuma ucu iki app'te iki ayrı sebeple hiç bağlanmamıştı:**
+
+| App | Kopukluk |
+|---|---|
+| app-pos | Sepeti diske **yazıyordu** ama `TransactionEntity.toDomain()` `basket`'i hiç set etmiyordu → veri diskte, geri okunmuyor |
+| app-mobile | Sepeti **hiç yazmıyordu**. `Transaction.toEntity()` `basketId = null` sabitliyordu; gerekçe olarak konmuş yorum (*"app-mobile'ın PGW handoff'u yok"*) **doğru ama alakasız**: bu app sepet *üretmiyor*, sepet *alıyor* — `GET /me/transactions` onu döndürüyor, DTO parse ediyor, `storeBuyerLedger` çöpe atıyordu |
+
+**Neden Tur 42'de görülmedi:** §J.6'nın kapanış kanıtı **sunucu tarafı SQL sorgusuydu**.
+Sunucuda satırlar gerçekten vardı. Cihazın o satırları geri okuyup okumadığı hiç
+sorulmadı — çünkü onu soracak bir ekran yoktu.
+
+**Ders:** bir zincirin ucunu doğrularken **hangi uçta durduğunu** bil. "Veri sunucuda
+var" ile "veri ekranda gösterilebilir" arasında iki katman daha vardı
+([[verify-running-artifact-not-source]] burada bir adım ileri gidiyor: sadece *koşan
+şeyi* değil, **koşan şeyin okuduğu yeri** doğrula).
+
+Yanında çıkan ikinci bug: `toItemEntities()` her çağrıda `UUID.randomUUID()` üretiyordu,
+yani `insertItems`'ın `IGNORE`'u hiç tetiklenmiyordu ve aynı sepet her pull'da kalemlerini
+kopyalıyordu. Görünmüyordu **çünkü kimse okumuyordu**. Tur 45 tam da bunu görünür yapacaktı
+(mobile 15 sn'de bir pull ediyor → 3 kalem 9 satır). Id'ler artık konuma göre türetiliyor.
+
+Üçü de Tur 45'te kapandı; DB version 3→4 ile yerel kopya yeniden kuruldu (pull `IGNORE`
+ile yazdığı için diskteki `basketId = NULL` satırları başka türlü düzelmezdi, ve
+append-only `transactions` tablosuna `UPDATE` sokmak istenmedi).
 
 ---
 
@@ -1327,3 +1357,50 @@ iki dikdörtgen arasında köşe geçişi oluşmaz.
 
 ⚠️ **Not:** ikisi de saf görsel; hiçbir işlevi etkilemiyor. Sunumda kart yine okunaklı ve
 tutarlı duruyor, sadece draft'taki incelik yakalanamadı.
+
+### L.11 Sepet ekranında lira cinsinden enflasyon farkı YOK  ⬜ PLANLANDI (Tur 46)
+
+Sepet detay ekranı kur notunu gösteriyor (*"Alındığı gün 33,4 USD — bugün 26,1 USD"*),
+ama planın §Tur 45 metninde yazan *"Enflasyon farkı: +34,00 TL"* satırını **göstermiyor**.
+
+**Neden çıkarıldı:** bir sepetin kendi lira cinsinden enflasyon farkı **yok**. Enflasyon
+ayrı `INDEXATION` ledger satırları olarak tutuluyor; bunlar bakiyeye ait, sunucu yazıyor
+ve sepetsizler. Sepet ekranına lira koymak için o satırları sepetlere **paylaştırmak**
+gerekirdi — ledger'da karşılığı olmayan uydurma bir rakam. Kullanıcı satırları toplayıp
+bakiyeyle karşılaştırdığında tutmazdı.
+
+**Kur notu neden sorun değil:** kaynağı tek (`GET /fx-rates`) ve yerelde rakibi yok — cihaz
+kur tablosu taşımıyor. Satırın kendi tutarını iki günün kuruna bölüyor, sepete pay
+biçmiyor. *"Tek rakam iki kaynaktan gelirse kendisiyle çelişebilir"* kuralı
+(`SellerDetailViewModel.indexationMinor` yorumu) burada ihlal edilmiyor.
+
+**Tur 46'da:** `GET /me/debts/breakdown` bottom-sheet'i — rakam **bakiye başına** ve tek
+kaynaktan gelecek. Doğru yer orası.
+
+⚠️ **TÜFE endeksi de gösterilmiyor** (kullanıcı kararı): USD somut ve karşılığı herkesin
+kafasında; endeks sayısı (1842 → 2210) sunumda ayrıca açıklama gerektiriyor.
+
+⚠️ **§L.4'ün görünür sonucu:** kur serisi uydurma, ve artık bu **kullanıcıya görünüyor**.
+Şeritteki dolar değerleri `seed_demo._fx_series`'ten geliyor. Sunumda "gerçek kur"
+iddiasında bulunulmamalı.
+
+### L.12 Room yazma yolu JVM testiyle örtülemiyor  ⚠️ AÇIK (Tur 45)
+
+`PullPathTest`'in sepet testi `PullEngine`'in sepeti yerel kaynağa **verdiğini** doğruluyor;
+`RoomLocalDataSource`'un onu **diske yazdığını** doğrulamıyor. Fake kendisine verileni
+kaydediyor, o kadar.
+
+**Nasıl anlaşıldı:** Tur 45'te düzeltme kasten geri alındı (`toEntity(null)`), tüm suite
+**yeşil kaldı**. Yani bu turun asıl bug'ını test yakalayamıyor. Kusur geri alındı, bulgu
+testin kendi yorumuna yazıldı.
+
+**Neden yapısal:** Room yazmasını örtmek instrumented test ister; bu repoda hiç yok.
+Eklemek `androidTest` kaynak seti + emülatör/cihazda koşum demek — 8GB makinede
+her turda ödenecek bir bedel değil ([[machine-8gb-one-ide-rule]]).
+
+**Şimdilik yerine geçen:** cihaz doğrulaması — iki pull sonrası `basket_items` satır
+sayısının **artmaması** (idempotency) ve `transactions.basketId`'nin dolu olması.
+
+**Ders (genel):** bir testin yeşil olması bir şey ölçtüğü anlamına gelmiyor. Yeni bir
+regresyon testi yazıldığında **kusuru geri koyup kırmızı görmek** tek gerçek kanıt —
+Tur 44'ün "bozuk verifier" dersinin test tarafındaki karşılığı.

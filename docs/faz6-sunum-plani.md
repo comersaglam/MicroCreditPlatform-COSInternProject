@@ -9,7 +9,7 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-09-02, Tur 44 kapandı.
+> Son güncelleme: 2026-09-02, Tur 45 kapandı.
 
 ---
 
@@ -19,7 +19,7 @@
 |-----|------|-------|
 | 43 | fx_rates + **endeksleme** + zengin seed | ✅ kapandı (progress.md Tur 43) — cihaz doğrulaması Tur 44'e |
 | 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihaz doğrulaması bekliyor |
-| 45 | Sepet detay ekranı (§J.6 kuyruğu) | ⬜ başlamadı |
+| 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ kapandı (progress.md Tur 45) — cihaz senaryosu bekliyor |
 | 46 | Toplam kırılımı + insights | ⬜ başlamadı |
 | 47 | Ödeme seçici + KVKK + profil % | ⬜ başlamadı |
 | 48 | Admin backend | ⬜ başlamadı |
@@ -270,8 +270,14 @@ cevap yalnızca SQL'den alınabiliyor.
 Nav argümanı `transactionId`. `Transaction.basket` null ise *"bu işlemde sepet
 bilgisi yok"* — **para-only handoff meşru bir durum, hata değil**.
 
-**Kur/enflasyon şeridi** aynı ekranda: *"Alındığı gün 3,2 USD — bugün 2,1 USD"*,
-*"Enflasyon farkı: +34,00 TL"*. Tur 43'ün `fx.py` hesabını kullanır.
+**Kur notu** aynı ekranda: *"Alındığı gün 3,2 USD — bugün 2,1 USD"*. `GET /fx-rates`'ten,
+read-through cache ile; offline'da veya 404'te sessizce gizlenir.
+
+⚠️ ***"Enflasyon farkı: +34,00 TL"* buradan ÇIKARILDI → Tur 46.** Bir sepetin kendi lira
+cinsinden enflasyon farkı yok: `INDEXATION` bakiyeye ait ayrı satırlar, sunucu yazıyor,
+sepetsizler. Sepete pay biçmek ledger'da karşılığı olmayan bir rakam üretirdi ve satırlar
+toplanınca bakiyeyle tutmazdı. Doğru yeri Tur 46'nın `/breakdown` bottom-sheet'i — orada
+rakam **bakiye başına** ve tek kaynaktan. Gerekçe [deferred.md §L.11](deferred.md).
 
 ⚠️ **Ölçek kuralları tek yerde:** `OrderItem.lineTotalMinor()`
 (`core-domain/.../model/OrderBody.kt`) yeniden kullanılır — ekranda ayrı çarpma
@@ -293,6 +299,11 @@ tek TextView'lık boş bir placeholder.
 anapara / enflasyon farkı / satış anındaki kur toplamı / toplam ödenen / kalan, artı
 *"bugün ödemezsen 3 ay sonra ≈ X TL"* projeksiyonu. `GET /me/debts/breakdown`'dan
 beslenir.
+
+⚠️ **Tur 45'ten devredildi:** lira cinsinden enflasyon farkı **burada** gösterilecek,
+sepet ekranında değil — rakam bakiye başına ve tek kaynaktan geldiği için burada
+tutarlı ([deferred.md §L.11](deferred.md)). Android tarafında `fxRateAt` ve read-through
+cache Tur 45'te bağlandı; bu turda eklenen yalnızca `/breakdown` ucu olacak.
 
 **Insights ekranı** — `ReportsFragment` doldurulur, **role göre iki farklı içerik**:
 
