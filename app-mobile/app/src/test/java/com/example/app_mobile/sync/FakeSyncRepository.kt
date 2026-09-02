@@ -13,6 +13,7 @@ import com.example.app_pos.model.SellerDebt
 import com.example.app_pos.model.SignInResult
 import com.example.app_pos.model.SyncOutcome
 import com.example.app_pos.model.Transaction
+import com.example.app_pos.model.TransactionDetail
 import com.example.app_pos.model.TransactionType
 import com.example.app_pos.model.User
 import kotlinx.coroutines.flow.Flow
@@ -87,6 +88,8 @@ class FakeSyncRepository(
     override fun observeMyDebtsBySeller(userId: String): Flow<List<SellerDebt>> = flowOf(emptyList())
     override fun observeMyTotalDebtMinor(userId: String): Flow<Long> = flowOf(0L)
     override fun observeAllForBuyer(userId: String): Flow<List<Transaction>> = flowOf(emptyList())
+
+    override suspend fun transactionDetail(transactionId: String): TransactionDetail? = null
     override fun observeMyTransactions(userId: String, sellerId: String): Flow<List<Transaction>> =
         flowOf(emptyList())
     override fun observeMyBalanceWithSeller(userId: String, sellerId: String): Flow<Long> = flowOf(0L)

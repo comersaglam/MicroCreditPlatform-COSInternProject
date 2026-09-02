@@ -12,14 +12,29 @@ import com.example.app_pos.model.TransactionType
 import com.example.app_mobile.util.toDisplayDateTime
 import com.example.app_mobile.util.toTlString
 
-/** Renders the buyer's ledger entries with one seller, newest first. Copied from
- *  app-pos's TransactionAdapter (same append-only display rules). */
-class TransactionAdapter :
-    ListAdapter<Transaction, TransactionAdapter.VH>(DIFF) {
+/**
+ * Renders one account's ledger entries, newest first. Copied from app-pos's
+ * TransactionAdapter (same append-only display rules).
+ *
+ * ⚠️ USED BY TWO SCREENS: SellerDetailFragment (what this user owes a shop) and
+ * CustomerDetailFragment (what a customer owes this user). It lives under sellerdetail for
+ * historical reasons only — a change here lands on both, so both have to be considered.
+ *
+ * [onClick] opens what the entry was made of. It has no default value on purpose: a
+ * default would let one of those two screens keep compiling with dead rows, and a tap that
+ * does nothing is indistinguishable from a screen that has not been wired yet. EVERY row
+ * is tappable, including the ones with no basket — whether an entry has items is not
+ * visible from the row, so a list where some taps did nothing would read as broken.
+ */
+class TransactionAdapter(
+    private val onClick: (Transaction) -> Unit
+) : ListAdapter<Transaction, TransactionAdapter.VH>(DIFF) {
 
     class VH(private val binding: ItemTransactionBinding) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(transaction: Transaction) = with(binding) {
+        fun bind(transaction: Transaction, onClick: (Transaction) -> Unit) = with(binding) {
+            root.setOnClickListener { onClick(transaction) }
+
             txDescription.text = transaction.description
             // Stored as ISO-8601 UTC; shown in the device's own time zone.
             txDate.text = transaction.createdAt.toDisplayDateTime()
@@ -53,7 +68,8 @@ class TransactionAdapter :
         return VH(binding)
     }
 
-    override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(getItem(position))
+    override fun onBindViewHolder(holder: VH, position: Int) =
+        holder.bind(getItem(position), onClick)
 
     private companion object {
         val DIFF = object : DiffUtil.ItemCallback<Transaction>() {

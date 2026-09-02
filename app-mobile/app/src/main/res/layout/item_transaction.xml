@@ -9,6 +9,10 @@
   The vertical padding is LARGER than before (14dp, was 12dp) even though the type got
   smaller. Shrinking text without opening the space around it just produces something
   cramped.
+
+  Tappable: it opens what the entry was made of. The ripple is what says so. Without a
+  background the row answered a touch with nothing at all, and a list that navigates
+  invisibly is one people never discover.
 -->
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -16,6 +20,9 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
     android:paddingHorizontal="@dimen/screen_edge"
     android:paddingVertical="@dimen/row_vertical">
 
