@@ -489,3 +489,100 @@ curl -s "localhost:4010/me/debts/breakdown" -H "Authorization: Bearer $BTOK"
 ```
 `principal + indexation − paid == outstanding` tutmalı. Telefondaki "Borçlarım" toplamı da
 aynı olmalı.
+
+---
+
+## G bloğu — Tur 44: tema B-a + T-Fides kimliği
+
+⚠️ **Bu blok CİHAZDA ÇALIŞTIRILMADI.** İki app derlendi, APK üretildi, dex doğrulandı —
+ama kurulmadı. **F bloğuyla birlikte koşulacak** (endeksleme cihazda ilk kez görülecek).
+
+### Kurulum
+
+```bash
+export JAVA_HOME=/Applications/Android\ Studio.app/Contents/jbr/Contents/Home
+cd app-mobile && ./gradlew assembleDebug && ./gradlew --stop
+cd ../app-pos  && ./gradlew assembleDebug && ./gradlew --stop
+
+# allowBackup=false olduğu için uninstall gerçekten siliyor
+adb uninstall com.example.app_mobile; adb uninstall com.example.app_pos
+adb install app-mobile/app/build/outputs/apk/debug/app-debug.apk
+adb install app-pos/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### G1 — ⚠️ ÖNCE BU: PGW sözleşmesi bozulmadı mı
+
+Uygulama adı ve ikon değişti. Değişmemesi gerekenler:
+
+```bash
+AAPT=$(ls ~/Library/Android/sdk/build-tools/*/aapt2 | tail -1)
+"$AAPT" dump badging app-pos/app/build/outputs/apk/debug/app-debug.apk | grep -E "^package|application-label"
+```
+
+Beklenen:
+```
+package: name='com.example.app_pos'     ← DEĞİŞMEMELİ
+application-label:'T-Fides POS'          ← değişti, sorun değil
+```
+
+Sonra **cihazda**: mock-pos → uzun basış → sepetli veresiye → app-pos açılmalı. Açılmıyorsa
+`applicationId` veya action string'i bozulmuş demektir (§K).
+
+### G2 — Odak kartı 6 ekranda, diğerlerinde yok
+
+Kart + sol şerit + sparkline **olması gereken**:
+- app-mobile: müşteri detayı, dükkân detayı, Borçlarım, Müşterilerim
+- app-pos: müşteri detayı, Müşterilerim
+
+**Olmaması gereken:** onaylar, profil, login, satış akışı (keypad/confirm/otp).
+
+Şerit her ekranda görünüyorsa vurgu kaybolmuş demektir.
+
+### G3 — Rakam efekti: sayma, sonra gradyan
+
+Müşteri detayını aç. Bakiye **0'dan sayarak** gelmeli (~600ms, yavaşlayarak durmalı),
+durduktan sonra **yukarıdan aşağı açıktan koyuya** gradyan almalı.
+
+⚠️ **Sayarken gradyan olmamalı** — düz renk. İkisi aynı anda görünüyorsa `MoneyText`'in
+sıralaması bozulmuş.
+
+### G4 — Sayma YALNIZ ilk gösterimde
+
+Ekranı aç → say. Geri çık → tekrar aç → **saymamalı**, rakam doğrudan yerinde olmalı.
+
+Her açılışta sayıyorsa `hasShownValue` çalışmıyor. Daha kötüsü: **ödeme yaptıktan sonra**
+sayıyorsa, ekran "hesap yapıyor" gibi görünür — tam da kesinlik beklenen anda.
+
+### G5 — Liste kaydırması akıcı mı
+
+Uzun bir müşteri geçmişini hızlı kaydır. **Titreme olmamalı.**
+
+Titriyorsa `MoneyText` liste satırına sızmıştır: RecyclerView her geri dönüşümde yeniden
+bağlar, her bağlamada animasyon başlar.
+
+### G6 — Sıfır bakiye NÖTR
+
+Kapanmış hesap aç (demo: `c3` / Mehmet Kaya, bakiye 0). Rakam **gri** olmalı —
+yeşil değil. Yeşilse "ödeme alındı" diyor ama öyle bir olay olmadı (§G.2).
+
+### G7 — Sparkline boş veriyle çökmüyor
+
+Yeni bir müşteri ekle (hiç işlemi yok) → detayına gir. **Çökmemeli**, sparkline boş
+kalmalı (`values.size < 2` koruması).
+
+### G8 — Kimlik
+
+- Uygulama çekmecesinde: **T-Fides Mobile** ve **T-Fides POS**, logo ikonlu
+- Login ekranında büyük logo
+- Her ekranın üst barında küçük logo (detay ekranlarında da — orası kaybolmamalı)
+
+⚠️ İkon köşeleri kesikse adaptive icon inset'i yetersiz demektir.
+
+### G9 — Tur 43 regresyonu: endeks satırı
+
+F bloğu koşulduktan sonra müşteri detayında endeks satırları görünmeli:
+- **Soluk kırmızı** (`#C77A7A`), normal veresiyeden daha soluk
+- İşaret **+**
+- `[Borç]` filtresine basınca **listede kalmalı**
+
+Yeşil ve eksi görünüyorsa `TransactionAdapter`'ın `when`'i bozulmuş.

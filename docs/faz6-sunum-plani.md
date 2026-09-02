@@ -9,7 +9,7 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-08-31, Tur 43 kapandı.
+> Son güncelleme: 2026-09-02, Tur 44 kapandı.
 
 ---
 
@@ -18,7 +18,7 @@
 | Tur | Konu | Durum |
 |-----|------|-------|
 | 43 | fx_rates + **endeksleme** + zengin seed | ✅ kapandı (progress.md Tur 43) — cihaz doğrulaması Tur 44'e |
-| 44 | Tema C (neon aksan) — app-mobile | ⬜ başlamadı |
+| 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihaz doğrulaması bekliyor |
 | 45 | Sepet detay ekranı (§J.6 kuyruğu) | ⬜ başlamadı |
 | 46 | Toplam kırılımı + insights | ⬜ başlamadı |
 | 47 | Ödeme seçici + KVKK + profil % | ⬜ başlamadı |
@@ -69,7 +69,7 @@ başlarken yeniden tartışılmaz** — değişirse burası güncellenir.
 | 2.6 | Trafik sekmesi | **Sadece seed** — canlı middleware YOK | Canlıya alınmadığı için gerçek trafik yok; eksiklik §L.1'e yazılır |
 | 2.7 | Admin işlemleri | Ban/askıya alma **gerçek**, ödeme düzeltme **mock** | Ledger append-only; düzeltme mimariyi bozar |
 | 2.8 | Profil/KYC | **Yerel-only mock** — TC/foto Room'da kalır | Backend'e TC göndermek demo için gereksiz KVKK riski |
-| 2.9 | Tema | **C — Neon aksan (fintech)**; önce app-mobile tam, POS sadece token | XML views'da yapılabilir; Compose'a dönülmüyor |
+| 2.9 | Tema | **B-a "Derinlik"** (Tur 44'te beş draft turunda seçildi, C değil); iki app da tam | XML views'da yapılabilir; Compose'a dönülmüyor |
 | 2.10 | Ödeme mock logoları | **Gerçek logolar**, `res/drawable/`, kendi renk şeridiyle | Token grubu içi sunum |
 | 2.11 | Sepet detay | **Her iki app**, işlem satırına tıkla → yeni Fragment | Veri zaten domain'de hazır |
 | 2.12 | **Enflasyon** | **Endeksleme** — gösterge değil, borcun parçası | *"ödeme yaparken inflated halini ödemesini istiyoruz"* (Tur 43'te eklendi) |
@@ -86,23 +86,35 @@ büyütüldü — turun yaklaşık iki katına çıkmasına rağmen.
 alınamıyor (§L.7) ve oran/sıklık henüz ürün kararı değil, teknik varsayım (§L.8 — BDDK
 sorusu dahil).
 
-### Tema C — kısa tarif
+### Tema B-a "Derinlik" — uygulanan hali
 
-Düz koyu zemin, kartlar var ama cam değil; **sadece rakamlar ve grafikler parlıyor**.
+Beş draft turunda seçildi ([design/](../design/)). Plan başlangıçta "C — neon aksan"
+diyordu; draft'lar üzerinde konuşurken B-a'ya dönüldü. Parlama/neon **kullanılmadı**:
+ferahlık isteniyordu, ve koyu zeminde parlama kalabalık hissi veriyor.
 
 ```
-  +---------------------+
-  | TOPLAM ALACAK       |
-  |  1.250,00 TL        |  <- neon glow
-  |  ....~~^^^~~....    |  <- sparkline
-  +---------------------+
+  |o------------------------+   <- sol serit: ustte tam marka,
+  |  GUNCEL BAKIYE          |      altta sonumleniyor
+  |                         |
+  |  2.616,00 TL            |   <- sayarak gelir, sonra gradyan alir
+  |  Bunun 66,00 TL'si                enflasyon farki
+  |  ....~~^^^~~....        |   <- sparkline (custom View)
+  +-------------------------+
+      kart: dikey gradyan, ust kenar aydinlik,
+            alt kenar zeminle birlesiyor. GOLGE YOK.
 
-zemin  #0D0D0F duz          kart   #17171B + 1px #2A2A30
-glow   sadece rakam + grafik
+zemin  #0B0D12       kart   #1A1E28 -> #14171F -> #0F1219
+marka  #2151F3 (dolgu)      #5B87FF (koyu zeminde metin)
 ```
 
-Mevcut `#4C8BFF` primary ve **Tur 25b'nin dört-ton sistemi aynen korunur** — cep testi
-(bana gelen yeşil / benden çıkan kırmızı) hâlâ geçerli, palet yeni renk kazanmaz.
+⚠️ **`#2151F3` metin olarak kullanılmıyor** — koyu zeminde ~3:1, WCAG AA'yı geçmiyor.
+Dolgu olarak (buton, çip, şerit) üstüne beyaz metinle 8:1 veriyor.
+
+**Tur 25b'nin dört-ton sistemi korundu** — cep testi (bana gelen yeşil / benden çıkan
+kırmızı) hâlâ geçerli. Tur 43'ün `balance_indexation` soluk kırmızısı da yerinde.
+
+⚠️ **Odak kartı yalnız 6 ekranda** (mobile 4 + pos 2). Şerit her yerde olursa vurgu
+olmaktan çıkar.
 
 ---
 

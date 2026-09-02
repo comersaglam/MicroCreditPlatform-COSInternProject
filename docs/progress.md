@@ -3263,3 +3263,131 @@ ve `ELSE -amountMinor` yazdıkları için endeksi **ters işaretle** toplayacakl
 kuralın kopyalarını sayarken, kaçının derleyici korumasında olduğunu ayrı say.
 
 **Sıradaki:** Tur 44 — Tema C (neon aksan), app-mobile'ın tasarım sistemi.
+
+### 2026-09-02 — Tur 44: tema B-a + T-Fides kimliği
+
+Tur 43 veriyi kurdu; bu tur onu **gösterilebilir** hale getiriyor.
+
+#### Tema beş draft turunda seçildi
+
+Kod yazmadan önce [design/](../design/) altında HTML draft'lar üretildi — XML'de 35 layout
+denemekten çok daha ucuz. Kural: **HTML'de yapılan her şeyin XML karşılığı olmalı**, yoksa
+draft yanıltıcı olur. `backdrop-filter`, çok katmanlı `box-shadow`, `::before` süsleri hiç
+kullanılmadı.
+
+| Tur | Ne denendi | Sonuç |
+|---|---|---|
+| 1 | A sakin / B kart / C ayrık | **B** seçildi |
+| 2 | A minimalist / C futuristik uçlara çekildi | B kaldı; C'nin sabit üç sütunlu kırılımı beğenilmedi |
+| 3 | B küçültülmüş / B farklı font | B'nin ağırlığı beğenildi |
+| 4 | B-a derinlik / B-b ışık / B-c çizgi | **B-a** seçildi |
+| 5 | Rakam efektleri: düz / gradyan / sayma / hale | **gradyan + sayma** |
+
+**B-a "Derinlik":** kart içinde dikey gradyan (üst kenar aydınlık, alt kenar zeminle
+birleşiyor), sol kenarda sönümlenen marka şeridi, inceltilmiş tipografi.
+
+⚠️ **Gölge hiç kullanılmadı** — koyu zeminde gölge derinlik okunmuyor, köşelerde leke
+oluyor. Derinliği gradyan veriyor ve çalışma zamanı maliyeti sıfır.
+
+#### İki teknik sorun, iki çözüm
+
+**1. Gradyan + sayma çakışması.** Draft'ta "ikisi birlikte çalışmaz" denmişti: shader
+metin genişliğine bağlı, sayarken genişlik her karede değişiyor, her karede shader kurmak
+hem israf hem titreme kaynağı.
+
+**Çözüm — sıralamak.** `MoneyText` sayarken düz renk kullanıyor, animasyon bitince gradyan
+uyguluyor. Kullanıcı zaten sayan rakamın rengine bakmıyor, hareketi izliyor.
+
+⚠️ **Sayma yalnız İLK değerde.** Ödeme sonrası rakamın yeniden sayması ekranı "hesap
+yapıyor" gibi gösterir — oysa o an tam da kesinlik beklenen andır.
+⚠️ **Liste satırlarında kullanılmıyor:** RecyclerView her geri dönüşümde yeniden bağlar,
+liste titrer.
+
+**2. Font ağırlığı ve `minSdk = 24`.** `android:fontWeight` API 28+; bu app 24'ü
+destekliyor. Çözüm hazır aileler (`sans-serif-light` = 300, API 16'dan beri var).
+
+⚠️ **İnce olan sadece BÜYÜK metin.** 300 ağırlık 14sp altında zayıflıyor, POS güneş
+altında kullanılıyor. Liste satırları 400'de kaldı.
+
+#### Yazılanlar
+
+| Dosya | Ne |
+|---|---|
+| `values/dimens.xml` | Boşluk ölçeği (6 adım, 4dp tabanlı) |
+| `values/type.xml` | Tipografi rolleri: Display/Title/Body/Caption/Label/Money/Button |
+| `values/colors.xml` | B-a paleti; **token adları değişmedi**, sadece değerler |
+| `drawable/bg_card_focus.xml` | Kart gradyanı (3 durak) |
+| `drawable/bg_card_stripe.xml` | Sönümlenen sol şerit |
+| `view/MoneyText.kt` | Sayma + gradyan, sıralı |
+| `view/SparklineView.kt` | İki `Path`, kütüphane yok (~110 satır) |
+| `util/BalanceSeries.kt` | Aylık kapanış bakiyeleri, mevcut satırlardan |
+
+⚠️ **`type.xml` bu turun temadan bağımsız kalıcı kazancı.** Öncesinde hiçbir tipografi
+stili yoktu; 35 layout'ta her boyut gömülüydü ve aynı tür etiket bir ekranda 14sp, başka
+ekranda 15sp idi. Hiçbiri yanlış değildi, hiçbiri tutarlı da değildi.
+
+**Renk token adları korundu** — layout'lar `?attr` üzerinden eriştiği için değerleri
+değiştirmek 35 layout'a dokunmadan tüm uygulamayı yeniden kaplıyor.
+
+#### Odak kartı: 4 ekran, 31 sade ekran
+
+*"Abartmadan"* isteği şöyle somutlaştı — şerit her yerde olursa vurgu olmaktan çıkar:
+
+| Ekran | Kart + şerit + sparkline |
+|---|---|
+| app-mobile: müşteri detayı, dükkân detayı, Borçlarım, Müşterilerim | ✅ |
+| app-pos: müşteri detayı, Müşterilerim | ✅ |
+| Onaylar, profil, login, satış akışı, liste satırları | ❌ |
+
+app-pos'un satış akışı (`keypad`, `confirm`, `otp`) bilerek sade: tezgâhta müşteri
+beklerken vurgu, önemli olan tek rakamla yarışır.
+
+**Borçlarım ve Müşterilerim yön-rengini kaybetti.** Kırmızı/yeşil panel rolü belirtiyordu;
+artık rakam yönü kendi gradyanında taşıyor, panel aynı şeyi ikinci kez söylüyordu.
+
+#### T-Fides kimliği
+
+`Veresiye` → **T-Fides Mobile**, `app-pos` → **T-Fides POS**, kullanıcının kendi logosuyla.
+
+🔒 **`applicationId` DEĞİŞMEDİ.** APK'dan doğrulandı:
+
+```
+package: name='com.example.app_pos'          ← aynı
+application-label:'T-Fides POS'              ← değişti
+com.example.app_pos.action.CREDIT            ← duruyor
+```
+
+Değişen yalnız `android:label` ve ikon — ikisi de kullanıcıya görünen etiket, §K
+sözleşmesinin parçası değil.
+
+Logo iki yerde: login'de büyük (ilk görülen ekran), ActionBar'da küçük. ActionBar'daki
+**Activity'ye** konuldu, layout'a değil — bar Activity'ye ait, dashboard layout'una
+konsaydı detay ekranlarında kaybolurdu, ki para bakılan yer tam orası.
+
+⚠️ **Adaptive icon %22 içeri çekildi:** 108dp tuvalin yalnız ortadaki 72dp'si garanti
+görünür, kenara kadar çizilen logonun köşelerini dairesel maske yiyor. Eski `.webp`
+ikonlar **silindi** — aynı isimde iki kaynak yazı tura.
+
+#### Doğrulama
+
+- İki app: `compileDebugKotlin` + `assembleDebug` + tüm unit testler yeşil
+- **APK içeriği doğrulandı** (kaynak değil): `MoneyText`, `SparklineView`, `BalanceSeries`
+  dex'te; `logo_fides.png` kaynaklarda; `applicationId` ve CREDIT action sabit
+- **CİHAZDA DOĞRULANMADI** — APK kurulmadı. Tur 43'ün F bloğuyla birlikte koşulacak.
+
+#### İki sessiz hata yakalandı
+
+**1. `processDebugResources`, `compileDebugKotlin`'in göremediğini gördü.** Adaptive icon
+arka planı `@drawable/ic_launcher_background` diye arıyordu, ben rengi `@color` olarak
+tanımlamıştım. Kotlin derlemesi kaynak bağlama yapmaz.
+
+**2. Kendi doğrulama komutum bozuktu.** `unzip -p ... | strings` boru hattı hiçbir sınıfı
+bulamadı — ama **bilinen bir sınıfı kontrol grubu olarak koyduğum için** aracın bozuk
+olduğu anlaşıldı, sınıfların eksik olduğu değil. Dex'i açıp aramak üçünü de buldu.
+
+**Öğrenilen:** **Bir doğrulama aracının kendisi de doğrulanmalı.** "Bulunamadı" iki şey
+demek olabilir: yok, ya da arayan bozuk. Aramaya var olduğu kesin bir şeyi de koymak
+ikisini ayırır — yoksa çalışan bir yapıyı bozuk sanıp saatlerce aranır.
+
+**Sıradaki:** cihaz testi (tema + Tur 43'ün F bloğu birlikte), sonra Tur 45 — sepet detay
+ekranı.
