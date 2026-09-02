@@ -37,6 +37,29 @@
         <argument
             android:name="customerName"
             app:argType="string" />
+
+        <!-- Tapping a ledger row opens what was in it. Pushed on top of the customer's
+             history, so Back returns to the same scroll position. -->
+        <action
+            android:id="@+id/action_customerDetail_to_transactionDetail"
+            app:destination="@id/transactionDetailFragment" />
+    </fragment>
+
+    <!--
+      One entry's basket. Reached only from a row tap; it has no tab and no other caller.
+
+      The argument is the entry's id alone: the basket is on disk beside it, so passing
+      the lines through the Bundle would serialise something the screen can simply read.
+    -->
+    <fragment
+        android:id="@+id/transactionDetailFragment"
+        android:name="com.example.app_pos.ui.dashboard.detail.TransactionDetailFragment"
+        android:label="@string/transaction_detail_title"
+        tools:layout="@layout/fragment_transaction_detail">
+
+        <argument
+            android:name="transactionId"
+            app:argType="string" />
     </fragment>
 
     <!-- What is waiting on this shop's answer. Filled by a poll, not by anything this

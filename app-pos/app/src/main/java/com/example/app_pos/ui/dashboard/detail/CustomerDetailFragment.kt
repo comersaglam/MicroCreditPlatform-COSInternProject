@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.app_pos.R
@@ -42,7 +43,12 @@ class CustomerDetailFragment : Fragment() {
     // SavedStateHandle, which Navigation populates from this destination's arguments.
     private val viewModel: CustomerDetailViewModel by viewModels()
 
-    private val adapter = TransactionAdapter()
+    private val adapter = TransactionAdapter { transaction ->
+        findNavController().navigate(
+            CustomerDetailFragmentDirections
+                .actionCustomerDetailToTransactionDetail(transaction.transactionId)
+        )
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,

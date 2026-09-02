@@ -12,15 +12,25 @@ import com.example.app_pos.model.TransactionType
 import com.example.app_pos.util.toDisplayDateTime
 import com.example.app_pos.util.toTlString
 
-/** Renders the ledger entries of a single customer, newest first. */
-class TransactionAdapter :
-    ListAdapter<Transaction, TransactionAdapter.TransactionViewHolder>(DIFF) {
+/**
+ * Renders the ledger entries of a single customer, newest first.
+ *
+ * [onClick] opens what the entry was made of. EVERY row is tappable, including the ones
+ * with no basket: whether an entry has items is not visible from the row, so a list where
+ * some taps did nothing would look broken rather than selective. The screen answers "no
+ * items on this one" in words, which is the honest version of the same information.
+ */
+class TransactionAdapter(
+    private val onClick: (Transaction) -> Unit
+) : ListAdapter<Transaction, TransactionAdapter.TransactionViewHolder>(DIFF) {
 
     class TransactionViewHolder(
         private val binding: ItemTransactionBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(transaction: Transaction) = with(binding) {
+        fun bind(transaction: Transaction, onClick: (Transaction) -> Unit) = with(binding) {
+            root.setOnClickListener { onClick(transaction) }
+
             txDescription.text = transaction.description
             // Stored as ISO-8601 UTC; shown in the device's time zone.
             txDate.text = transaction.createdAt.toDisplayDateTime()
@@ -56,7 +66,7 @@ class TransactionAdapter :
     }
 
     override fun onBindViewHolder(holder: TransactionViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        holder.bind(getItem(position), onClick)
     }
 
     private companion object {
