@@ -32,6 +32,15 @@
     <dimen name="radius_md">14dp</dimen>
 
     <!--
+      The focus card's INNER radius: what the gradient layer curves at, sitting 3dp inside
+      the brand edge. Nested rounded rectangles only look concentric when the inner radius
+      is the outer one minus the gap between them — 14 − 3. Give both the same radius and
+      the inner corner bulges; give the inner none and the edge reads as a strip stuck on
+      the side rather than as the card's own border.
+    -->
+    <dimen name="radius_card_inner">11dp</dimen>
+
+    <!--
       Hairline. 1dp rather than 0.5dp: sub-pixel lines vanish entirely on low-density
       screens, and a separator that is sometimes invisible is worse than a slightly heavy
       one.
@@ -39,7 +48,7 @@
     <dimen name="stroke_hairline">1dp</dimen>
 
     <!-- The brand stripe down the left edge of a focus card. -->
-    <dimen name="stripe_width">4dp</dimen>
+    <dimen name="stripe_width">3dp</dimen>
 
     <!--
       Vertical rhythm for list rows. Note this is LARGER than the 12dp the layouts used

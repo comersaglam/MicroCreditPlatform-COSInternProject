@@ -12,6 +12,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.app_mobile.MainActivity
 import com.example.app_mobile.R
 import com.example.app_mobile.databinding.FragmentLoginBinding
+import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -87,47 +88,80 @@ class LoginFragment : Fragment() {
         when (state) {
             LoginState.IDLE -> {
                 binding.btnLogin.isEnabled = true
-                binding.statusText.visibility = View.GONE
+                hideStatus()
                 binding.codeInput.text = null
             }
             LoginState.SUBMITTING -> {
                 binding.btnLogin.isEnabled = false
-                binding.statusText.visibility = View.GONE
+                hideStatus()
             }
             LoginState.CODE_SENT -> {
                 binding.btnLogin.isEnabled = true
                 // Reached either fresh (code just sent) or after a wrong code — the two look
-                // identical on screen, so the message has to distinguish them.
-                binding.statusText.setText(
-                    if (viewModel.codeRejected.value) R.string.msg_login_wrong_code
-                    else R.string.msg_login_code_sent
+                // identical on screen, so the message has to distinguish them. And they are
+                // not the same KIND of message: one is an instruction, the other a refusal.
+                val rejected = viewModel.codeRejected.value
+                showStatus(
+                    if (rejected) R.string.msg_login_wrong_code else R.string.msg_login_code_sent,
+                    isError = rejected,
                 )
-                binding.statusText.visibility = View.VISIBLE
             }
             LoginState.SUCCESS -> {
                 (activity as? MainActivity)?.onLoginSucceeded()
             }
             LoginState.NEEDS_REGISTER -> {
                 binding.btnLogin.isEnabled = true
-                binding.statusText.visibility = View.GONE
+                hideStatus()
                 showRegisterDialog()
             }
             LoginState.ERROR -> {
                 binding.btnLogin.isEnabled = true
                 // Prefer what the server said; fall back to the generic line.
                 val message = viewModel.errorMessage.value
-                if (message != null) binding.statusText.text = message
-                else binding.statusText.setText(R.string.msg_login_wrong_number)
-                binding.statusText.visibility = View.VISIBLE
+                if (message != null) showStatus(message) else showStatus(R.string.msg_login_wrong_number)
             }
             LoginState.UNREACHABLE -> {
                 // Says the connection failed rather than blaming the number, which is what
                 // the old shared ERROR branch did to anyone whose signal dropped.
                 binding.btnLogin.isEnabled = true
-                binding.statusText.setText(R.string.msg_login_unreachable)
-                binding.statusText.visibility = View.VISIBLE
+                showStatus(R.string.msg_login_unreachable)
             }
         }
+    }
+
+    /**
+     * The status line, in the colour its message deserves.
+     *
+     * The layout paints this red, which was right for every state that used it EXCEPT the
+     * one that runs most often: "enter the code we sent you" is an instruction, and in red
+     * it reads as a refusal — the screen appeared to reject a number it had just accepted.
+     *
+     * app-pos has had this distinction since its login was written; this side only ever
+     * set the text. Two mirrored screens, one of them half-implemented.
+     */
+    private fun showStatus(messageRes: Int, isError: Boolean = true) {
+        binding.statusText.setText(messageRes)
+        applyStatusColour(isError)
+    }
+
+    private fun showStatus(message: String, isError: Boolean = true) {
+        binding.statusText.text = message
+        applyStatusColour(isError)
+    }
+
+    private fun applyStatusColour(isError: Boolean) {
+        binding.statusText.setTextColor(
+            MaterialColors.getColor(
+                binding.statusText,
+                if (isError) com.google.android.material.R.attr.colorError
+                else com.google.android.material.R.attr.colorOnSurfaceVariant,
+            )
+        )
+        binding.statusText.visibility = View.VISIBLE
+    }
+
+    private fun hideStatus() {
+        binding.statusText.visibility = View.GONE
     }
 
     private fun showRegisterDialog() {

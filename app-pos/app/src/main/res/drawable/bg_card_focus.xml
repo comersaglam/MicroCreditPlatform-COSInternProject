@@ -1,33 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The focus card's ground (theme B-a).
+  The focus card's ground, brand edge included.
 
-  A vertical gradient from a lighter top edge down to something close to the page,
-  so the card reads as lifted at the top and settled at the base. Three stops, not
-  two: a straight fade made the card look like it was dissolving rather than sitting
-  on the page.
+  This is the draft's card written as a drawable. In CSS it was three declarations:
 
-  There is no shadow and no elevation anywhere in this theme. On a dark ground a
-  shadow does not read as depth — it reads as a smudge around the corners. The
-  gradient does that job instead, and it costs nothing at runtime.
+      background: linear-gradient(180deg, #14171F, #11141B);
+      border: 1px solid outline;
+      border-left: 3px solid brand;
+      border-radius: 14px;
 
-  Used on FOUR screens only (customer detail, seller detail, my debts, my customers).
-  A stripe and a gradient on every card would stop being emphasis.
+  and the whole reason it looked right is that the brand edge is part of the SHAPE. The
+  radius applies to it, so it curves with the card instead of ending in square corners
+  beside a rounded one.
+
+  TWO LAYERS, and which one carries what matters:
+
+    below  the brand rectangle, and the 1dp outline. The outline lives here so it traces
+           the card's outside only; on the layer above it would also draw down the inside
+           of the brand edge, laying a grey line over the blue.
+
+    above  the gradient, inset from the start by exactly the edge's width. Its corners are
+           the outer radius MINUS that inset, which is what makes the two curves
+           concentric rather than one bulging out of the other.
+
+  The brand edge is FLAT colour. An earlier version faded it downward, which was invention
+  — the draft never did that, and at 3dp a gradient mostly reads as the edge losing its
+  colour halfway down.
 -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <gradient
-        android:angle="270"
-        android:startColor="@color/card_top"
-        android:centerColor="@color/card_mid"
-        android:endColor="@color/card_bottom"
-        android:centerY="0.45"
-        android:type="linear" />
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/stripe_top" />
+            <stroke
+                android:width="@dimen/stroke_hairline"
+                android:color="@color/outline" />
+            <corners android:radius="@dimen/radius_md" />
+        </shape>
+    </item>
 
-    <stroke
-        android:width="@dimen/stroke_hairline"
-        android:color="@color/outline" />
+    <item android:start="@dimen/stripe_width">
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:centerColor="@color/card_mid"
+                android:centerY="0.45"
+                android:endColor="@color/card_bottom"
+                android:startColor="@color/card_top"
+                android:type="linear" />
+            <corners
+                android:bottomLeftRadius="@dimen/radius_card_inner"
+                android:bottomRightRadius="@dimen/radius_md"
+                android:topLeftRadius="@dimen/radius_card_inner"
+                android:topRightRadius="@dimen/radius_md" />
+        </shape>
+    </item>
 
-    <corners android:radius="@dimen/radius_md" />
-</shape>
+</layer-list>

@@ -102,14 +102,26 @@ class MainActivity : AppCompatActivity() {
         // it flows with the text and drifts as the title changes length. This one is
         // positioned by its own gravity and stays at the right end.
         supportActionBar?.apply {
+            // The bar shows the identity and nothing else. The screen's own name is not
+            // repeated here: a tab's name is already under it in the bottom bar, and a
+            // detail screen names the person in its first line. Leaving the title on would
+            // have put it directly behind the centred wordmark.
+            setDisplayShowTitleEnabled(false)
             setDisplayShowCustomEnabled(true)
-            setCustomView(R.layout.actionbar_logo)
-            // The custom view fills the bar so its own gravity can push the mark to the
-            // right end; without explicit params it is measured as wrap_content and lands
-            // wherever the title leaves room, which is the drift this replaced.
-            customView.layoutParams = androidx.appcompat.app.ActionBar.LayoutParams(
-                androidx.appcompat.app.ActionBar.LayoutParams.MATCH_PARENT,
-                androidx.appcompat.app.ActionBar.LayoutParams.MATCH_PARENT,
+            // The params go in WITH the view, never assigned to it afterwards. The action
+            // bar is a Toolbar underneath and casts whatever params its child carries to
+            // Toolbar.LayoutParams -- so assigning ActionBar.LayoutParams to the view
+            // returned by getCustomView() crashes on the next measure pass. Handed to
+            // setCustomView they are converted for us.
+            //
+            // Full width is what lets the layout's own gravity push the mark to the right
+            // end; measured as wrap_content it lands wherever the title leaves room.
+            setCustomView(
+                layoutInflater.inflate(R.layout.actionbar_logo, null),
+                androidx.appcompat.app.ActionBar.LayoutParams(
+                    androidx.appcompat.app.ActionBar.LayoutParams.MATCH_PARENT,
+                    androidx.appcompat.app.ActionBar.LayoutParams.MATCH_PARENT,
+                ),
             )
         }
 

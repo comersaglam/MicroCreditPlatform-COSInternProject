@@ -112,8 +112,8 @@
     <string name="login_phone_hint">Telefon (0555 444 3322)</string>
     <string name="login_button">Giriş Yap</string>
     <string name="login_send_code">Kod Gönder</string>
-    <string name="login_code_hint">SMS ile gelen kod</string>
-    <string name="login_edit_phone">Numarayı düzelt</string>
+    <string name="login_code_hint">SMS ile gelen kodu giriniz</string>
+    <string name="login_edit_phone">Numarayı değiştir</string>
     <string name="msg_login_wrong_number">Geçerli bir telefon numarası girin</string>
     <string name="msg_login_code_sent">Kod gönderildi, telefonunuzu kontrol edin</string>
     <string name="msg_login_invalid_code">Kod hatalı, tekrar deneyin</string>

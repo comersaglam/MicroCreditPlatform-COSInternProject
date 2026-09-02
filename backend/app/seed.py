@@ -97,10 +97,10 @@ def seed(db: Session) -> None:
     _tx(db, "t15", "u_owner", "c2", 4500, "DEBT", "Deterjan", "2026-07-22T13:05:00")
 
     # One pending approval per demo account, so the Onaylar tab is never empty.
-    _approval(db, "p1", "u_owner", "Ahmet Bakkal", "u1", "c1", 5000, "DEBT",
-              "Ekmek, süt", "2026-07-25T07:05:00")
-    _approval(db, "p2", "u_market", "Ayşe Market", "u_owner", "o1", 7500, "DEBT",
-              "Temizlik malzemesi", "2026-07-25T08:20:00")
+    # _approval(db, "p1", "u_owner", "Ahmet Bakkal", "u1", "c1", 5000, "DEBT",
+    #           "Ekmek, süt", "2026-07-25T07:05:00")
+    # _approval(db, "p2", "u_market", "Ayşe Market", "u_owner", "o1", 7500, "DEBT",
+    #           "Temizlik malzemesi", "2026-07-25T08:20:00")
 
     db.commit()
 

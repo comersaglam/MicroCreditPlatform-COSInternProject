@@ -85,14 +85,6 @@ class DashboardFragment : Fragment() {
                 R.id.pairingFragment -> R.id.profileFragment
                 else -> destination.id
             }
-            // The label declared on the INNER destination. The action bar is wired to the
-            // outer graph, whose only destination here is the dashboard itself -- so every
-            // tab and every detail screen showed that one outer label and nothing ever
-            // changed it.
-            destination.label?.let {
-                (activity as? AppCompatActivity)?.supportActionBar?.title = it
-            }
-
             val item = binding.bottomNav.menu.findItem(tabId) ?: return@addOnDestinationChangedListener
             // isChecked, NOT selectedItemId: assigning the id makes the view act as though
             // the tab were tapped, which navigates away from the screen just opened.

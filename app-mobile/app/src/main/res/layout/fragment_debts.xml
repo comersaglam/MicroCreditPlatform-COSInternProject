@@ -35,17 +35,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
 
-        <!-- The stripe: its own view because a border cannot carry a gradient. -->
-        <View
-            android:id="@+id/totalStripe"
-            android:layout_width="@dimen/stripe_width"
-            android:layout_height="0dp"
-            android:background="@drawable/bg_card_stripe"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <TextView
+<TextView
             android:id="@+id/totalLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

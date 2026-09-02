@@ -73,6 +73,7 @@
           so the top of every screen is one continuous colour.
         -->
         <item name="actionBarTheme">@style/ThemeOverlay.Apppos.ActionBar</item>
+        <item name="toolbarStyle">@style/Widget.Fides.Toolbar</item>
         <item name="bottomNavigationStyle">@style/Widget.Apppos.BottomNav</item>
     </style>
 
@@ -98,6 +99,27 @@
     <style name="Widget.Apppos.BottomNav.ActiveIndicator"
         parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
         <item name="android:color">@color/primary_container</item>
+    </style>
+
+
+    <!--
+      The action bar's inner Toolbar, with its content insets zeroed.
+
+      Toolbar lays its children out as [navigation] [logo] [title] [custom view] [menu],
+      and hands the custom view whatever is LEFT once the up arrow has taken its space. A
+      view declared match_parent therefore fills a narrowed box, and anything centred in it
+      centres on that box rather than on the bar: measured on the device the wordmark sat
+      44px left of centre on a screen with no up arrow at all, and further off once one
+      appeared.
+
+      Zeroing the insets gives the custom view the full width, so its own gravity finds the
+      real middle. Safe here because the title is switched off (see MainActivity) — the
+      inset exists to keep a title clear of the navigation button, and there is no title.
+    -->
+    <style name="Widget.Fides.Toolbar" parent="Widget.Material3.Toolbar">
+        <item name="contentInsetStart">0dp</item>
+        <item name="contentInsetStartWithNavigation">0dp</item>
+        <item name="contentInsetEnd">0dp</item>
     </style>
 
 </resources>

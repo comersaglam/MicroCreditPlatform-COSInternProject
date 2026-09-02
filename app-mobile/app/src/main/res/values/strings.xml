@@ -7,12 +7,12 @@
     <!-- Login / register -->
     <string name="login_title">T-Fides</string>
     <string name="login_subtitle">Telefon numaranızla giriş yapın</string>
-    <string name="login_phone_hint">Telefon (0555 444 3322)</string>
+    <string name="login_phone_hint">Telefon (0555 111 2233)</string>
     <string name="login_button">Kod gönder</string>
-    <string name="login_code_hint">SMS kodu</string>
+    <string name="login_code_hint">SMS ile gelen kodu giriniz</string>
     <string name="login_verify_button">Giriş yap</string>
     <string name="login_edit_phone">Numarayı değiştir</string>
-    <string name="msg_login_wrong_number">Geçersiz numara, tekrar deneyin</string>
+    <string name="msg_login_wrong_number">Geçerli bir telefon numarası girin</string>
     <string name="msg_login_unreachable">Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin</string>
     <string name="msg_login_code_sent">Telefonunuza gönderilen kodu girin</string>
     <string name="msg_login_wrong_code">Kod hatalı, tekrar deneyin</string>

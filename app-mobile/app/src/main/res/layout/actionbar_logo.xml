@@ -1,48 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The T-Fides identity in the action bar: the mark, and the name beside it.
+  The T-Fides identity in the action bar: the name centred, the mark at the right end.
 
   setLogo() was the first attempt and it put the mark INSIDE the title block, where it
-  flowed with the text — drifting toward the middle on short titles and moving again on
-  every screen change. A custom view is positioned by its own gravity and stays put.
+  flowed with the text and drifted as titles changed length. A custom view is positioned
+  by its own gravity and stays put.
 
-  AT THE RIGHT END, not the left: the left belongs to the up arrow and the centre to the
-  screen's own title. The wordmark keeps the bar from reading as empty next to a small
-  mark on its own.
+  The NAME is centred in the bar rather than tucked beside the mark: a wordmark reads as
+  the app's identity when it holds the middle, and as a caption when it hangs off an icon.
+  Centring is against the whole bar, so it stays put whatever the mark's width.
 
-  The name is italic and in the brand gradient rather than plain white, so it reads as a
-  logotype rather than as a second heading competing with the title.
+  The MARK sits at the right end. Not the left, which belongs to the up arrow.
+
+  Italic and in the brand gradient so it reads as a logotype rather than as a second
+  heading competing with the screen title below it.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <LinearLayout
+    <com.example.app_mobile.view.GradientText
+        android:id="@+id/actionBarWordmark"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:fontFamily="sans-serif-medium"
+        android:letterSpacing="0.02"
+        android:text="@string/app_name"
+        android:textSize="19sp"
+        android:textStyle="italic" />
+
+    <ImageView
+        android:id="@+id/actionBarLogo"
+        android:layout_width="@dimen/logo_bar"
+        android:layout_height="@dimen/logo_bar"
         android:layout_gravity="end|center_vertical"
         android:layout_marginEnd="@dimen/space_4"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
-
-        <ImageView
-            android:id="@+id/actionBarLogo"
-            android:layout_width="@dimen/logo_bar"
-            android:layout_height="@dimen/logo_bar"
-            android:contentDescription="@string/app_name"
-            android:src="@drawable/logo_fides" />
-
-        <com.example.app_mobile.view.GradientText
-            android:id="@+id/actionBarWordmark"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/space_2"
-            android:fontFamily="sans-serif-light"
-            android:letterSpacing="0.01"
-            android:text="@string/app_name"
-            android:textSize="15sp"
-            android:textStyle="italic" />
-
-    </LinearLayout>
+        android:contentDescription="@string/app_name"
+        android:src="@drawable/logo_fides" />
 
 </FrameLayout>
