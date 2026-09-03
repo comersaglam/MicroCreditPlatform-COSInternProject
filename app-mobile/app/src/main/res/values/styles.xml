@@ -44,8 +44,10 @@
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">@dimen/button_height</item>
         <item name="android:layout_marginTop">@dimen/space_2</item>
-        <item name="android:textAppearance">@style/TextAppearance.Fides.Body</item>
-        <item name="android:gravity">start|center_vertical</item>
+        <!-- Same weight as the filled brand buttons: in the payment sheet the four options
+             sit in one list, and a lighter label on one of them would read as the odd one
+             out rather than as the deliberate choice it is. -->
+        <item name="android:textAppearance">@style/TextAppearance.Fides.Button</item>
         <item name="strokeWidth">@dimen/stroke_hairline</item>
     </style>
 
@@ -57,16 +59,24 @@
       only by an accent. Here the point is the opposite — the card exists to say whose rails
       these would be, and a bank drawn in our palette reads as our feature.
 
-      Centred rather than start-aligned, because without an icon a left-aligned label on a
-      full-width filled button leaves an empty right half that looks like a missing logo.
+      Both styles centre their label. Without an icon, a left-aligned name on a full-width
+      button leaves an empty right half that reads as a logo that failed to load.
     -->
     <style name="Widget.Fides.BrandButton" parent="Widget.Material3.Button">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">@dimen/button_height</item>
         <item name="android:layout_marginTop">@dimen/space_2</item>
-        <item name="android:textAppearance">@style/TextAppearance.Fides.Body</item>
-        <item name="android:textAllCaps">false</item>
-        <item name="cornerRadius">@dimen/radius_sm</item>
+        <!--
+          The Button appearance, not Body: sans-serif-medium rather than regular. A brand
+          name is a mark, and at regular weight on a filled ground it reads as a sentence
+          somebody typed onto a button.
+        -->
+        <item name="android:textAppearance">@style/TextAppearance.Fides.Button</item>
+        <!--
+          No cornerRadius override. Every other MaterialButton in the app takes Material's
+          own fully-rounded shape, and these had been given an 8dp square-ish corner that
+          made them the only three buttons on the screen with a different silhouette.
+        -->
         <!-- The ripple has to come from the brand's own foreground, or Material tints it
              with our primary and a blue flash crosses a green button. -->
         <item name="rippleColor">?attr/colorControlHighlight</item>
