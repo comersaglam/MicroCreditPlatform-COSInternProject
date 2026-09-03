@@ -34,11 +34,13 @@
     </style>
 
     <!--
-      A partner-account button (Turn 47, mock — deferred.md §L.3).
+      A full-width outlined button, for a route that is OURS.
 
-      Outlined rather than filled, and the outline carries the brand colour while the label
-      stays on-surface. A filled brand-coloured button would read as "connected"; an outline
-      reads as an offer, which is what these are — none of them does anything yet.
+      It was written for the partner buttons and no longer holds any: those moved to the
+      filled brand style below in Turn 47b. What is left on it is "Normal Ödeme" in the
+      payment sheet — the one working route — and outlined is exactly right for it. The
+      three brands beside it are filled in their own colours; drawing ours the same way
+      would put it in company it does not keep.
     -->
     <style name="Widget.Fides.PartnerButton" parent="Widget.Material3.Button.OutlinedButton">
         <item name="android:layout_width">match_parent</item>
