@@ -101,7 +101,7 @@ def seed(db: Session) -> None:
         ("Beyaz peynir (kg)", 3400,  250,  100),  # 0,25 kg   × 34,00 =  8,50  KDV %1
         ("Poşet",              200, 1000, 2000),  # 1 adet    ×  2,00 =  2,00  KDV %20
     ])
-    _tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ekmek, süt", "2026-07-26T07:10:00",
+    _tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ahmet Bakkal alisveris", "2026-07-26T07:10:00",
         basket_id="b_t1")
     _tx(db, "t2", "u_owner", "c1", 3000, "DEBT", "Peynir", "2026-07-21T07:40:00")
     _tx(db, "t3", "u_owner", "c1", 4000, "PAYMENT", "Nakit ödeme", "2026-07-22T15:00:00")

@@ -168,7 +168,16 @@ def _fx_series(db: Session) -> None:
     if db.execute(select(func.count()).select_from(models.FxRate)).scalar_one() > 0:
         return
 
-    usd, eur, gold, cpi = 3_180_00 / 100, 3_450_00 / 100, 2_450_00, 100_000
+    # Lira per unit, as a float, because the series is grown by multiplication and only
+    # rounded to kuruş on the way into the row.
+    #
+    # ⚠️ These were `3_180_00 / 100` and read as "31,80" at a glance -- the underscore
+    # grouping looks like a kuruş literal. It is not: 3_180_00 is 318000, so the series ran
+    # at 3.180 lira to the dollar, a hundred times high, and had done since Turn 43. Nothing
+    # caught it because nothing READ it; the first screen to show a rate (Turn 45's basket
+    # detail) rendered "0,0 USD" for a 50,00 TL entry and that is how it surfaced. Same
+    # shape as §J.7: a bug can sit in data no one consumes.
+    usd, eur, gold, cpi = 31.80, 34.50, 2_450_00, 100_000
 
     day = _RATES_FROM
     while day <= _TODAY:
