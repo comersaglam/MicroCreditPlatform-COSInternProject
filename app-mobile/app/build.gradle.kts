@@ -66,6 +66,10 @@ dependencies {
     implementation(project(":core-domain"))
     // Room-backed persistence + the Repository implementation.
     implementation(project(":core-data"))
+    // Charts for the insights screen. The only third-party UI dependency in the project;
+    // taken because Turn 46 needs bar and line charts in nine cards and hand-rolling each
+    // one is a turn's worth of Canvas work on its own. Published on JitPack only.
+    implementation(libs.mpandroidchart)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
