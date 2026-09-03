@@ -1187,9 +1187,28 @@ eski davranışa birebir dönülür.
 sonuçsuz bir kapanma görürdü, tutar diyalogu hiç açılmazdı ve **çalışan yol bozuk
 görünürdü** — yani bu bölümün korumak istediği şeyin tam tersi olurdu.
 
-**Logolar:** gerçek logo **kullanılmadı**. Lisansımız yok; her seçenek marka adıyla yazılı
-ve marka renginde kenarlıklı. Yapı Kredi'nin lacivertti (`#004990`) koyu zeminde delik gibi
-göründüğü için açılmış bir ton kullanıldı, gerekçesi `colors.xml`'de yazılı.
+**Logolar:** gerçek logo **kullanılmadı** — lisansımız yok. Her marka **kendi renkleriyle**
+yazılıyor: kendi zemini, üstünde kendi yazı rengi.
+
+| | Zemin | Yazı |
+|---|---|---|
+| Odero | `#00A94F` | beyaz |
+| Yapı Kredi | `#F5F5F5` | `#004990` |
+| TokenFlex | `#F5F5F5` | `#F47B20` |
+
+⚠️ Açık zeminler **`#F5F5F5`, saf beyaz değil**: üç adet `#FFFFFF` bu temanın `#0B0D12`
+zemininde göz alıyor ve ekranın asıl konusu olan defterden dikkati çekiyor.
+
+⚠️ **Hex kodları hafızadan verildi** (ajanın ağ erişimi yok), kullanıcı teyit etti. Gerçek
+marka kılavuzlarından doğrulanmadı.
+
+**Tur 47b'de değişti:** önce bizim paletimize uygun seçilmiş renklerle *kenarlıklıydı* — bu
+onları "bizim üç butonumuz" gibi gösteriyordu. Marka kendi renginde çizilince başkasının
+altyapısı olduğu okunuyor, ki kartın amacı bu.
+
+⚠️ **`Widget.Fides.PartnerButton` stili artık yalnız "Normal Ödeme"de** — o bizim çalışan
+yolumuz ve kenarlıklı kalması bilinçli: markalar gibi çizilseydi ait olmadığı bir kümeye
+girerdi.
 
 ### L.4 `fx_rates` verisi mock — gerçek web-fetch yok  ⚠️ AÇIK (Tur 43'te tablo geldi)
 
@@ -1591,3 +1610,34 @@ Grafik kütüphanesi **gerçek**: MPAndroidChart v3.1.0, jitpack üzerinden (bu 
 Tur 46'da eklendi, `includeGroup` ile yalnız o gruba kapsanmış). Koyu tema uyumu
 `ChartTheme.kt`'de tek yerde toplandı — kütüphanenin varsayılanları açık zemine göre ve
 koyu zeminde eksen/legend/grid görünmüyor.
+
+### L.18 Görsel yerleşim hataları hiçbir build adımında yakalanmıyor  ⚠️ AÇIK (Tur 47b)
+
+Tur 47b'nin cihaz testinde KVKK onay kutusu **ekranın dışında** kaldı: `ScrollView`
+`android:maxHeight`'ı dikkate almıyor, 1525 karakterlik metin diyalogu doldurdu ve altındaki
+checkbox taştı. Onay butonu o checkbox'a bağlı olduğu için hep pasif kaldı — metin
+onaylanamıyordu.
+
+**Bu hatayı hiçbir otomatik adım göremezdi:**
+
+| Adım | Neden görmedi |
+|---|---|
+| `compileDebugKotlin` | XML'e hiç bakmıyor |
+| `processDebugResources` | XML **geçerli**; hata ayrıştırmada değil, ölçmede |
+| Birim testler | Layout ölçümü JVM'de koşmuyor |
+| APK dex grep'i | Sınıf var, sorun görünürlükte |
+
+**Yani:** derleme yeşil, kaynak doğrulaması yeşil, ekran bozuk.
+
+**Sonuç — bu bir eksiklik değil, kalıcı bir sınır.** Görsel yerleşim yalnız ekranda
+doğrulanır. Instrumented UI testi (Espresso) bunu yakalayabilirdi ama bu repoda hiç
+instrumentation yok (§L.12) ve 8GB makinede her turda ödenecek bir bedel değil.
+
+**Pratik kural:** yeni bir **diyalog** veya **kaydırılabilir** yüzey eklendiğinde, cihazda
+üç şey kontrol edilir:
+1. En alttaki kontrol görünüyor mu (buton, checkbox, onay)
+2. Uzun metinle taşma var mı
+3. Küçük ekranda ne oluyor
+
+⚠️ Özellikle **bir kontrolün diğerini etkinleştirdiği** yerlerde: görünmeyen bir kontrol,
+etkinleştirdiği butonu sessizce sonsuza kadar pasif bırakır.

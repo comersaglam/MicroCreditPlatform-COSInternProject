@@ -3723,3 +3723,78 @@ de `compileDebugKotlin` sessiz kaldı. Bu artık bir alışkanlık olmalı: kayn
 dokunan her adımdan sonra o task koşulur.
 
 **Sıradaki:** Tur 46 + 47 için toplu cihaz senaryosu, sonra Tur 48 — admin backend.
+
+---
+
+### 2026-09-03 — Tur 46b + 47b: cihaz testi, ve onun bulduğu bir kapı hatası
+
+Tur 46 ve 47 birlikte cihazda koşuldu. **Her şey çalışıyor** — bir istisna dışında, ve o
+istisna tam da bu turların en önemli parçasıydı.
+
+#### Bulunan hata: KVKK onaylanamıyordu
+
+Kullanıcı bildirdi: *"vazgeç çalışıyor ama onay çalışmıyor."*
+
+**Sebep:** `dialog_kvkk.xml`'de `ScrollView`, `wrap_content` + `android:maxHeight="360dp"`
+ile tanımlıydı. **`ScrollView` `maxHeight`'ı dikkate almıyor** — 1525 karakterlik aydınlatma
+metni diyalogun tamamını kaplıyor, altındaki checkbox ekranın dışına taşıyordu. Onay butonu
+o checkbox'a bağlı olduğu için **hep pasif kalıyordu**.
+
+"Vazgeç"in çalışması teşhisin yarısıydı: o hiçbir şeye bağlı değil.
+
+**Düzeltme:** metin artık checkbox'tan **arta kalan** yeri alıyor (`height=0dp` +
+`weight=1`), tersi değil. Kök `LinearLayout` da `match_parent` olmak zorunda —
+`wrap_content` bir ebeveynin içinde ağırlık hiçbir şey yapmaz.
+
+⚠️ **Ne derleyici ne `processDebugResources` bunu görebilirdi.** Layout *yanlış ölçüyor*,
+ayrıştırılamıyor değil. Bu tür hatalar yalnız cihazda görünüyor — ve bu, cihaz testinin
+neden ayrı bir adım olduğunun en net örneği.
+
+⚠️ Hata **iki app'te de** vardı (dosya kopyalanarak paylaşılıyor), ikisinde de düzeltildi.
+
+#### Kullanıcı geri bildirimiyle yapılan iki düzeltme
+
+**1. Marka renkleri gerçek marka renkleri oldu.** Butonlar önce bizim paletimize uygun
+seçilmiş renklerle *kenarlıklıydı* — bu onları "bizim üç butonumuz" gibi gösteriyordu. Artık
+her marka **kendi renkleriyle dolgulu**:
+
+| | Zemin | Yazı |
+|---|---|---|
+| Odero | `#00A94F` | beyaz |
+| Yapı Kredi | `#F5F5F5` | `#004990` |
+| TokenFlex | `#F5F5F5` | `#F47B20` |
+
+Beyaz `#F5F5F5`'e kısıldı (kullanıcı tercihi): üç adet saf beyaz `#0B0D12` zeminde göz alır
+ve ekranın asıl konusu olan defterden dikkati çeker.
+
+⚠️ Hex kodları **hafızadan** verildi (ağ erişimi yok), kullanıcı teyit etti.
+
+**2. Ortak hesaplar kartı POS eşleşmesinin üstüne alındı.** Banka hesabı bağlamak, kasa
+eşleştirmekten daha büyük bir iddia; mikrokredi argümanını taşıyan kart çıkış butonundan
+hemen önce durmamalı.
+
+Yanında iki tutarlılık düzeltmesi: yazılar `TextAppearance.Fides.Button`'a geçti (zaten
+vardı, yanlışlıkla `Body` kullanılıyordu) ve **`cornerRadius` override'ı kaldırıldı** —
+uygulamadaki diğer bütün butonlar Material'ın kendi yuvarlaklığını kullanıyor, bu üçü tek
+farklı siluetti.
+
+#### Doğrulanan senaryolar
+
+- KVKK: kayıtta çıkıyor, checkbox olmadan buton pasif, **onaylanınca geçiyor**
+- Çıkış → tekrar giriş → **KVKK çıkmıyor** (`ConsentStore`'un asıl testi, ayrı dosyada
+  olduğu için `TokenStore.clear()` ona dokunamıyor)
+- Insights: alıcı sekmeyi görüyor, grafikler koyu temada okunaklı, rol çipi çalışıyor
+- Ödeme seçici: üç mock kart "yakında" diyor ve **kapanmıyor**, Normal Ödeme çalışıyor
+- Sepet detayı, kur notu (Tur 45), profil vitrini
+
+#### Öğrenilen
+
+**Bir layout'un derlenmesi, ölçülebildiği anlamına gelmiyor.** `maxHeight`'ın `ScrollView`'da
+çalışmadığını bilerek yazmıştım ama yanlış hatırladım; derleme yeşil, kaynak doğrulaması
+yeşil, ekran bozuk. [[verify-running-artifact-not-source]] ailesine bir üye daha: **görsel
+yerleşim yalnız ekranda doğrulanır.**
+
+**Kullanıcının "şu çalışmıyor ama bu çalışıyor" demesi teşhisin yarısıdır.** "Vazgeç
+çalışıyor" bilgisi, sorunu diyalogun tamamından checkbox'a bağlı olan tek butona indirdi.
+
+**Faz 6'nın mobil tarafı BİTTİ (43-47).** Sıradaki: Tur 48 — admin backend.

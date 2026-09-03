@@ -9,7 +9,8 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-09-03, Tur 46 + 47 kapandı. **Kalan: 48-49-50 (admin + panel + chatbot).**
+> Son güncelleme: 2026-09-03. **Mobil taraf BİTTİ (43-47), hepsi cihazda doğrulandı.**
+> Kalan: 48-49-50 — admin backend, web panel, chatbot.
 
 ---
 
@@ -20,8 +21,8 @@
 | 43 | fx_rates + **endeksleme** + zengin seed | ✅ kapandı (progress.md Tur 43) — cihaz doğrulaması Tur 44'e |
 | 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihazda görüldü (Tur 45b) |
 | 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 45 + 45b) |
-| 46 | Toplam kırılımı + insights | ✅ kapandı (progress.md Tur 46) — insights mock, kırılım sheet'i §L.17'ye |
-| 47 | Ödeme seçici + KVKK + profil % | ✅ kapandı (progress.md Tur 47) — cihaz senaryosu bekliyor |
+| 46 | Toplam kırılımı + insights | ✅ **kapandı ve CİHAZDA DOĞRULANDI** — insights mock (§L.17), kırılım sheet'i ertelendi |
+| 47 | Ödeme seçici + KVKK + profil % | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 47 + 47b) |
 | 48 | Admin backend | ⬜ başlamadı |
 | 49 | web-admin (React + Vite) | ⬜ başlamadı |
 | 50 | Gemini chatbot | ⬜ başlamadı |
