@@ -35,6 +35,10 @@ dependencies {
     // types must stay on its compile classpath. Hilt is stricter still — every type named in
     // an @Inject constructor has to be resolvable by the module that generates the component.
     api(project(":core-network"))
+    // ConsentStore keeps the KVKK acceptance on its own DataStore file (see
+    // data/consent/ConsentStore.kt for why it is not in TokenStore, which lives in
+    // :core-network and clears itself on every logout).
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)          // Flow-returning DAO queries + suspend
     ksp(libs.androidx.room.compiler)

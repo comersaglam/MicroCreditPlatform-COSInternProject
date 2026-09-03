@@ -34,6 +34,10 @@ dependencies {
     // `api` rather than `implementation`: :app injects TokenStore (to prime it) and reads
     // ApiResult, so those types have to stay on its compile classpath.
     api(project(":core-network"))
+    // ConsentStore keeps the KVKK acceptance on its own DataStore file (see
+    // data/consent/ConsentStore.kt for why it is not in TokenStore, which lives in
+    // :core-network and clears itself on every logout).
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)          // Flow-returning DAO queries + suspend
     ksp(libs.androidx.room.compiler)

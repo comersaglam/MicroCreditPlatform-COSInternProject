@@ -2,6 +2,8 @@ package com.example.app_pos.data.di
 
 import android.content.Context
 import androidx.room.Room
+import com.example.app_pos.data.consent.DataStoreConsentStore
+import com.example.app_pos.data.consent.ConsentStore
 import com.example.app_pos.data.OfflineFirstRepository
 import com.example.app_pos.data.db.AppDatabase
 import com.example.app_pos.data.local.LocalSource
@@ -63,4 +65,15 @@ object DataModule {
     @Provides
     @Singleton
     fun provideRepository(impl: OfflineFirstRepository): Repository = impl
+
+    /**
+     * The KVKK acceptance flag, on its own DataStore file.
+     *
+     * Not folded into TokenStore even though that is also DataStore-backed: TokenStore
+     * clears its whole file on logout, and consent has to outlive that. See ConsentStore.
+     */
+    @Provides
+    @Singleton
+    fun provideConsentStore(@ApplicationContext context: Context): ConsentStore =
+        DataStoreConsentStore(context)
 }
