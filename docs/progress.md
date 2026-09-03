@@ -3568,3 +3568,76 @@ etmesi ancak ekrana bakan bir insana saçma gelir.
 
 **Sıradaki:** Tur 46 — toplam kırılımı + insights (kullanıcı planda kendi notunu düştü:
 müşteri/satıcı insights içeriği birlikte konuşulacak).
+
+---
+
+### 2026-09-03 — Tur 47: Ödeme seçici + KVKK kapısı + profil vitrini
+
+Tur 46'dan önce yapıldı (§3'ün sıralama kuralları buna izin veriyor: 46 ve 47 birbirini
+bloklamıyor). Kullanıcı *"tur 47 hiçbir noktaya değmeyen mock noktalar sadece"* dedi —
+plan da öyle diyordu, **ama iki noktada yanlıştı.**
+
+#### Planın "birbirine değmiyor" varsayımı
+
+| Keşifte çıkan | Sonuç |
+|---|---|
+| **KVKK `TokenStore`'a konamaz.** `DataStoreTokenStore.clear()` çıkışta *tüm dosyayı* siliyor → onay her logout'ta unutulur, metin sonsuza kadar çıkardı | Ayrı `ConsentStore` yazıldı, `core-data`'da, kendi DataStore dosyasıyla |
+| **Profil alanları Room v5 gerektiriyor** ve `upsertUser` `@Upsert` olduğu için her girişte profili ezerdi | Kullanıcı vitrine indirdi (47.1) → Room'a hiç dokunulmadı |
+
+⚠️ İkinci tuzak, yazılmasaydı ileride yeniden keşfedilecekti: `signIn → mirrorUser →
+upsertUser → @Upsert` zinciri tam satır yazıyor, `UserDto`'da o alanlar yok, yani her giriş
+yerel profili siler. Kod bunu **zaten biliyor**: `storeShopNames` 400 satır aşağıda aynı
+gerekçeyi yazmış ve `existing.copy(...)` kullanmış. §L.16'ya kaydedildi.
+
+#### Yapılanlar
+
+| Parça | Ne | Gerçek mi? |
+|---|---|---|
+| **KVKK kapısı** | `requireKvkkConsent(...)` Fragment eklentisi + `ConsentStore` | ✅ **Gerçek** — onay verilmeden kayıt olunamıyor, çıkıştan sonra hatırlanıyor |
+| **Ödeme seçici** | `PaymentMethodSheet` (repodaki ilk BottomSheet), dört seçenek | Üçü mock, "Normal Ödeme" **çalışan yol** |
+| **Profil** | Doluluk çubuğu + dört KYC satırı + üç banka butonu | Tamamen vitrin (47.1) |
+
+#### Üç tasarım kararı ve gerekçeleri
+
+**1. Kapı tek yerde yaşıyor.** Üç giriş noktasının imzası farklı (`register(code)` /
+`register()` / `becomeSeller(shopName)`); fark **lambda içinde yakalanıyor**, kapıya
+ulaşmıyor. Her diyaloga ayrı checkbox koymak üç implementasyon, üç unutma şansı olurdu —
+[[approval-gate-per-entry-point]]'in tam konusu.
+
+⚠️ **Girdi kapıdan ÖNCE okunuyor.** `onGranted()` çalıştığında dış diyalog kapanmış ve
+`TextInputEditText` detach olmuş oluyor; lambda içinde okunsa boş gelirdi.
+
+**2. Mock ödeme seçenekleri `dismiss()` ETMİYOR.** Kapatsalardı çağıran taraf sonuçsuz bir
+kapanma görürdü, tutar diyalogu hiç açılmazdı ve **çalışan yol bozuk görünürdü** — §L.3'ün
+korumak istediğinin tam tersi. Bunun yerine sheet içinde bir satır açılıyor ve **kalıyor**;
+Toast olsaydı açıklayan cümle bitmeden kaybolurdu.
+
+**3. Logo kullanılmadı.** Lisans yok; marka adı + marka renginde kenarlık. Yapı Kredi'nin
+lacivertti (`#004990`) koyu zeminde delik gibi göründüğü için açıldı, gerekçesi
+`colors.xml`'de.
+
+#### Yan düzeltme
+
+`showBecomeSellerDialog()` diyalogunu alanda tutmuyor ve `onDestroyView`'da kapatmıyordu
+(iki `LoginFragment` doğru yapıyor) — üstüne KVKK diyalogu binince sızıntı iki katına
+çıkacaktı. Düzeltildi.
+
+#### Doğrulama
+
+- İki app: `assembleDebug` + tüm testler yeşil
+- **APK dex'i grep'lendi, kontrol grubuyla**: `ConsentStore`, `KvkkGateKt`,
+  `DialogKvkkBinding` ikisinde de var; `PaymentMethodSheet` **yalnız app-mobile'da** — doğru,
+  çünkü app-pos'ta `initiatePayment` hiç yok. Uydurma sınıf 0
+- **`showPayDialog()` gövdesine dokunulmadığı diff ile doğrulandı**, hatırlamayla değil
+- ⬜ **Cihaz senaryosu bekliyor**
+
+#### Öğrenilen
+
+**Bir planın "birbirine değmiyor" demesi ölçüm değil, tahmindir.** Bu tur gerçekten üç
+bağımsız parçaydı — ama planın önerdiği *depolama yeri* (TokenStore) sessiz bir bug
+taşıyordu ve ancak `clear()`'ın gövdesi okununca görüldü. Mock bir tur bile, dokunduğu
+altyapının davranışını doğrulamayı gerektiriyor.
+
+**Sıradaki:** Tur 47 cihaz senaryosu (özellikle: çıkış→giriş sonrası KVKK **çıkmamalı**, ve
+app-pos ayrı doğrulanmalı), sonra Tur 46 — kullanıcı planda not düştü: müşteri/satıcı
+insights içeriği birlikte konuşulacak.

@@ -1165,17 +1165,31 @@ kararını bozar. Doğru yol **ters kayıt**: düzeltme, ters yönde yeni bir sa
 görüntüleme demek — sunum kapsamı dışında. Panelde bunu **açıklayan bir not** gösterilir;
 "yapılamadı" değil, "bilerek böyle" mesajı verir.
 
-### L.3 TokenFlex / Odero / Yapı Kredi butonları görsel  ⬜ PLANLANDI (Tur 47)
+### L.3 TokenFlex / Odero / Yapı Kredi butonları görsel  ✅ UYGULANDI (Tur 47)
 
-Ödeme yöntemi seçicideki ilk üç kart ve profildeki üç "hesabını bağla" butonu **hiçbir
-entegrasyona bağlı değil** — seçilince "yakında" kartı çıkar.
+Ödeme yöntemi seçicideki ilk üç seçenek
+([`PaymentMethodSheet`](../app-mobile/app/src/main/java/com/example/app_mobile/ui/sellerdetail/PaymentMethodSheet.kt))
+ve profildeki üç "hesabını bağla" butonu **hiçbir entegrasyona bağlı değil** — seçilince
+"yakında" açıklaması çıkar.
 
 **Neden:** bunlar Token/Koç grubu ödeme sistemlerinin **vizyon göstergesi**. Gerçek
 entegrasyon ayrı bir iş kolu (sözleşme, anahtar, sertifikasyon).
 
-⚠️ **Bozulmaması gereken:** dördüncü kart **"Normal Ödeme"** mevcut `initiatePayment`
+⚠️ **Bozulmaması gereken:** dördüncü seçenek **"Normal Ödeme"** mevcut `initiatePayment`
 akışını sürdürür. Yani **çalışan yol seçicinin arkasında duruyor**, mock'lar onun
 önüne geçmiyor.
+
+**Tur 47'de nasıl korundu:** `showPayDialog()` gövdesine **hiç dokunulmadı** (diff ile
+doğrulandı) — sheet onun önüne eklendi. `SellerDetailFragment`'taki iki ifade silinirse
+eski davranışa birebir dönülür.
+
+⚠️ **Mock seçenekler `dismiss()` ETMİYOR** ve bu bilinçli. Kapatsalardı çağıran taraf
+sonuçsuz bir kapanma görürdü, tutar diyalogu hiç açılmazdı ve **çalışan yol bozuk
+görünürdü** — yani bu bölümün korumak istediği şeyin tam tersi olurdu.
+
+**Logolar:** gerçek logo **kullanılmadı**. Lisansımız yok; her seçenek marka adıyla yazılı
+ve marka renginde kenarlıklı. Yapı Kredi'nin lacivertti (`#004990`) koyu zeminde delik gibi
+göründüğü için açılmış bir ton kullanıldı, gerekçesi `colors.xml`'de yazılı.
 
 ### L.4 `fx_rates` verisi mock — gerçek web-fetch yok  ⚠️ AÇIK (Tur 43'te tablo geldi)
 
@@ -1220,10 +1234,16 @@ müşterilerin borcuna eklenen enflasyon farkı da uydurma bir orandan geliyor. 
 sadeleşiyor. 100'den başlayan seri ile 100000'den başlayan aynı cevabı veriyor — kaynak
 değiştiğinde çağıranların hiçbiri etkilenmiyor.
 
-### L.5 TC / kimlik fotoğrafı yerelde kalıyor — KVKK kararı  ⬜ PLANLANDI (Tur 47)
+### L.5 TC / kimlik fotoğrafı yerelde kalıyor — KVKK kararı  ✅ KARAR GEÇERLİ (Tur 47)
 
-Profil tamamlama alanları (`tcNo`, `idPhotoUri`, `birthDate`, `address`) Room'a yazılır,
-**backend'e hiç gitmez**. Doluluk yüzdesi gerçek hesaplanır ama veri cihazı terk etmez.
+⚠️ **Tur 47'de kapsam DARALDI, §L.16'ya bak.** Bu bölüm *"Room'a yazılır"* diyordu; öyle
+olmadı. Profil alanları **hiçbir yere yazılmıyor** — ekranda sabit değerler duruyor
+(kullanıcı kararı 47.1). Aşağıdaki KVKK gerekçesi aynen geçerli ve KVKK aydınlatma metnine
+de bu turda düz Türkçeyle girdi: *"yalnızca bu cihazda saklanır."*
+
+Gerçek implementasyona geçilirse alanlar (`tcNo`, `idPhotoUri`, `birthDate`, `address`)
+Room'a yazılır, **backend'e hiç gitmez**. Doluluk yüzdesi gerçek hesaplanır ama veri
+cihazı terk etmez.
 
 **Neden:** TC kimlik numarası ve kimlik fotoğrafı KVKK'nın **özel nitelikli veri**
 tarafına yakın duruyor. Demo için sunucuya taşımanın hiçbir faydası yok, anlatımı ise
@@ -1476,3 +1496,50 @@ atlanıyor.
 **Daha iyi çözüm (ileride):** testler kendi onaylarını `POST /approvals` ile kursun — aynı
 dosyadaki diğer 31 test zaten böyle çalışıyor. O zaman seed'den bağımsız olurlar ve kural
 her koşulda test edilir.
+
+### L.16 Profil tamamlama bir VİTRİN — hiçbir alan saklanmıyor  ⬜ PLANLANDI (Tur 47'de görsel)
+
+Profil ekranındaki doluluk çubuğu (%83), TC (`123******89`), doğum tarihi, adres ve kimlik
+fotoğrafı satırları **sabit string**. Girdi alınmıyor, hiçbir yere yazılmıyor, çubuk
+kıpırdamıyor. Kullanıcı kararı (47.1): *"sadece mock olarak yazalım, fonksiyonel olmasına
+gerek yok."*
+
+**Neden vitrin bırakıldı — keşifte çıkan iki tuzak:**
+
+**1. Room'un yıkıcı fallback'i bu alanları kalıcı siler.**
+`fallbackToDestructiveMigration(dropAllTables = true)` her şema bump'ında yerel kopyayı
+siliyor. Bugüne kadarki her bump'ın gerekçesi *"sunucu her satırın sahibi, sonraki pull
+geri getirir"*di (`AppDatabase.kt` yorumları). Bu dört alan **sunucuda yok** (§L.5), yani
+o gerekçe onlar için geçerli değil: bir sonraki bump onları geri getirilemez biçimde siler.
+Gerçek implementasyon ya elle `Migration` yazmayı ya da alanları Room dışına almayı
+gerektirir.
+
+**2. `upsertUser` her girişte profili ezer.** ⚠️ Bu, yazılmasaydı ileride yeniden
+keşfedilecek bir bug:
+
+```
+signIn() → mirrorUser(dto.user) → local.upsertUser(user.toDomain())
+                                → users.upsert(...)   ← @Upsert = TAM SATIR değiştirir
+```
+
+`UserDto`'da `tcNo`/`birthDate`/`address` **yok** (backend `models.py`/`schemas.py`
+doğrulandı), yani wire'dan gelen `User`'ın bu alanları `null`. `@Upsert` tam satır
+yazdığı için **her girişte yerel profil silinirdi.**
+
+Çözümü kod zaten biliyor: `RoomLocalDataSource.storeShopNames` 400 satır aşağıda tam bu
+gerekçeyi yazmış — *"blanket upsert kullanıcının kendi satırını ezip profilini siler"* —
+ve `existing.copy(...)` ile sadece ilgili alanları güncelliyor. `upsertUser` de aynısını
+yapmalı: `findById` → varsa yerel alanları koru.
+
+**Yapılması gereken (ileride, sırayla):**
+1. `User` + `UserEntity`'ye dört nullable alan, **`createdAt`'ten SONRA** ve `= null`
+   varsayılanla — aksi hâlde app-pos'un `SessionFake.testUser()` ve
+   `CustomerSelectViewModelTest`'indeki konumsal `User(...)` çağrıları sessizce kayar
+2. `AppDatabase` v5 + yukarıdaki migration kararı
+3. `upsertUser` koruması (2. madde)
+4. Doluluk yüzdesi `core-domain`'de saf fonksiyon + test ([[prove-the-test-fails-first]])
+
+⚠️ **Kimlik fotoğrafı için ayrıca:** `PickVisualMedia` API 33+'ta **kalıcı olmayan** URI
+izni veriyor; `takePersistableUriPermission` orada `SecurityException` atıyor. Ayrıca
+projede görüntü yükleme kütüphanesi yok (Coil/Glide). Yani gerçek implementasyonda URI
+saklanabilir ama fotoğrafın yeniden açılışta render edilmesi ayrı bir iştir.

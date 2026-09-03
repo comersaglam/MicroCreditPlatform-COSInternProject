@@ -9,7 +9,7 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-09-03, Tur 45 + 45b kapandı (cihazda doğrulandı).
+> Son güncelleme: 2026-09-03, Tur 47 kapandı (Tur 46'dan önce yapıldı — sıra §3'e göre serbest).
 
 ---
 
@@ -21,7 +21,7 @@
 | 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihazda görüldü (Tur 45b) |
 | 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 45 + 45b) |
 | 46 | Toplam kırılımı + insights | ⬜ başlamadı |
-| 47 | Ödeme seçici + KVKK + profil % | ⬜ başlamadı |
+| 47 | Ödeme seçici + KVKK + profil % | ✅ kapandı (progress.md Tur 47) — cihaz senaryosu bekliyor |
 | 48 | Admin backend | ⬜ başlamadı |
 | 49 | web-admin (React + Vite) | ⬜ başlamadı |
 | 50 | Gemini chatbot | ⬜ başlamadı |
@@ -349,10 +349,28 @@ akışını sürdürür — çalışan yol bozulmuyor.**
 demek değil. Tur 41 bunu pahalı öğretti.
 
 Kaydırılabilir standart aydınlatma metni + *"Okudum, onaylıyorum"* checkbox;
-onaylanmadan kayıt butonu pasif. Metin `strings.xml`'de `kvkk_text`. Onay yerel
-olarak `TokenStore`'a yazılır, backend'e gitmez.
+onaylanmadan kayıt butonu pasif. Metin `strings.xml`'de `kvkk_text`. Onay yerel olarak
+saklanır, backend'e gitmez.
+
+⚠️ **`TokenStore`'a DEĞİL.** Bu plan öyle diyordu ama uzun fitilli bir bug olurdu:
+`DataStoreTokenStore.clear()` çıkışta **tüm dosyayı** siliyor, yani onay her logout'ta
+unutulur ve metin sonsuza kadar yeniden çıkardı. Tur 47'de ayrı bir
+[`ConsentStore`](../app-mobile/core-data/src/main/java/com/example/app_pos/data/consent/ConsentStore.kt)
+yazıldı (`preferencesDataStore(name = "consent")`, `core-data`'da) — ayrı dosya,
+`clear()` erişemiyor.
+
+**Kapı tek yerde:** `requireKvkkConsent(...)` Fragment eklentisi, üç çağrı noktası da onu
+kullanıyor. Üçünün imzası farklı (`register(code)` / `register()` /
+`becomeSeller(shopName)`); fark lambda içinde yakalanıyor, kapıya ulaşmıyor.
 
 **Profil tamamlama**
+
+⚠️ **Tur 47'de VİTRİNE indirildi** (kullanıcı kararı 47.1): alanlar sabit string, girdi
+alınmıyor, hiçbir yere yazılmıyor, doluluk çubuğu %83'te sabit. Room'a **dokunulmadı**.
+Gerekçe ve gerçek implementasyonun gerektirdikleri [deferred.md §L.16](deferred.md)'da —
+özellikle `upsertUser`'ın `@Upsert` olması yüzünden her girişte profili ezeceği tuzağı.
+
+Aşağıdaki plan metni gerçek implementasyon için geçerliliğini koruyor:
 
 `UserEntity` += `tcNo, idPhotoUri, birthDate, address` — **yerel-only**.
 
