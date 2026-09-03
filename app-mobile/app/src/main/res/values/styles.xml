@@ -33,4 +33,19 @@
         <item name="strokeColor">@color/credit_stroke</item>
     </style>
 
+    <!--
+      A partner-account button (Turn 47, mock — deferred.md §L.3).
+
+      Outlined rather than filled, and the outline carries the brand colour while the label
+      stays on-surface. A filled brand-coloured button would read as "connected"; an outline
+      reads as an offer, which is what these are — none of them does anything yet.
+    -->
+    <style name="Widget.Fides.PartnerButton" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/button_height</item>
+        <item name="android:layout_marginTop">@dimen/space_2</item>
+        <item name="android:textAppearance">@style/TextAppearance.Fides.Body</item>
+        <item name="android:gravity">start|center_vertical</item>
+        <item name="strokeWidth">@dimen/stroke_hairline</item>
+    </style>
 </resources>

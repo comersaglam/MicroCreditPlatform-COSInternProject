@@ -125,4 +125,18 @@
          Zero used to take the "payment received" green and announce an event that had
          not happened. -->
     <color name="balance_settled">#6B7280</color>
+    <!--
+      Turn 47: mock partner brands (deferred.md §L.3).
+
+      These are brand-ADJACENT, not exact brand hexes, and the difference is deliberate:
+      Yapı Kredi's navy is #004990, which on this theme's #0B0D12 ground reads as a hole
+      rather than a mark. Each is lifted until it holds its own against the dark surface
+      while still being recognisably the right colour.
+
+      They are fills, never text — same rule as the brand blue (§2): saturated colour on
+      near-black fails contrast as type and passes easily as a chip with white on top.
+    -->
+    <color name="brand_tokenflex">#5B87FF</color>
+    <color name="brand_odero">#F97316</color>
+    <color name="brand_yapikredi">#1E6FBF</color>
 </resources>

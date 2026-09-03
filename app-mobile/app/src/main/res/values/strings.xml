@@ -196,4 +196,38 @@
     -->
     <string name="tx_detail_fx">Alındığı gün %1$s USD ediyordu</string>
     <string name="tx_detail_fx_equivalent">Bugünkü kurla %1$s</string>
+    <!-- ============ Turn 47: profile showcase (all mock, see deferred.md §L.16) ======= -->
+    <!--
+      Fixed values, not bindings. The bar sits at 83% because five of six fields are filled
+      and the address is not — a meter pinned at 100% would be a picture of nothing.
+    -->
+    <string name="profile_completion_label">PROFİL DOLULUĞU</string>
+    <string name="profile_completion_value">%83</string>
+    <string name="profile_missing_fields">Eksik: adres</string>
+
+    <string name="profile_tc_label">TC Kimlik No</string>
+    <!-- Masked on purpose: a full national id on screen outlives the demo in the recording,
+         and it would contradict the consent text's promise that it stays on the device. -->
+    <string name="profile_tc_masked">123******89</string>
+    <string name="profile_birthdate_label">Doğum Tarihi</string>
+    <string name="profile_birthdate_value">01.01.1990</string>
+    <string name="profile_address_label">Adres</string>
+    <string name="profile_idphoto_label">Kimlik Fotoğrafı</string>
+    <string name="profile_idphoto_added">Eklendi ✓</string>
+    <string name="profile_add">Ekle</string>
+    <string name="profile_view">Görüntüle</string>
+
+    <!-- Partner accounts: the microcredit argument, stated as three buttons. -->
+    <string name="profile_partners_label">ORTAK HESAPLAR</string>
+    <string name="profile_partners_hint">Defterinizi bir kredi geçmişine dönüştürün.</string>
+    <string name="partner_tokenflex">TokenFlex ile bağlan</string>
+    <string name="partner_odero">Odero ile bağlan</string>
+    <string name="partner_yapikredi">Yapı Kredi ile bağlan</string>
+
+    <!-- Every mock lands here. A dialog rather than a Toast: on a presentation screen a
+         Toast is gone before the sentence ends, and this one carries the REASON, which is
+         the part worth saying out loud. -->
+    <string name="mock_soon_title">Yakında</string>
+    <string name="mock_soon_message">Bu ekran, entegrasyonun nasıl görüneceğini gösteriyor.\n\nGerçek bağlantı ayrı bir iş kolu: sözleşme, API anahtarı ve sertifikasyon gerekiyor. Ürünün tarafı hazır — eksik olan kurumsal taraf.</string>
+    <string name="mock_soon_dismiss">Anladım</string>
 </resources>
