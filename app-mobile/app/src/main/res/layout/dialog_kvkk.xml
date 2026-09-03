@@ -2,24 +2,33 @@
 <!--
   The KVKK notice, as a dialog body.
 
-  The ScrollView is the point of the whole layout: the text is long on purpose, and it has
-  to be possible to reach the bottom of it. A dialog message that silently clips would be a
-  consent nobody could actually read before giving.
-
-  maxHeight rather than a fixed height, so the dialog is only as tall as it needs to be on
-  a large screen and still scrolls on a small one.
+  Two things have to be true at once and they pull against each other: the notice is long
+  on purpose and must be readable to the end, and the checkbox that gates acceptance must
+  always be reachable. The scrolling text therefore takes what is LEFT after the checkbox
+  has its space, never the other way round.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:orientation="vertical"
     android:paddingHorizontal="@dimen/space_5"
     android:paddingTop="@dimen/space_3">
 
+    <!--
+      ⚠️ height=0dp with a weight, NOT wrap_content with a maxHeight.
+
+      It was the latter, and the checkbox below it never appeared: android:maxHeight is not
+      honoured by ScrollView, so 1500 characters of notice took the whole dialog and pushed
+      the checkbox off the bottom of the screen. With the checkbox unreachable the positive
+      button stayed permanently disabled — the notice could be cancelled but never accepted.
+
+      A weight of 1 makes the text take what is LEFT after the checkbox has its space, so
+      the control the button waits on is always the one guaranteed to be on screen.
+    -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:maxHeight="360dp"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:scrollbars="vertical">
 
         <TextView
