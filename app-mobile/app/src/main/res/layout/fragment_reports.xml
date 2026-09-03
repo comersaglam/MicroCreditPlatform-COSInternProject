@@ -1,21 +1,326 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Insights: six cards, one story, read from whichever end of the counter you stand at.
+
+  ⚠️ EVERY FIGURE HERE IS MOCK (Turn 46, decision 46.1 — deferred.md §L.17). The data comes
+  from InsightsMockData, not from the ledger. Why is written there.
+
+  The order is the argument: your rhythm → the gap between booking and collecting → what
+  inflation did → the detail. The inflation card sits in the middle because it is the
+  product's actual claim, and it is the only one painted in the indexation colour.
+
+  ⚠️ NO bg_card_focus. The brand stripe is capped at six screens (§2 of the phase plan) and
+  both budgets are spent. These use bg_surface_block, the flat lifted panel added in Turn 45.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/reportsPlaceholder"
-        android:layout_width="wrap_content"
+    <!--
+      Role switch. Visible only when the account is also a seller — a pure buyer has one
+      reading and no choice to make. app-pos has no equivalent: it is single-role, and a
+      toggle with one option is a control that cannot do anything.
+    -->
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/roleGroup"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center"
-        android:text="@string/reports_placeholder"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:textSize="16sp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_3"
+        android:visibility="gone"
+        app:selectionRequired="true"
+        app:singleSelection="true"
+        tools:visibility="visible">
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipRoleBuyer"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="@string/insights_role_buyer" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipRoleSeller"
+            style="@style/Widget.Material3.Chip.Filter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/insights_role_seller" />
+    </com.google.android.material.chip.ChipGroup>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="@dimen/space_5">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="@dimen/screen_edge">
+
+            <!-- ============ 1. Collection rate ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_4"
+                android:background="@drawable/bg_surface_block"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:id="@+id/rateLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="TAHSİLAT ORANI" />
+
+                <TextView
+                    android:id="@+id/rateValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_1"
+                    android:textAppearance="@style/TextAppearance.Fides.Display"
+                    tools:text="%81" />
+
+                <!--
+                  The split bar: two weighted Views, no Canvas. Collected against
+                  outstanding, in the four-tone system's own colours.
+                -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="10dp"
+                    android:layout_marginTop="@dimen/space_3"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:id="@+id/rateBarPaid"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="81"
+                        android:background="@color/payment_received" />
+
+                    <View
+                        android:id="@+id/rateBarRest"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="19"
+                        android:background="@color/balance_due" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/rateDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_2"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="906.656,00 TL tahsil edildi · 1.116.744,00 TL yazıldı" />
+            </LinearLayout>
+
+            <!-- ============ 2. Monthly trend ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_3"
+                android:background="@drawable/bg_surface_block"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:id="@+id/trendLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="AYLIK CİRO" />
+
+                <TextView
+                    android:id="@+id/trendBusiest"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_1"
+                    android:textAppearance="@style/TextAppearance.Fides.Body"
+                    tools:text="En yoğun ay Mart — 121.753,00 TL" />
+
+                <com.github.mikephil.charting.charts.BarChart
+                    android:id="@+id/trendChart"
+                    android:layout_width="match_parent"
+                    android:layout_height="140dp"
+                    android:layout_marginTop="@dimen/space_3" />
+            </LinearLayout>
+
+            <!-- ============ 3. Debt vs payment ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_3"
+                android:background="@drawable/bg_surface_block"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:id="@+id/compareLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="VERESİYE VE TAHSİLAT" />
+
+                <com.github.mikephil.charting.charts.BarChart
+                    android:id="@+id/compareChart"
+                    android:layout_width="match_parent"
+                    android:layout_height="140dp"
+                    android:layout_marginTop="@dimen/space_3" />
+
+                <!-- A hand-written legend: the library's own is switched off, and two
+                     series without a key is a chart nobody can read. -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_2"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@color/balance_due" />
+
+                    <TextView
+                        android:id="@+id/legendDebt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/space_1"
+                        android:layout_marginEnd="@dimen/space_3"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textAppearance="@style/TextAppearance.Fides.Caption"
+                        tools:text="Veresiye" />
+
+                    <View
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@color/payment_received" />
+
+                    <TextView
+                        android:id="@+id/legendPayment"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="@dimen/space_1"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textAppearance="@style/TextAppearance.Fides.Caption"
+                        tools:text="Tahsilat" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ============ 4. Inflation — the argument ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_3"
+                android:background="@drawable/bg_surface_block"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:id="@+id/inflationLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="ENFLASYONDAN KURTARILAN" />
+
+                <TextView
+                    android:id="@+id/inflationValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_1"
+                    android:textColor="@color/balance_indexation"
+                    android:textAppearance="@style/TextAppearance.Fides.Display"
+                    tools:text="118.430,00 TL" />
+
+                <TextView
+                    android:id="@+id/inflationDetail"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_2"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="Endeksleme olmasaydı bu tutar defterde erimiş olacaktı." />
+            </LinearLayout>
+
+            <!-- ============ 5. Categories ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_3"
+                android:background="@drawable/bg_surface_block"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:id="@+id/categoryLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/space_2"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="NE SATIYORUM" />
+
+                <!-- Rows are added from code: label, proportional bar, amount. Plain
+                     weighted Views, so this needs no chart and no Canvas. -->
+                <LinearLayout
+                    android:id="@+id/categoryRows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- ============ 6. Ranked list ============ -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_3"
+                android:background="@drawable/bg_surface_block"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:id="@+id/rankedLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="@dimen/space_2"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    tools:text="EN ÇOK BORCU OLANLAR" />
+
+                <LinearLayout
+                    android:id="@+id/rankedRows"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!--
+              The mock notice, on screen rather than only in the docs. Somebody presenting
+              this should not have to remember which numbers are real, and somebody seeing
+              it for the first time should not have to guess.
+            -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/space_4"
+                android:gravity="center"
+                android:text="@string/insights_mock_notice"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:textAppearance="@style/TextAppearance.Fides.Caption" />
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</LinearLayout>

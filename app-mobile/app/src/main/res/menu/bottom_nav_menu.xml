@@ -8,6 +8,19 @@
         android:icon="@drawable/ic_debts"
         android:title="@string/nav_debts" />
 
+    <!--
+      Insights, for buyers too (Turn 46). The destination has always been in
+      dashboard_graph.xml, but this item was only in the seller menu — so a pure buyer had
+      no way to reach a screen that has a whole half written for them.
+
+      Third position, matching where it sits in the seller menu, so the tab does not move
+      under someone who becomes a seller.
+    -->
+    <item
+        android:id="@+id/reportsFragment"
+        android:icon="@drawable/ic_reports"
+        android:title="@string/nav_reports" />
+
     <item
         android:id="@+id/approvalsFragment"
         android:icon="@drawable/ic_approvals"

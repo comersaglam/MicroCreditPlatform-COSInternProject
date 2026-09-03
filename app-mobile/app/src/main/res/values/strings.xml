@@ -61,7 +61,6 @@
 
     <!-- Seller: reports placeholder tab -->
     <string name="nav_reports">Detaylı Bilgiler</string>
-    <string name="reports_placeholder">Detaylı bilgiler yakında:\ntarih aralığı, toplam borç, toplam tahsilat</string>
 
     <!-- Seller: customer list (Müşterilerim) -->
     <string name="nav_customers">Müşterilerim</string>
@@ -267,4 +266,38 @@
     <!-- Shown in place, and it STAYS: a Toast would be gone before the sentence explaining
          it ends, which on a presented screen is the difference that matters. -->
     <string name="payment_method_soon">Bu yöntem yakında. Ödeme kuruluşu ve banka entegrasyonları sözleşme ve sertifikasyon gerektiriyor — ürün tarafı hazır.\n\nŞimdilik "Normal Ödeme" ile devam edebilirsiniz.</string>
+    <!-- ============ Turn 46: insights (ALL FIGURES MOCK — deferred.md §L.17) ========= -->
+    <string name="insights_role_buyer">Alıcı</string>
+    <string name="insights_role_seller">Satıcı</string>
+
+    <!-- Seller wording -->
+    <string name="insights_rate_label_seller">TAHSİLAT ORANI</string>
+    <string name="insights_trend_label_seller">AYLIK CİRO</string>
+    <string name="insights_compare_label_seller">VERESİYE VE TAHSİLAT</string>
+    <string name="insights_inflation_label_seller">ENFLASYONDAN KURTARILAN</string>
+    <string name="insights_inflation_detail_seller">Endeksleme olmasaydı bu tutar defterde erimiş olacaktı.</string>
+    <string name="insights_category_label_seller">NE SATIYORUM</string>
+    <string name="insights_ranked_label_seller">EN ÇOK BORCU OLANLAR</string>
+    <string name="insights_rate_detail_seller">%1$s tahsil edildi · %2$s yazıldı</string>
+    <string name="insights_legend_debt_seller">Veresiye</string>
+    <string name="insights_legend_payment_seller">Tahsilat</string>
+
+    <!-- Buyer wording: the same six cards read from the other side of the counter -->
+    <string name="insights_rate_label_buyer">ÖDEME ORANIM</string>
+    <string name="insights_trend_label_buyer">AYLIK HARCAMAM</string>
+    <string name="insights_compare_label_buyer">BORÇ VE ÖDEME</string>
+    <string name="insights_inflation_label_buyer">ENFLASYONA KAPTIRDIĞIM</string>
+    <string name="insights_inflation_detail_buyer">Borcunuz beklerken enflasyon kadar büyüdü.</string>
+    <string name="insights_category_label_buyer">NE ALIYORUM</string>
+    <string name="insights_ranked_label_buyer">HANGİ DÜKKANA BORÇLUYUM</string>
+    <string name="insights_rate_detail_buyer">%1$s ödendi · %2$s borçlanıldı</string>
+    <string name="insights_legend_debt_buyer">Borç</string>
+    <string name="insights_legend_payment_buyer">Ödeme</string>
+
+    <string name="insights_busiest">En yoğun ay %1$s — %2$s</string>
+    <string name="insights_percent">%%%1$d</string>
+
+    <!-- On screen, not just in the docs: whoever presents this should not have to remember
+         which numbers are real, and whoever sees it first should not have to guess. -->
+    <string name="insights_mock_notice">Bu ekrandaki rakamlar örnek verilerdir.</string>
 </resources>

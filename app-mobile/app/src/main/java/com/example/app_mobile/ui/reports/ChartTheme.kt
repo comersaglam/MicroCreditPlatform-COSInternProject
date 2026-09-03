@@ -81,3 +81,60 @@ fun BarChart.showMonthly(
     setExtraOffsets(0f, 4f, 0f, 0f)
     invalidate()
 }
+
+/**
+ * Two series side by side, month for month — booked against collected.
+ *
+ * The chart that carries the argument: where the red bar outruns the green one, the shop is
+ * lending faster than it is being paid back. A single series cannot say that.
+ *
+ * ⚠️ The group geometry has to add up exactly. barWidth * 2 + barSpace * 2 + groupSpace must
+ * equal 1, or the bars drift out of their month's slot and stop lining up with the label
+ * underneath — a chart that quietly attributes June's figure to July.
+ */
+fun BarChart.showPaired(
+    first: List<Long>,
+    second: List<Long>,
+    labels: List<String>
+) {
+    applyFidesBase(context)
+
+    fun set(values: List<Long>, colorRes: Int) = BarDataSet(
+        values.mapIndexed { index, value -> BarEntry(index.toFloat(), value / 100f) },
+        ""
+    ).apply {
+        color = ContextCompat.getColor(context, colorRes)
+        setDrawValues(false)
+        highLightAlpha = 0
+    }
+
+    val barWidth = 0.38f
+    val barSpace = 0.02f
+    val groupSpace = 1f - (barWidth + barSpace) * 2
+
+    data = BarData(
+        set(first, R.color.balance_due),
+        set(second, R.color.payment_received)
+    ).apply { this.barWidth = barWidth }
+
+    xAxis.apply {
+        position = XAxis.XAxisPosition.BOTTOM
+        setDrawGridLines(false)
+        setDrawAxisLine(false)
+        textColor = ContextCompat.getColor(context, R.color.on_surface_variant)
+        textSize = 9f
+        granularity = 1f
+        setCenterAxisLabels(true)
+        valueFormatter = IndexAxisValueFormatter(labels)
+        axisMinimum = 0f
+        axisMaximum = labels.size.toFloat()
+    }
+
+    axisLeft.isEnabled = false
+    axisRight.isEnabled = false
+
+    // Must come after the axis bounds above: grouping reads them.
+    groupBars(0f, groupSpace, barSpace)
+    setExtraOffsets(0f, 4f, 0f, 0f)
+    invalidate()
+}
