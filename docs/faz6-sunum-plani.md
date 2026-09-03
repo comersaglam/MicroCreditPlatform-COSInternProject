@@ -9,7 +9,7 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-09-03, Tur 47 kapandı (Tur 46'dan önce yapıldı — sıra §3'e göre serbest).
+> Son güncelleme: 2026-09-03, Tur 46 + 47 kapandı. **Kalan: 48-49-50 (admin + panel + chatbot).**
 
 ---
 
@@ -20,7 +20,7 @@
 | 43 | fx_rates + **endeksleme** + zengin seed | ✅ kapandı (progress.md Tur 43) — cihaz doğrulaması Tur 44'e |
 | 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihazda görüldü (Tur 45b) |
 | 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 45 + 45b) |
-| 46 | Toplam kırılımı + insights | ⬜ başlamadı |
+| 46 | Toplam kırılımı + insights | ✅ kapandı (progress.md Tur 46) — insights mock, kırılım sheet'i §L.17'ye |
 | 47 | Ödeme seçici + KVKK + profil % | ✅ kapandı (progress.md Tur 47) — cihaz senaryosu bekliyor |
 | 48 | Admin backend | ⬜ başlamadı |
 | 49 | web-admin (React + Vite) | ⬜ başlamadı |
@@ -290,7 +290,14 @@ satıra tıkla → üç kalem görünsün. §J.6'nın SQL sorgusu artık UI'da d
 
 ### Tur 46 — Toplam kırılımı + insights ekranı
 
-Bu turda neler yapacağımızı, müşteri ve satıcı insightsta neler göstereceğimizi tartışıp konuşacağız
+⚠️ **Tur 46 MOCK olarak uygulandı** (kullanıcı kararı 46.1: *"vizyon göstermek esas, sunum
+yakında"*). Altı kart, iki rol, gerçek grafik kütüphanesi — ama her rakam sabit.
+Gerekçesi ve gerçek implementasyonun gerektirdikleri [deferred.md §L.17](deferred.md)'de.
+
+⚠️ **Toplam kırılımı BottomSheet'i bu turda YAPILMADI.** `/breakdown` ucu canlı ama insights
+enflasyon argümanını zaten taşıyor; sheet'in dört rakamından üçü aynı şeyi ikinci bir
+kaynaktan söylerdi — Tur 45'in *"tek rakam iki kaynaktan gelmesin"* kuralı. Yapılırsa
+kuralı: sadece `projected_3m_minor` ve fx çiftini telden al, diğer dördünü yerelden türet.
 **Neden burada:** fx verisi (43) + tema/sparkline (44) hazır. `ReportsFragment` bugün
 tek TextView'lık boş bir placeholder.
 

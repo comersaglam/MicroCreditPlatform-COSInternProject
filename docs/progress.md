@@ -3641,3 +3641,85 @@ altyapının davranışını doğrulamayı gerektiriyor.
 **Sıradaki:** Tur 47 cihaz senaryosu (özellikle: çıkış→giriş sonrası KVKK **çıkmamalı**, ve
 app-pos ayrı doğrulanmalı), sonra Tur 46 — kullanıcı planda not düştü: müşteri/satıcı
 insights içeriği birlikte konuşulacak.
+
+---
+
+### 2026-09-03 — Tur 46: Insights ekranları (mock veri, gerçek grafikler)
+
+Faz 6'nın çekirdek dördü (43-44-45-47) bitmişti; 46 son parçaydı. Kullanıcı kararı turu
+baştan şekillendirdi: *"vizyon göstermek esas, sunum yakında"* → **rakamlar mock, kütüphane
+gerçek.**
+
+#### Önce ölçtüm, sonra planladım — ve üç şey planı değiştirdi
+
+| Ölçüm | Sayı | Sonucu |
+|---|---|---|
+| Demo hesaplarında INDEXATION | **8 satıcının hiçbirinde yok** | Enflasyon kartı her demo hesabında **0,00 TL** gösterirdi |
+| Sepetli işlem | **5801'de 1** | Kalem bazında "ne almışlar" çizilemez |
+| `description` kategorileri | 10 kategori, **4763/4768 borç** | Aynı soru kategori düzeyinde cevaplanabilirdi |
+
+⚠️ Birincisi [[verify-the-end-you-are-standing-on]]'un tekrarıydı: endeksleme **tembel**,
+okuma yapılmadan satır oluşmuyor. Kod doğru, veri yok — ve ürünün ana argümanı sıfır
+görünürdü. Kullanıcının mock kararı bu riski tamamen ortadan kaldırdı.
+
+#### İlk adım: kütüphanenin gerçekten çözüldüğünü kanıtlamak
+
+MPAndroidChart **jitpack**'te ve bu projede jitpack tanımlı değildi. Hiçbir kart yazmadan
+önce bağımlılığın indiğini doğruladım (`:app:dependencies` → `com.github.PhilJay:
+MPAndroidChart:v3.1.0` classpath'te). Tıkansaydı turun şekli değişecekti.
+
+⚠️ Depo `includeGroup` ile **yalnız o gruba kapsandı** — jitpack eklemek, projedeki diğer
+tüm bağımlılıkların nereden çözülebileceğini genişletmemeli.
+
+#### Yapılanlar
+
+| Ne | Detay |
+|---|---|
+| `ChartTheme.kt` | Kütüphanenin koyu tema uyumu **tek yerde** — varsayılanları açık zemine göre, koyu zeminde eksen/legend/grid görünmüyor. Dokuz kartta dokuz kez yazılmasın |
+| `InsightsMockData.kt` | İki rol, altı kart, seed'in **gerçek büyüklüklerinden türetilmiş** rakamlar (~1.1M TL borç, %58 TÜFE, Mart tepeli mevsimsel dalga) |
+| Altı kart | Tahsilat oranı → aylık trend → veresiye vs tahsilat → **enflasyon** → kategoriler → sıralı liste |
+| Rol çipi | app-mobile'da alıcı/satıcı, **alıcı varsayılan**, yalnız satıcıysa görünür. app-pos'ta **yok** |
+| Alıcı erişimi | `bottom_nav_menu.xml`'e `reportsFragment` eklendi |
+
+#### Üç tasarım kararı
+
+**1. Kartların sırası argümandır:** ritmin → yazma ile tahsil arasındaki açık → enflasyonun
+yaptığı → detay. Enflasyon kartı ortada ve `balance_indexation` renginde, çünkü ürünün asıl
+iddiası o.
+
+**2. Sıralı listeler Canvas değil, ağırlıklı düz `View`.** Altı satırlık sıralı bir listede
+oran mesajın tamamı; `layout_weight` bunu çiziyor, çizilecek/invalidate edilecek bir şey
+yok.
+
+**3. app-pos'ta çip yok.** Tek rollü bir uygulamada tek seçenekli kontrol, işlevi olmayan
+kontroldür — üstelik var olmayan ikinci bir mod ima eder. Alıcı string'leri de POS'a hiç
+taşınmadı.
+
+⚠️ **Alıcı bu sekmeye ULAŞAMIYORDU.** Nav hedefi `dashboard_graph.xml`'de baştan beri
+vardı, menü öğesi yalnız satıcı menüsündeydi — yani alıcı için yazılmış yarım ekranın kapısı
+yoktu.
+
+#### Yapılmayan: toplam kırılımı BottomSheet'i
+
+`/breakdown` ucu canlı ama **bu turda bağlanmadı**. Insights enflasyon argümanını zaten
+taşıyor; sheet'in dört rakamından üçü aynı şeyi ikinci bir kaynaktan söylerdi — Tur 45'in
+*"tek rakam iki kaynaktan gelmesin"* kuralı. §L.17'ye yazıldı.
+
+#### Doğrulama
+
+- İki app: `assembleDebug` + testler yeşil
+- **APK dex'i grep'lendi, kontrol grubuyla**: grafik sınıfları ve mock veri ikisinde de var;
+  **`chipRoleSeller` app-pos'ta 0** — olması gereken şekil
+- ⬜ Cihaz senaryosu bekliyor (Tur 47 ile birlikte koşulacak)
+
+#### Öğrenilen
+
+**En riskli bağımlılığı ilk adımda ölç.** Jitpack tanımlı değildi; kartları yazıp sonra
+bunu öğrenmek turun tamamını çöpe atardı. Beş dakikalık bir `:app:dependencies` çağrısı,
+"kütüphane kullanalım" kararının gerçekten uygulanabilir olduğunu kanıtladı.
+
+**`processDebugResources` bu turda da yakaladı** — XML yorumunda `--`. Üçüncü kez, ve üçünde
+de `compileDebugKotlin` sessiz kaldı. Bu artık bir alışkanlık olmalı: kaynak dosyaya
+dokunan her adımdan sonra o task koşulur.
+
+**Sıradaki:** Tur 46 + 47 için toplu cihaz senaryosu, sonra Tur 48 — admin backend.

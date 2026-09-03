@@ -1543,3 +1543,51 @@ yapmalı: `findById` → varsa yerel alanları koru.
 izni veriyor; `takePersistableUriPermission` orada `SecurityException` atıyor. Ayrıca
 projede görüntü yükleme kütüphanesi yok (Coil/Glide). Yani gerçek implementasyonda URI
 saklanabilir ama fotoğrafın yeniden açılışta render edilmesi ayrı bir iştir.
+
+### L.17 Insights ekranları TAMAMEN MOCK  ⬜ PLANLANDI (Tur 46'da vitrin)
+
+"Detaylı Bilgiler" sekmesindeki altı kartın **her rakamı** `InsightsMockData.kt`'den geliyor.
+Ledger'dan, Room'dan, backend'den **hiçbir şey okunmuyor**. Ekranın altında bunu söyleyen bir
+satır var (*"Bu ekrandaki rakamlar örnek verilerdir"*) — sunumu yapan kişi hangi rakamın
+canlı olduğunu hatırlamak zorunda kalmasın diye.
+
+**Kullanıcı kararı (46.1):** *"implementasyon ile uğraşmayalım, vizyon göstermek esas, sunum
+yakında."*
+
+#### Neden hesaplanmadı — ölçümlerle
+
+Para tarafı **hesaplanabilirdi**: `observeAllForSeller` / `observeAllForBuyer` her hareketi
+Room'dan reaktif olarak zaten döndürüyor. Engel şuydu:
+
+| Ölçüm | Sonuç |
+|---|---|
+| **Demo hesaplarında INDEXATION satırı YOK** — 20 satırın hepsi seed'in `u_owner`/`u_market`'ine ait | Ürünün ana argümanı olan enflasyon kartı, demo yapılacak **her hesapta 0,00 TL** gösterirdi |
+| **5801 işlemin 1'inde sepet var** | Kalem bazında "ne almışlar" hiç çizilemez |
+| `description` alanı 10 kategori, **4763/4768 borç** | Kategori bazında çizilebilirdi (gerçek implementasyonda yol bu) |
+
+⚠️ Birinci satır [[verify-the-end-you-are-standing-on]]'un tekrarıydı: endeksleme **tembel**
+tetikleniyor, yani bir okuma yapılmadan satır oluşmuyor. Kod doğru, veri yok.
+
+#### Gerçek implementasyon neye ihtiyaç duyar
+
+1. **Toplama fonksiyonları `core-domain`'e** — `Ledger.kt`'nin komşusu olarak
+   (`balanceOf` zaten orada, aynı tür aritmetik). Saf JVM + junit, yani test edilebilir;
+   `app/util/`'de test altyapısı yok. Aylık gruplama için `BalanceSeries.monthsUpTo`
+   deseni hazır — ama dikkat: o **kümülatif** bakiye üretiyor, insights **ay-başına**
+   toplam istiyor, ikisi farklı şeyler.
+2. **Endeksleme ısıtması** — demo öncesi her hesap için endeksleme tetikleyen uçlara birer
+   istek. 210.088 TL açık bakiye ve %58 kümülatif TÜFE ile ciddi rakamlar çıkar.
+3. **Kalem bazında için ayrıca:** `BasketDao`'ya toplu sorgu (`IN (:ids)` veya join —
+   bugün yalnız tek-id okuma var), domain `Transaction`'a `basketId`, ve `seed_demo.py`'ye
+   sepet yazımı. Bu üçü olmadan kart boş çalışır.
+
+⚠️ **Ay etiketleri de sabit** (`InsightsMockData.MONTHS`). Bugünden geriye hesaplansaydı
+etiketler ilerler, sabit değerler yerinde kalır ve grafik birkaç ay sonra içinde olmayan
+bir yaz iddia ederdi.
+
+#### Mock olmayan tek şey
+
+Grafik kütüphanesi **gerçek**: MPAndroidChart v3.1.0, jitpack üzerinden (bu depo projeye
+Tur 46'da eklendi, `includeGroup` ile yalnız o gruba kapsanmış). Koyu tema uyumu
+`ChartTheme.kt`'de tek yerde toplandı — kütüphanenin varsayılanları açık zemine göre ve
+koyu zeminde eksen/legend/grid görünmüyor.
