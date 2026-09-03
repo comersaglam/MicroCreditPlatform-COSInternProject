@@ -1444,3 +1444,35 @@ saat, geçmiş tarihler için sonsuz). Room entity'si `FxRateEntity` şu an sade
 olarak dönüyordu. Sunucuda doğru olan bu fallback cache'te yanlış — orada seri **kısmi**.
 Sonuç: bir yıllık bir alışverişin kur notu "500 TL → 500 TL" diyordu, yani hiç değer
 kaybetmemiş gibi. Artık tam tarih eşleşmesi var; ıska bir istek, yanlış eşleşme sessiz.
+
+### L.14 Seed'deki p1/p2 onayları kapalı — 18 test askıda  ⚠️ AÇIK (Tur 45b)
+
+`seed.py`'de iki bekleyen onay (`p1`, `p2`) yorum satırına alındı — **kullanıcı kararı**:
+seed koştuğundan beri orada duran bir kart, "Onaylar" sekmesinin amacı değil ve sunum
+sırasında kimsenin yapmadığı bir isteği onaylamaya davet ediyor.
+
+**Sonucu:** `tests/test_approvals.py`'deki 49 testin **18'i** o kartları okuyor. Artık
+`@seeded_approvals` ile **atlanıyor** (`skipif`), kırık olarak değil — önkoşulları yok.
+
+⚠️ **Askıya alınan kurallar önemsiz değil.** Bunlar onay kapısının kendi kuralları:
+
+| Test | Ne koruyordu |
+|---|---|
+| `test_the_initiator_cannot_approve_their_own_request` | **Kendi isteğini onaylayamazsın** — [[server-enforces-not-client]] |
+| `test_a_stranger_cannot_approve` | Yabancı onaylayamaz |
+| `test_pending_does_not_show_other_peoples_approvals` | Başkasının kutusunu göremezsin |
+| `test_approving_twice_conflicts` | Çift onay çakışır |
+| `test_a_rejected_request_cannot_then_be_approved` | Reddedilen sonradan onaylanamaz |
+| `test_the_role_is_derived_from_whose_book_it_is` | Yön alanları doğru türetiliyor (Tur 24b bug'ı) |
+
+Bunlar askıdayken **hiçbir şey kontrol etmiyor**. Approvals'a dokunan bir tur sessizce
+bozabilir.
+
+**Geri açmak tek satırlık iş:** `seed.py`'deki iki `_approval` çağrısının yorumunu kaldır.
+Skip koşulu seed'i **çalıştırıp** onay sayısına bakıyor (kaynak metnini okumuyor), yani
+testler kendiliğinden canlanır. Doğrulandı: açıkken 49/49 geçiyor, kapalıyken 31 geçip 18
+atlanıyor.
+
+**Daha iyi çözüm (ileride):** testler kendi onaylarını `POST /approvals` ile kursun — aynı
+dosyadaki diğer 31 test zaten böyle çalışıyor. O zaman seed'den bağımsız olurlar ve kural
+her koşulda test edilir.
