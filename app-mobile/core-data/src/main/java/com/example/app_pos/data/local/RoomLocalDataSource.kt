@@ -306,8 +306,24 @@ class RoomLocalDataSource(private val db: AppDatabase) : LocalSource {
      * A past date's rate never changes, so there is nothing to invalidate: a row here is
      * correct for as long as the table survives.
      */
+    /**
+     * A cached reading for EXACTLY this date, or null.
+     *
+     * Deliberately not the nearest earlier one, which is what the server does. The server
+     * can fall back like that because it holds the whole series, so the previous reading is
+     * genuinely the last one before the date -- a Sunday answers with Friday. This table
+     * holds only the handful of days someone has looked at, so "the most recent row on or
+     * before" can be a year off, and the caller has no way to tell.
+     *
+     * That is not hypothetical: a screen asked for the rate on an entry from last September
+     * and then for today's. The cache held one row, September's, and answered both with it.
+     * The two figures were identical, so a purchase that had lost 17% of its value rendered
+     * as having lost nothing.
+     *
+     * A miss costs one request and fills the gap. A wrong hit is silent.
+     */
     override suspend fun cachedFxRate(asOf: String): FxSnapshot? =
-        fxRates.nearest(asOf)?.let {
+        fxRates.nearest(asOf)?.takeIf { it.asOf == asOf }?.let {
             FxSnapshot(
                 asOf = it.asOf,
                 usdMinor = it.usdMinor,

@@ -339,10 +339,19 @@ class OfflineFirstRepository @Inject constructor(
         local.cachedFxRate(asOf)?.let { return it }
 
         val snapshot = (remote.fxRate(asOf) as? ApiResult.Success)?.data ?: return null
-        // Keyed by the row's OWN date, which may be earlier than the day asked for. Storing
-        // it under the requested date would invent a reading for a day the series skipped,
-        // and the next lookup would find it and believe it.
+
+        // Stored under the row's OWN date, which is the honest key: the server falls back to
+        // the last reading before the day asked for, so this may be an earlier date and
+        // saying otherwise would invent a reading for a day the series skipped.
         local.cacheFxRate(snapshot)
+
+        // And again under the date that was ASKED for, when the two differ. The cache
+        // matches exactly (see cachedFxRate for why it cannot do the server's fallback), so
+        // without this row a weekend or a gap in the series never hits and every visit to
+        // the screen goes back to the network. The values are the server's answer to this
+        // exact question, so the copy is not an invention -- it is what the endpoint said.
+        if (snapshot.asOf != asOf) local.cacheFxRate(snapshot.copy(asOf = asOf))
+
         return snapshot
     }
 
