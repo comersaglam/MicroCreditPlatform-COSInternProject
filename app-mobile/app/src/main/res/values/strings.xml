@@ -257,4 +257,14 @@
 <b>Haklarınız.</b> KVKK m.11 kapsamında; verilerinize erişme, düzeltilmesini veya silinmesini isteme, işlemeye itiraz etme ve zararınızın giderilmesini talep etme haklarına sahipsiniz. Bu haklarınızı uygulama içindeki profil ekranından veya destek kanallarımızdan kullanabilirsiniz.</string>
     <string name="kvkk_accept">Aydınlatma metnini okudum, kişisel verilerimin yukarıda belirtilen şekilde işlenmesini onaylıyorum.</string>
     <string name="kvkk_continue">Onaylıyorum</string>
+    <!-- Payment method sheet (Turn 47). Three of the four are mocks — deferred.md §L.3. -->
+    <string name="payment_method_title">Ödeme yöntemi</string>
+    <string name="payment_method_subtitle">Bu borcu nasıl ödemek istersiniz?</string>
+    <string name="payment_method_normal">Normal Ödeme</string>
+    <string name="payment_method_tokenflex">TokenFlex ile taksitlendir</string>
+    <string name="payment_method_odero">Odero ile öde</string>
+    <string name="payment_method_yapikredi">Yapı Kredi kredisiyle kapat</string>
+    <!-- Shown in place, and it STAYS: a Toast would be gone before the sentence explaining
+         it ends, which on a presented screen is the difference that matters. -->
+    <string name="payment_method_soon">Bu yöntem yakında. Ödeme kuruluşu ve banka entegrasyonları sözleşme ve sertifikasyon gerektiriyor — ürün tarafı hazır.\n\nŞimdilik "Normal Ödeme" ile devam edebilirsiniz.</string>
 </resources>

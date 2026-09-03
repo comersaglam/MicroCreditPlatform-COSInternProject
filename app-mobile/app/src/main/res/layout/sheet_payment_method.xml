@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  How to pay. Four choices, three of which are pictures (deferred.md §L.3).
+
+  The first bottom sheet in this repo. It earns being one rather than another
+  MaterialAlertDialogBuilder: this is a list of choices, not a form, and four branded rows
+  in a dialog fight its max height on a small screen for a title bar they do not need.
+
+  ⚠️ The mock rows do NOT close the sheet. They reveal the line at the bottom in place. If
+  they dismissed and returned nothing, the amount dialog would never open and the WORKING
+  payment path would look broken — which is the one thing §L.3 exists to prevent.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/screen_edge"
+    android:paddingTop="@dimen/space_4"
+    android:paddingBottom="@dimen/space_5">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/payment_method_title"
+        android:textAppearance="@style/TextAppearance.Fides.Title" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_1"
+        android:text="@string/payment_method_subtitle"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:textAppearance="@style/TextAppearance.Fides.Caption" />
+
+    <!--
+      The working one goes FIRST, not last. It is the one a demo actually uses, and burying
+      it under three that do nothing would make the sheet feel like an obstacle.
+    -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/methodNormal"
+        style="@style/Widget.Fides.PartnerButton"
+        android:layout_marginTop="@dimen/space_4"
+        android:text="@string/payment_method_normal"
+        app:strokeColor="@color/accent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/methodTokenflex"
+        style="@style/Widget.Fides.PartnerButton"
+        android:text="@string/payment_method_tokenflex"
+        app:strokeColor="@color/brand_tokenflex" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/methodOdero"
+        style="@style/Widget.Fides.PartnerButton"
+        android:text="@string/payment_method_odero"
+        app:strokeColor="@color/brand_odero" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/methodYapikredi"
+        style="@style/Widget.Fides.PartnerButton"
+        android:text="@string/payment_method_yapikredi"
+        app:strokeColor="@color/brand_yapikredi" />
+
+    <!--
+      Stays on screen once shown, unlike a Toast, which is gone before the sentence
+      explaining it ends. On a presented screen that difference is the whole point.
+    -->
+    <TextView
+        android:id="@+id/methodSoonText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_4"
+        android:text="@string/payment_method_soon"
+        android:textColor="@color/balance_indexation"
+        android:textAppearance="@style/TextAppearance.Fides.Caption"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
+</LinearLayout>

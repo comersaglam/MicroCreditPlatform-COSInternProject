@@ -10,6 +10,7 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.core.net.toUri
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.setFragmentResultListener
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -68,7 +69,19 @@ class SellerDetailFragment : Fragment() {
         binding.transactionList.adapter = adapter
 
         setupFilters()
-        binding.btnPay.setOnClickListener { showPayDialog() }
+        // The picker goes IN FRONT of the amount flow, not in place of it. showPayDialog()
+        // below is untouched: if any of this misbehaves, deleting these two statements
+        // restores the previous behaviour exactly.
+        binding.btnPay.setOnClickListener {
+            PaymentMethodSheet().show(parentFragmentManager, PaymentMethodSheet.TAG)
+        }
+        setFragmentResultListener(PaymentMethodSheet.REQUEST_KEY) { _, bundle ->
+            // Only the working route reports back; the mocks explain themselves in the
+            // sheet and leave it open, so there is nothing to handle for them here.
+            if (bundle.getString(PaymentMethodSheet.KEY_METHOD) == PaymentMethodSheet.METHOD_NORMAL) {
+                showPayDialog()
+            }
+        }
         observeShopPhone()
         observeBalance()
         observeCardExtras()
