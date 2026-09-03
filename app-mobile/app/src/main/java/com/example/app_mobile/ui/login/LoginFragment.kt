@@ -12,10 +12,13 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.example.app_mobile.MainActivity
 import com.example.app_mobile.R
 import com.example.app_mobile.databinding.FragmentLoginBinding
+import com.example.app_mobile.ui.kvkk.requireKvkkConsent
+import com.example.app_pos.data.consent.ConsentStore
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * The login gate — the app's start destination. The customer cannot reach the dashboard
@@ -34,6 +37,13 @@ class LoginFragment : Fragment() {
     private val viewModel: LoginViewModel by viewModels()
 
     private var registerDialog: androidx.appcompat.app.AlertDialog? = null
+
+    // The KVKK dialog stacks on top of the register one, so it gets the same treatment:
+    // held here, dismissed in onDestroyView.
+    private var kvkkDialog: androidx.appcompat.app.AlertDialog? = null
+
+    @Inject
+    lateinit var consentStore: ConsentStore
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -173,7 +183,13 @@ class LoginFragment : Fragment() {
             // Reuses the code already on screen: the server keeps it valid for the whole
             // exchange, so registering does not need a second SMS.
             .setPositiveButton(R.string.register_confirm_positive) { _, _ ->
-                viewModel.register(binding.codeInput.text?.toString()?.trim().orEmpty())
+                // Read BEFORE the gate. By the time onGranted runs this dialog is gone and
+                // its view with it, so the code has to be captured here rather than inside
+                // the lambda.
+                val code = binding.codeInput.text?.toString()?.trim().orEmpty()
+                requireKvkkConsent(consentStore, onShown = { kvkkDialog = it }) {
+                    viewModel.register(code)
+                }
             }
             .setNegativeButton(R.string.register_confirm_negative) { _, _ -> viewModel.cancelRegister() }
             .setOnCancelListener { viewModel.cancelRegister() }
@@ -184,6 +200,8 @@ class LoginFragment : Fragment() {
         super.onDestroyView()
         registerDialog?.dismiss()
         registerDialog = null
+        kvkkDialog?.dismiss()
+        kvkkDialog = null
         _binding = null
     }
 }

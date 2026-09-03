@@ -12,8 +12,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.example.app_pos.MainActivity
 import com.example.app_pos.R
+import com.example.app_pos.data.consent.ConsentStore
+import com.example.app_pos.ui.kvkk.requireKvkkConsent
 import com.example.app_pos.databinding.FragmentLoginBinding
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -35,6 +38,13 @@ class LoginFragment : Fragment() {
 
     // Guards against re-showing the register dialog on every re-emit / config change.
     private var registerDialog: androidx.appcompat.app.AlertDialog? = null
+
+    // The KVKK dialog stacks on top of the register one, so it gets the same treatment:
+    // held here, dismissed in onDestroyView.
+    private var kvkkDialog: androidx.appcompat.app.AlertDialog? = null
+
+    @Inject
+    lateinit var consentStore: ConsentStore
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -142,7 +152,11 @@ class LoginFragment : Fragment() {
         registerDialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
             .setTitle(R.string.register_confirm_title)
             .setMessage(getString(R.string.register_confirm_message, phone))
-            .setPositiveButton(R.string.register_confirm_positive) { _, _ -> viewModel.register() }
+            .setPositiveButton(R.string.register_confirm_positive) { _, _ ->
+                requireKvkkConsent(consentStore, onShown = { kvkkDialog = it }) {
+                    viewModel.register()
+                }
+            }
             .setNegativeButton(R.string.register_confirm_negative) { _, _ -> viewModel.cancelRegister() }
             .setOnCancelListener { viewModel.cancelRegister() }
             .show()
@@ -152,6 +166,8 @@ class LoginFragment : Fragment() {
         super.onDestroyView()
         registerDialog?.dismiss()
         registerDialog = null
+        kvkkDialog?.dismiss()
+        kvkkDialog = null
         _binding = null
     }
 

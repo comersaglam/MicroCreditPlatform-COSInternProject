@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The KVKK notice, as a dialog body.
+
+  The ScrollView is the point of the whole layout: the text is long on purpose, and it has
+  to be possible to reach the bottom of it. A dialog message that silently clips would be a
+  consent nobody could actually read before giving.
+
+  maxHeight rather than a fixed height, so the dialog is only as tall as it needs to be on
+  a large screen and still scrolls on a small one.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="@dimen/space_5"
+    android:paddingTop="@dimen/space_3">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="360dp"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/kvkkText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingExtra="2dp"
+            android:text="@string/kvkk_text"
+            android:textAppearance="@style/TextAppearance.Fides.Body" />
+    </ScrollView>
+
+    <!--
+      The checkbox the positive button waits on. Not pre-checked, and there is no way to
+      make it so: a consent that arrives already given is not consent.
+    -->
+    <com.google.android.material.checkbox.MaterialCheckBox
+        android:id="@+id/kvkkAcceptCheck"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/space_3"
+        android:text="@string/kvkk_accept"
+        android:textAppearance="@style/TextAppearance.Fides.Caption" />
+
+</LinearLayout>

@@ -14,10 +14,13 @@ import androidx.navigation.fragment.findNavController
 import com.example.app_mobile.MainActivity
 import com.example.app_mobile.R
 import com.example.app_mobile.databinding.FragmentProfileBinding
+import com.example.app_mobile.ui.kvkk.requireKvkkConsent
+import com.example.app_pos.data.consent.ConsentStore
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * "Profil" tab: the signed-in user's account. Name/email editable inline. If not a
@@ -40,6 +43,10 @@ class ProfileFragment : Fragment() {
     // a leaked window.
     private var becomeSellerDialog: AlertDialog? = null
     private var mockDialog: AlertDialog? = null
+    private var kvkkDialog: AlertDialog? = null
+
+    @Inject
+    lateinit var consentStore: ConsentStore
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -124,7 +131,12 @@ class ProfileFragment : Fragment() {
             .setMessage(R.string.become_seller_message)
             .setView(input)
             .setPositiveButton(R.string.become_seller_positive) { _, _ ->
-                viewModel.becomeSeller(input.text?.toString()?.trim().orEmpty())
+                // Read BEFORE the gate: onGranted runs after this dialog is gone, and the
+                // TextInputEditText goes with it.
+                val shopName = input.text?.toString()?.trim().orEmpty()
+                requireKvkkConsent(consentStore, onShown = { kvkkDialog = it }) {
+                    viewModel.becomeSeller(shopName)
+                }
             }
             .setNegativeButton(R.string.dialog_cancel, null)
             .show()
@@ -176,6 +188,8 @@ class ProfileFragment : Fragment() {
         becomeSellerDialog = null
         mockDialog?.dismiss()
         mockDialog = null
+        kvkkDialog?.dismiss()
+        kvkkDialog = null
         _binding = null
     }
 }

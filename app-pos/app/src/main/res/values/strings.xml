@@ -216,4 +216,31 @@
     -->
     <string name="tx_detail_fx">Alındığı gün %1$s USD ediyordu</string>
     <string name="tx_detail_fx_equivalent">Bugünkü kurla %1$s</string>
+    <!-- ================== Turn 47: KVKK consent gate ============================== -->
+    <!--
+      The notice itself. This is a presentation artifact as much as a legal one: somebody
+      will read it on screen, so it is written to be read rather than to be scrolled past.
+
+      The third paragraph is the one that matters to this project. It states the §L.5
+      decision in plain Turkish — the national id and the photo never leave the device —
+      which is both true and the reason the profile screen masks the number.
+    -->
+    <string name="kvkk_title">Aydınlatma Metni ve Açık Rıza</string>
+    <string name="kvkk_text">6698 sayılı Kişisel Verilerin Korunması Kanunu (KVKK) uyarınca, veri sorumlusu sıfatıyla T-Fides tarafından kişisel verileriniz aşağıda açıklandığı şekilde işlenmektedir.
+
+<b>İşlenen veriler.</b> Telefon numaranız (kimlik doğrulama ve hesap eşleştirme için), ad soyadınız, varsa e-posta adresiniz ve dükkan bilgileriniz; ayrıca uygulamayı kullandığınız süre boyunca oluşan veresiye ve ödeme kayıtlarınız.
+
+<b>Cihazınızda kalan veriler.</b> TC kimlik numaranız, kimlik fotoğrafınız, doğum tarihiniz ve adresiniz <b>yalnızca bu cihazda saklanır ve sunucularımıza gönderilmez.</b> Bu bilgiler yalnızca profil doluluğunuzu hesaplamak için kullanılır.
+
+<b>İşleme amacı.</b> Veresiye defterinin iki taraf arasında tutulması, borç ve ödeme kayıtlarının doğrulanması, ve tarafların birbirinin onayı olmadan kayıt oluşturamamasının sağlanması.
+
+<b>Hukuki sebep.</b> Sözleşmenin kurulması ve ifası (KVKK m.5/2-c) ile açık rızanız (m.5/1).
+
+<b>Saklama süresi.</b> Kayıtlar, hesabınız açık olduğu sürece ve ilgili mevzuatın öngördüğü zamanaşımı süreleri boyunca saklanır.
+
+<b>Aktarım.</b> Verileriniz yurt dışına aktarılmaz. Ödeme işlemleri için ödeme kuruluşlarıyla paylaşılan bilgiler, yalnızca işlemin gerçekleşmesi için zorunlu olanlarla sınırlıdır.
+
+<b>Haklarınız.</b> KVKK m.11 kapsamında; verilerinize erişme, düzeltilmesini veya silinmesini isteme, işlemeye itiraz etme ve zararınızın giderilmesini talep etme haklarına sahipsiniz. Bu haklarınızı uygulama içindeki profil ekranından veya destek kanallarımızdan kullanabilirsiniz.</string>
+    <string name="kvkk_accept">Aydınlatma metnini okudum, kişisel verilerimin yukarıda belirtilen şekilde işlenmesini onaylıyorum.</string>
+    <string name="kvkk_continue">Onaylıyorum</string>
 </resources>
