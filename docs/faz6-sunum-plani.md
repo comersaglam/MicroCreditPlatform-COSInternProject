@@ -290,6 +290,7 @@ satıra tıkla → üç kalem görünsün. §J.6'nın SQL sorgusu artık UI'da d
 
 ### Tur 46 — Toplam kırılımı + insights ekranı
 
+Bu turda neler yapacağımızı, müşteri ve satıcı insightsta neler göstereceğimizi tartışıp konuşacağız
 **Neden burada:** fx verisi (43) + tema/sparkline (44) hazır. `ReportsFragment` bugün
 tek TextView'lık boş bir placeholder.
 

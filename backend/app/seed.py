@@ -76,7 +76,33 @@ def seed(db: Session) -> None:
     db.flush()
 
     # u1 @ Ahmet Bakkal (c1): 50 + 30 - 40 = 40,00
-    _tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ekmek, süt", "2026-07-20T06:15:00")
+    #
+    # t1 is the one seeded entry with an ITEMISED basket, and it is dated LAST so it sits
+    # at the top of the history — the row a demo taps first. Every other entry here is
+    # money-only, so without this the basket screen had nothing to show unless a gateway
+    # handoff had been run on a device first.
+    #
+    # ⚠️ The amount is unchanged (50,00) and so is the balance. c1's 40,00 is pinned by
+    # test_seed_demo.test_the_documented_accounts_are_untouched and written into six places
+    # in docs/test-hesaplari.md, including a chained scenario ("approve → 90,00"). Attaching
+    # a basket costs nothing; adding an entry would have quietly invalidated all of it.
+    #
+    # The lines are chosen to put the two scale rules ON SCREEN rather than only in a unit
+    # test: three quantity shapes (2 / 1 / 0,25 units) and two tax rates. A basket of round
+    # single units at one rate would render identically whether or not the ÷1000 and ÷100
+    # were right. Prices are plausible-ish rather than researched — what is being
+    # demonstrated is the arithmetic, not the going rate for cheese.
+    #
+    # 15,00 + 24,50 + 8,50 + 2,00 = 50,00 — equal to the entry, which is exactly what the
+    # screen's footer total exists to let anyone check.
+    _basket(db, "b_t1", "2026-07-26T07:10:00", [
+        ("Ekmek",              750, 2000,  100),  # 2 adet    ×  7,50 = 15,00  KDV %1
+        ("Süt 1 L",           2450, 1000,  100),  # 1 adet    × 24,50 = 24,50  KDV %1
+        ("Beyaz peynir (kg)", 3400,  250,  100),  # 0,25 kg   × 34,00 =  8,50  KDV %1
+        ("Poşet",              200, 1000, 2000),  # 1 adet    ×  2,00 =  2,00  KDV %20
+    ])
+    _tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ekmek, süt", "2026-07-26T07:10:00",
+        basket_id="b_t1")
     _tx(db, "t2", "u_owner", "c1", 3000, "DEBT", "Peynir", "2026-07-21T07:40:00")
     _tx(db, "t3", "u_owner", "c1", 4000, "PAYMENT", "Nakit ödeme", "2026-07-22T15:00:00")
     # u1 @ Ayşe Market (m1): 120 + 45 - 65 = 100,00
@@ -122,13 +148,46 @@ def _customer(db, customer_id, name, phone, claim, claimed_by, created_by_seller
     ))
 
 
-def _tx(db, tx_id, seller, customer, amount, tx_type, desc, created_at):
+def _tx(db, tx_id, seller, customer, amount, tx_type, desc, created_at, basket_id=None):
     db.add(models.Transaction(
         transaction_id=tx_id, seller_id=seller, customer_id=customer,
         amount_minor=amount, type=tx_type, description=desc,
-        basket_id=None, settled_via_pgw=False, receipt_no=None,
+        basket_id=basket_id, settled_via_pgw=False, receipt_no=None,
         created_at=_at(created_at),
     ))
+
+
+def _basket(db, basket_id, created_at, items):
+    """
+    A handed-off basket and its lines.
+
+    `items` are (name, price_minor, quantity, tax_percent) tuples in the GATEWAY's shape,
+    which is the only shape these ever have: quantity and tax_percent are both ×1000, so
+    2500 is two and a half units and 1000 is ten percent. They are stored exactly as the
+    PGW sends them and de-scaled only for display (OrderItem.quantityDisplay /
+    taxPercentDisplay on the clients).
+
+    ⚠️ The caller is responsible for the lines summing to the entry's amount_minor. The
+    detail screen prints both figures precisely so they can be compared, so a seed whose
+    basket does not add up would put a visible contradiction in the demo.
+
+    Tax is NOT part of that sum: prices are what the till charged, tax inclusive, and the
+    rate is carried for the receipt rather than added to it.
+    """
+    db.add(models.Basket(
+        basket_id=basket_id, create_invoice=False, document_type=0, is_void=False,
+        created_at=_at(created_at),
+    ))
+    for index, (name, price, quantity, tax_percent) in enumerate(items):
+        db.add(models.BasketItem(
+            # Derived from position, like the clients do it, so re-seeding cannot
+            # duplicate a line (see deferred.md §J.7).
+            id=f"{basket_id}#{index:04d}",
+            basket_id=basket_id, name=name, price_minor=price, quantity=quantity,
+            tax_percent=tax_percent, section_no=1, status=1, type=0, item_limit=0,
+        ))
+    # Visible to the foreign key of the transaction added next.
+    db.flush()
 
 
 def _approval(db, approval_id, seller_id, shop_name, target_user_id,

@@ -53,7 +53,9 @@ def test_history_is_scoped_to_one_shop(client, buyer_auth):
     ).json()
 
     # One person, two books: the entries must not mix.
-    assert [t["transaction_id"] for t in at_owner] == ["t3", "t2", "t1"]
+    # Newest first, and t1 is dated last — it carries the seed's itemised basket and is
+    # meant to be the first row a demo taps.
+    assert [t["transaction_id"] for t in at_owner] == ["t1", "t3", "t2"]
     assert [t["transaction_id"] for t in at_market] == ["t6", "t5", "t4"]
 
 

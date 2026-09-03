@@ -428,7 +428,12 @@ def test_reading_many_baskets_does_not_query_per_entry(client, owner_auth, db_se
     ]
     # Two: one for the headers, one for the items -- regardless of how many entries.
     assert len(basket_reads) == 2
-    assert sum(1 for r in rows if r["basket"] is not None) == 3
+
+    # The three this test wrote came back with their baskets. Counted by id rather than
+    # totalled, because the seed carries an itemised basket of its own (t1) and a bare
+    # count here would be asserting on the seed rather than on the batch read.
+    returned = {r["transaction_id"] for r in rows if r["basket"] is not None}
+    assert {f"tx-basket-{n}" for n in range(3)} <= returned
 
 
 # --- reads ---
@@ -439,7 +444,10 @@ def test_history_is_newest_first(client, owner_auth):
         "/transactions", headers=owner_auth, params={"customer_id": "c1"}
     ).json()
 
-    assert [t["transaction_id"] for t in rows] == ["t3", "t2", "t1"]
+    # t1 is dated last, not first: it is the seed's only itemised basket and is meant to
+    # sit at the top of the history, where a demo taps it. The id order is deliberately
+    # not the date order, which is the point of asserting on dates rather than ids.
+    assert [t["transaction_id"] for t in rows] == ["t1", "t3", "t2"]
 
 
 def test_history_is_scoped_to_the_signed_in_seller(client, owner_auth):
