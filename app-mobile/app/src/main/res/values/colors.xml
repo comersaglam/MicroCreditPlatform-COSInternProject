@@ -126,17 +126,27 @@
          not happened. -->
     <color name="balance_settled">#6B7280</color>
     <!--
-      Turn 47: mock partner brands (deferred.md §L.3).
+      Turn 47: mock partner brands (deferred.md §L.3), corrected in Turn 47b.
 
-      These are brand-ADJACENT, not exact brand hexes, and the difference is deliberate:
-      Yapı Kredi's navy is #004990, which on this theme's #0B0D12 ground reads as a hole
-      rather than a mark. Each is lifted until it holds its own against the dark surface
-      while still being recognisably the right colour.
+      Each partner is drawn the way it draws itself — its own ground with its own type on
+      top — rather than as a coloured outline on our surface. A partner rendered in our
+      palette reads as our feature; rendered in theirs it reads as somebody else's rail,
+      which is the whole point of the card.
 
-      They are fills, never text — same rule as the brand blue (§2): saturated colour on
-      near-black fails contrast as type and passes easily as a chip with white on top.
+      ⚠️ The two light grounds are #F5F5F5, not #FFFFFF. Pure white against this theme's
+      #0B0D12 is a glare, and three of them stacked would pull every eye away from the
+      ledger the screen is about. One notch down keeps the brands legible as themselves.
+
+      Foregrounds are their real brand hexes and are used AS TEXT here, which the palette
+      rule (§2) normally forbids — but that rule is about saturated colour on near-black.
+      On these light grounds the contrast runs the other way and passes comfortably.
     -->
-    <color name="brand_tokenflex">#5B87FF</color>
-    <color name="brand_odero">#F97316</color>
-    <color name="brand_yapikredi">#1E6FBF</color>
+    <color name="brand_tokenflex_bg">#F5F5F5</color>
+    <color name="brand_tokenflex_fg">#F47B20</color>
+
+    <color name="brand_odero_bg">#00A94F</color>
+    <color name="brand_odero_fg">#FFFFFF</color>
+
+    <color name="brand_yapikredi_bg">#F5F5F5</color>
+    <color name="brand_yapikredi_fg">#004990</color>
 </resources>

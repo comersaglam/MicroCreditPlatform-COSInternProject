@@ -359,6 +359,75 @@
             android:text="@string/profile_become_seller"
             android:textAppearance="@style/TextAppearance.Fides.Body" />
 
+        <!--
+          Partner accounts. Every one of these is a mock (deferred.md §L.3) and the point is
+          the ARGUMENT, not the button: a ledger that knows what someone owes and how
+          reliably they repay is the input a lender needs, and Yapı Kredi is here to say
+          that out loud. Turning a shopkeeper's notebook into a credit history is the whole
+          product thesis.
+
+          Each partner is drawn in ITS OWN colours: their ground, their type on top. No
+          logo — those are trademarked and we hold no licence to draw them — but the name in
+          the brand's own palette is enough for anyone in the room to know who is meant, and
+          it reads as somebody else's rail rather than as another of our buttons.
+
+          Placed above the POS pairing card: connecting an account is a bigger claim than
+          pairing a till, and the card that carries the microcredit argument should not be
+          the last thing before the logout button.
+        -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/space_4"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/space_4">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/profile_partners_label"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_1"
+                    android:text="@string/profile_partners_hint"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textAppearance="@style/TextAppearance.Fides.Caption" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConnectTokenflex"
+                    style="@style/Widget.Fides.BrandButton"
+                    android:layout_marginTop="@dimen/space_3"
+                    android:text="@string/partner_tokenflex"
+                    android:textColor="@color/brand_tokenflex_fg"
+                    app:backgroundTint="@color/brand_tokenflex_bg" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConnectOdero"
+                    style="@style/Widget.Fides.BrandButton"
+                    android:text="@string/partner_odero"
+                    android:textColor="@color/brand_odero_fg"
+                    app:backgroundTint="@color/brand_odero_bg" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConnectYapikredi"
+                    style="@style/Widget.Fides.BrandButton"
+                    android:text="@string/partner_yapikredi"
+                    android:textColor="@color/brand_yapikredi_fg"
+                    app:backgroundTint="@color/brand_yapikredi_bg" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Pairing card: seller + not paired. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/pairCard"
@@ -404,67 +473,6 @@
             android:textAppearance="@style/TextAppearance.Fides.Body"
             android:visibility="gone"
             tools:visibility="visible" />
-
-        <!--
-          Partner accounts. Every one of these is a mock (deferred.md §L.3) and the point is
-          the ARGUMENT, not the button: a ledger that knows what someone owes and how
-          reliably they repay is the input a lender needs, and Yapı Kredi is here to say
-          that out loud. Turning a shopkeeper's notebook into a credit history is the whole
-          product thesis.
-
-          Each partner is named in words and outlined in its own colour. No logo: those are
-          trademarked and we hold no licence to draw them, so the honest version is the name
-          and the colour, which is enough for anyone in the room to know who is meant.
-        -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/space_4"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/space_4">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/profile_partners_label"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textAppearance="@style/TextAppearance.Fides.Caption"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/space_1"
-                    android:text="@string/profile_partners_hint"
-                    android:textColor="?attr/colorOnSurfaceVariant"
-                    android:textAppearance="@style/TextAppearance.Fides.Caption" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnConnectTokenflex"
-                    style="@style/Widget.Fides.PartnerButton"
-                    android:layout_marginTop="@dimen/space_3"
-                    android:text="@string/partner_tokenflex"
-                    app:strokeColor="@color/brand_tokenflex" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnConnectOdero"
-                    style="@style/Widget.Fides.PartnerButton"
-                    android:text="@string/partner_odero"
-                    app:strokeColor="@color/brand_odero" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnConnectYapikredi"
-                    style="@style/Widget.Fides.PartnerButton"
-                    android:text="@string/partner_yapikredi"
-                    app:strokeColor="@color/brand_yapikredi" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnLogout"

@@ -37,6 +37,9 @@
     <!--
       The working one goes FIRST, not last. It is the one a demo actually uses, and burying
       it under three that do nothing would make the sheet feel like an obstacle.
+
+      It also stays OUTLINED while the three partners are filled in their own colours: this
+      route is ours, and drawing it like a brand would put it in company it does not keep.
     -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/methodNormal"
@@ -47,21 +50,24 @@
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/methodTokenflex"
-        style="@style/Widget.Fides.PartnerButton"
+        style="@style/Widget.Fides.BrandButton"
         android:text="@string/payment_method_tokenflex"
-        app:strokeColor="@color/brand_tokenflex" />
+        android:textColor="@color/brand_tokenflex_fg"
+        app:backgroundTint="@color/brand_tokenflex_bg" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/methodOdero"
-        style="@style/Widget.Fides.PartnerButton"
+        style="@style/Widget.Fides.BrandButton"
         android:text="@string/payment_method_odero"
-        app:strokeColor="@color/brand_odero" />
+        android:textColor="@color/brand_odero_fg"
+        app:backgroundTint="@color/brand_odero_bg" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/methodYapikredi"
-        style="@style/Widget.Fides.PartnerButton"
+        style="@style/Widget.Fides.BrandButton"
         android:text="@string/payment_method_yapikredi"
-        app:strokeColor="@color/brand_yapikredi" />
+        android:textColor="@color/brand_yapikredi_fg"
+        app:backgroundTint="@color/brand_yapikredi_bg" />
 
     <!--
       Stays on screen once shown, unlike a Toast, which is gone before the sentence

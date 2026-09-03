@@ -48,4 +48,27 @@
         <item name="android:gravity">start|center_vertical</item>
         <item name="strokeWidth">@dimen/stroke_hairline</item>
     </style>
+
+    <!--
+      A partner rendered in ITS OWN colours: their ground, their type on top.
+
+      Distinct from the outlined style above, which the payment sheet still uses. There the
+      four options have to read as one list of choices, so they share our surface and differ
+      only by an accent. Here the point is the opposite — the card exists to say whose rails
+      these would be, and a bank drawn in our palette reads as our feature.
+
+      Centred rather than start-aligned, because without an icon a left-aligned label on a
+      full-width filled button leaves an empty right half that looks like a missing logo.
+    -->
+    <style name="Widget.Fides.BrandButton" parent="Widget.Material3.Button">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/button_height</item>
+        <item name="android:layout_marginTop">@dimen/space_2</item>
+        <item name="android:textAppearance">@style/TextAppearance.Fides.Body</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="cornerRadius">@dimen/radius_sm</item>
+        <!-- The ripple has to come from the brand's own foreground, or Material tints it
+             with our primary and a blue flash crosses a green button. -->
+        <item name="rippleColor">?attr/colorControlHighlight</item>
+    </style>
 </resources>
