@@ -98,7 +98,25 @@ def fx_series(db_session):
 
     Requesting this fixture is how a test says "now let inflation run". The rate is a round
     3% so an expected figure can be worked out by hand in the test that reads it.
+
+    A LEAD-IN YEAR sits in front of it, flat and unindexed. The seed's oldest entry is
+    backdated to September 2025, and rate_at answers with the most recent reading on or
+    BEFORE the date it is asked about -- so a series starting in January 2026 returns null
+    for that entry, and the breakdown's fx_at_open comes back empty. The lead-in months
+    carry the same cpi as month one, so nothing is indexed before 2026 and every figure a
+    test works out by hand is unchanged.
     """
+    for month in range(9, 13):
+        db_session.add(
+            models.FxRate(
+                as_of=date(2025, month, 1),
+                usd_minor=3_200,
+                eur_minor=3_500,
+                gold_minor=400_000,
+                cpi_index=100_000,
+            )
+        )
+
     cpi = 100_000
     for month in range(1, 13):
         db_session.add(

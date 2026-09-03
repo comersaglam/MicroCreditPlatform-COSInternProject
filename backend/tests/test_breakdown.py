@@ -75,10 +75,10 @@ def test_buyer_and_seller_see_the_same_account(client, owner_auth, buyer_auth, f
 # --- what the components actually contain -----------------------------------------
 
 def test_principal_is_debt_only(client, owner_auth, db_session, fx_series) -> None:
-    # c1's seeded entries: 50 + 30 debt, 40 payment.
+    # c1's seeded entries: 500 + 30 debt, 40 payment.
     body = client.get("/customers/breakdown?customer_id=c1", headers=owner_auth).json()
 
-    assert body["principal_minor"] == 8_000
+    assert body["principal_minor"] == 53_000
     assert body["total_paid_minor"] == 4_000
 
 
@@ -88,7 +88,7 @@ def test_indexation_is_reported_separately(client, owner_auth, fx_series) -> Non
     body = client.get("/customers/breakdown?customer_id=c1", headers=owner_auth).json()
 
     assert body["indexation_minor"] > 0
-    assert body["principal_minor"] == 8_000  # unchanged by indexing
+    assert body["principal_minor"] == 53_000  # unchanged by indexing
 
 
 def test_no_indexation_without_rates(client, owner_auth) -> None:
@@ -97,7 +97,7 @@ def test_no_indexation_without_rates(client, owner_auth) -> None:
     body = client.get("/customers/breakdown?customer_id=c1", headers=owner_auth).json()
 
     assert body["indexation_minor"] == 0
-    assert body["outstanding_minor"] == 4_000
+    assert body["outstanding_minor"] == 49_000
 
 
 # --- scoping ----------------------------------------------------------------------

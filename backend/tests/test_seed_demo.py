@@ -36,7 +36,7 @@ def db():
 @pytest.mark.parametrize(
     "seller_id,customer_id,expected",
     [
-        ("u_owner", "c1", 4000),
+        ("u_owner", "c1", 49000),
         ("u_owner", "c2", 16500),
         ("u_owner", "c3", 0),
         ("u_owner", "c4", 2550),

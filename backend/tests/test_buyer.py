@@ -11,7 +11,7 @@ def test_debts_are_grouped_by_shop(client, buyer_auth):
     rows = client.get("/me/debts", headers=buyer_auth).json()
 
     by_seller = {r["seller_id"]: r["balance_minor"] for r in rows}
-    assert by_seller == {"u_owner": 4000, "u_market": 10000}
+    assert by_seller == {"u_owner": 49000, "u_market": 10000}
 
 
 def test_debts_carry_the_shop_name_not_the_persons(client, buyer_auth):
@@ -53,9 +53,9 @@ def test_history_is_scoped_to_one_shop(client, buyer_auth):
     ).json()
 
     # One person, two books: the entries must not mix.
-    # Newest first, and t1 is dated last — it carries the seed's itemised basket and is
-    # meant to be the first row a demo taps.
-    assert [t["transaction_id"] for t in at_owner] == ["t1", "t3", "t2"]
+    # Newest first, and t1 is dated FIRST -- it carries the seed's itemised basket and is
+    # backdated a year so the exchange-rate note on it has a year of drift to show.
+    assert [t["transaction_id"] for t in at_owner] == ["t3", "t2", "t1"]
     assert [t["transaction_id"] for t in at_market] == ["t6", "t5", "t4"]
 
 
@@ -77,7 +77,7 @@ def test_buyer_balance_matches_what_the_seller_sees(client, buyer_auth, owner_au
         "/balances", headers=owner_auth, params={"customer_id": "c1"}
     ).json()
 
-    assert buyer_view["balance_minor"] == seller_view["balance_minor"] == 4000
+    assert buyer_view["balance_minor"] == seller_view["balance_minor"] == 49000
 
 
 def test_buyer_balance_is_zero_with_an_unknown_shop(client, buyer_auth):
@@ -106,4 +106,4 @@ def test_a_new_entry_shows_up_on_the_buyers_side(client, owner_auth, buyer_auth)
         r["seller_id"]: r["balance_minor"]
         for r in client.get("/me/debts", headers=buyer_auth).json()
     }
-    assert debts["u_owner"] == 5000
+    assert debts["u_owner"] == 50000

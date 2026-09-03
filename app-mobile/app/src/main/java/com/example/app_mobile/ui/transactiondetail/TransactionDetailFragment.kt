@@ -79,12 +79,17 @@ class TransactionDetailFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.fxNote.collect { note ->
-                    if (note == null) {
-                        binding.txDetailFx.visibility = View.GONE
-                    } else {
+                    // The two lines appear and disappear together: the second one is
+                    // meaningless without the first to say what it is measuring against.
+                    val visibility = if (note == null) View.GONE else View.VISIBLE
+                    binding.txDetailFx.visibility = visibility
+                    binding.txDetailFxEquivalent.visibility = visibility
+
+                    if (note != null) {
                         binding.txDetailFx.text =
-                            getString(R.string.tx_detail_fx, note.thenUsd, note.nowUsd)
-                        binding.txDetailFx.visibility = View.VISIBLE
+                            getString(R.string.tx_detail_fx, note.thenUsd)
+                        binding.txDetailFxEquivalent.text =
+                            getString(R.string.tx_detail_fx_equivalent, note.equivalentNow)
                     }
                 }
             }

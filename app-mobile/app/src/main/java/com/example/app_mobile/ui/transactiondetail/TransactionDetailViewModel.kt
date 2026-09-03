@@ -10,11 +10,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.app_mobile.util.toTlString
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 import javax.inject.Inject
+import kotlin.math.roundToLong
 
 /**
  * What the detail screen is showing at any moment.
@@ -100,26 +102,25 @@ class TransactionDetailViewModel @Inject constructor(
         val then = repo.fxRateAt(createdAt.take(10)) ?: return
         val now = repo.fxRateAt(todayIsoDate()) ?: return
 
-        // Both or neither. One half of a comparison is not a comparison, and "worth 33,4
+        // Both or neither. One half of a comparison is not a comparison, and "worth 12,17
         // dollars then" with nothing to weigh it against says less than silence.
-        _fxNote.value = FxNote(
-            thenUsd = usdOf(amountMinor, then.usdMinor),
-            nowUsd = usdOf(amountMinor, now.usdMinor)
-        )
-    }
+        if (then.usdMinor <= 0L || now.usdMinor <= 0L) return
 
-    /**
-     * How many dollars a kuruş amount was worth at a rate — the ONE place money becomes a
-     * Double in this app.
-     *
-     * Deliberate and contained: this is a display ratio, it is rounded to one decimal
-     * because that is all anyone reads off it, and it never re-enters the ledger. Every
-     * other figure stays an integer count of kuruş.
-     */
-    private fun usdOf(amountMinor: Long, usdMinor: Long): String {
-        if (usdMinor <= 0L) return "0,0"
-        val dollars = amountMinor.toDouble() / usdMinor
-        return String.format(Locale("tr", "TR"), "%.1f", dollars)
+        // What the entry bought in dollars on the day it was written, and what those same
+        // dollars cost today.
+        //
+        // The SECOND figure is the one that matters, and framing it this way round is the
+        // whole point. "It was 12,17 dollars, now it is 10,37" is true and reads as the
+        // debt shrinking — which is exactly backwards. Nobody paid anything: the lira moved.
+        // Restating the same purchase in today's money (586,78 TL against the 500,00 on the
+        // books) says what actually happened, in the currency the reader thinks in.
+        val dollarsThen = amountMinor.toDouble() / then.usdMinor
+        val equivalentNowMinor = (dollarsThen * now.usdMinor).roundToLong()
+
+        _fxNote.value = FxNote(
+            thenUsd = String.format(Locale("tr", "TR"), "%.2f", dollarsThen),
+            equivalentNow = equivalentNowMinor.toTlString()
+        )
     }
 
     private fun todayIsoDate(): String =
@@ -128,5 +129,10 @@ class TransactionDetailViewModel @Inject constructor(
             .format(Date())
 }
 
-/** The two figures the exchange-rate line compares, already formatted. */
-data class FxNote(val thenUsd: String, val nowUsd: String)
+/**
+ * The two lines of the exchange-rate note, already formatted.
+ *
+ * [equivalentNow] is lira, not dollars: what the same purchase costs at today's rate. The
+ * comparison is with the amount on the entry above it, which is the point of showing it.
+ */
+data class FxNote(val thenUsd: String, val equivalentNow: String)

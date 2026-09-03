@@ -54,6 +54,17 @@ _TODAY = date(2026, 8, 31)
 _RATES_FROM = date(2025, 3, 1)
 _ENTRIES_FROM = date(2025, 9, 1)
 
+# The dollar's two real endpoints (Morningstar): 41,16 lira on 3 September 2025 and 48,31
+# a year later. The published curve between them is close to a straight line, so a single
+# compounded daily rate reproduces its shape -- 17,4% over the year, 0,044% a day.
+#
+# Anchored rather than invented because this is the one figure in the demo a viewer can
+# check against their own phone. A series that said 31 lira would be the thing they
+# noticed, and it would cost the rest of the data its credibility.
+_USD_ANCHOR = date(2025, 9, 3)
+_USD_ON_ANCHOR = 41.16
+_USD_DAILY = (48.31 / 41.16) ** (1 / 365)
+
 _SHOPS = [
     ("Yıldız Bakkal", "Kemal Yıldız"),
     ("Deniz Market", "Deniz Arslan"),
@@ -156,10 +167,17 @@ def _fx_series(db: Session) -> None:
     """
     Daily rates across the whole window.
 
-    A plausible year rather than the real one: the lira slides against the dollar, gold
-    outruns both, and the index rises about 2.5% a month with a little variation. What the
-    demo needs is a series with a believable SHAPE -- see deferred.md §L.4 on why the
-    numbers themselves are invented.
+    The DOLLAR is anchored to two real readings: 41,16 lira on 3 September 2025 and 48,31
+    on 3 September 2026 (Morningstar). That is 17,4% over the year, and the real curve is
+    close enough to a straight line that a constant daily rate reproduces its shape. So the
+    series is grown at that rate with a little daily noise on top, which lands the last day
+    of the window near 48 lira -- what someone checking their phone during the demo will
+    see.
+
+    Euro and gold are still invented, but scaled to the dollar rather than drifting on
+    their own: gold outruns the currencies, the euro tracks a little above the dollar. The
+    index rises about 2,5% a month. See deferred.md §L.4 -- only the dollar's endpoints are
+    real, everything else has a believable shape and nothing more.
 
     Returns early if rates already exist. `as_of` is the primary key, so a second pass
     over a populated table raises rather than skipping -- and it raised for real, on a
@@ -171,21 +189,31 @@ def _fx_series(db: Session) -> None:
     # Lira per unit, as a float, because the series is grown by multiplication and only
     # rounded to kuruş on the way into the row.
     #
-    # ⚠️ These were `3_180_00 / 100` and read as "31,80" at a glance -- the underscore
-    # grouping looks like a kuruş literal. It is not: 3_180_00 is 318000, so the series ran
-    # at 3.180 lira to the dollar, a hundred times high, and had done since Turn 43. Nothing
-    # caught it because nothing READ it; the first screen to show a rate (Turn 45's basket
-    # detail) rendered "0,0 USD" for a 50,00 TL entry and that is how it surfaced. Same
-    # shape as §J.7: a bug can sit in data no one consumes.
-    usd, eur, gold, cpi = 31.80, 34.50, 2_450_00, 100_000
+    # ⚠️ The dollar was once written `3_180_00 / 100` and read as "31,80" at a glance --
+    # the underscore grouping looks like a kuruş literal. It is not: 3_180_00 is 318000, so
+    # the series ran at 3.180 lira to the dollar, a hundred times high, from Turn 43 until
+    # Turn 45. Nothing caught it because nothing READ it; the first screen to show a rate
+    # rendered "0,0 USD" for a 50,00 TL entry and that is how it surfaced. Same shape as
+    # §J.7: a bug can sit in data no one consumes.
+    #
+    # Written as plain decimals now, and the dollar's is a real reading rather than a guess.
+    usd = _USD_ON_ANCHOR * _USD_DAILY ** (_RATES_FROM - _USD_ANCHOR).days
+    # Roughly the real spread against the dollar, then carried along at the same rate.
+    eur, gold, cpi = usd * 1.17, 2_450_00, 100_000
+    # The euro's own noise has to be SYMMETRIC around 1. An asymmetric band compounds: a
+    # mean of 1,00025 is a rounding error on any one day and 15% over the window, which is
+    # how the euro first came out at 66 lira while the dollar sat at 48.
 
     day = _RATES_FROM
     while day <= _TODAY:
         # A month's inflation, spread across its days, with a little daily noise.
         drift = 1 + (_RANDOM.uniform(0.018, 0.032) / 30)
         cpi = round(cpi * drift)
-        usd *= 1 + (_RANDOM.uniform(0.010, 0.026) / 30)
-        eur *= 1 + (_RANDOM.uniform(0.008, 0.028) / 30)
+        # The dollar climbs at the measured rate. The noise is symmetric around it, so a
+        # long series wanders a little day to day without drifting off the two real points.
+        usd *= _USD_DAILY * _RANDOM.uniform(0.9985, 1.0015)
+        # The euro tracks the dollar; gold outruns both.
+        eur *= _USD_DAILY * _RANDOM.uniform(0.9980, 1.0020)
         gold *= 1 + (_RANDOM.uniform(0.015, 0.040) / 30)
 
         db.add(

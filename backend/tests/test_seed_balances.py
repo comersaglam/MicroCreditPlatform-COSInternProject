@@ -34,7 +34,7 @@ def db():
 @pytest.mark.parametrize(
     "seller_id,customer_id,expected",
     [
-        ("u_owner", "c1", 4000),    # Ahmet:  50 + 30 - 40 = 40,00
+        ("u_owner", "c1", 49000),   # Ahmet: 500 + 30 - 40 = 490,00
         ("u_owner", "c2", 16500),   # Ayşe:   120 + 45     = 165,00
         ("u_owner", "c3", 0),       # Mehmet: 80 - 80      = 0
         ("u_owner", "c4", 2550),    # Fatma:                 25,50
@@ -64,7 +64,7 @@ def test_debts_by_seller_groups_across_shops(db) -> None:
     # u1 is c1 at Ahmet Bakkal and m1 at Ayşe Market -- one person, two books. This is
     # the query behind /me/debts, and it is the reason the seed needed a second shop.
     debts = debts_by_seller(db, ["c1", "m1"])
-    assert debts == {"u_owner": 4000, "u_market": 10000}
+    assert debts == {"u_owner": 49000, "u_market": 10000}
 
 
 def test_seed_is_not_run_twice(db) -> None:

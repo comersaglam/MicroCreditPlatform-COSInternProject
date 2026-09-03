@@ -207,6 +207,13 @@
          empty tail, so a zero-rated line does not trail a stray separator. -->
     <string name="basket_line_pricing">%1$s × %2$s</string>
     <string name="basket_line_pricing_tax">%1$s × %2$s · KDV %%%3$s</string>
-    <!-- Turkish quotes the currency, not the rate: "worth 33,4 dollars then, 26,1 now". -->
-    <string name="tx_detail_fx">Alındığı gün %1$s USD — bugün %2$s USD</string>
+    <!--
+      Two lines, and the second one is the point. "It was worth 12,17 dollars then" alone
+      invites the wrong reading — that the debt shrank. What actually happened is that the
+      lira did: the same dollars now cost 586,78 TL, so the shopkeeper who waited a year to
+      be paid is down 86,78 without anyone defaulting on anything. That is the argument the
+      whole product rests on, and it belongs in the currency the reader thinks in.
+    -->
+    <string name="tx_detail_fx">Alındığı gün %1$s USD ediyordu</string>
+    <string name="tx_detail_fx_equivalent">Bugünkü kurla %1$s</string>
 </resources>

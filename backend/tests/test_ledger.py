@@ -444,10 +444,9 @@ def test_history_is_newest_first(client, owner_auth):
         "/transactions", headers=owner_auth, params={"customer_id": "c1"}
     ).json()
 
-    # t1 is dated last, not first: it is the seed's only itemised basket and is meant to
-    # sit at the top of the history, where a demo taps it. The id order is deliberately
-    # not the date order, which is the point of asserting on dates rather than ids.
-    assert [t["transaction_id"] for t in rows] == ["t1", "t3", "t2"]
+    # t1 sorts LAST despite its id: it is the seed's only itemised basket and is
+    # backdated a year, so the rate note on it has a year of lira drift to show.
+    assert [t["transaction_id"] for t in rows] == ["t3", "t2", "t1"]
 
 
 def test_history_is_scoped_to_the_signed_in_seller(client, owner_auth):
@@ -469,7 +468,7 @@ def test_balance_matches_the_seeded_book(client, owner_auth):
     assert response.status_code == 200
 
     body = response.json()
-    assert body["balance_minor"] == 4000
+    assert body["balance_minor"] == 49000
     assert body["seller_id"] == "u_owner"
     assert body["as_of"]
 

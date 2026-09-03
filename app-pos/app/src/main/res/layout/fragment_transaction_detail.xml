@@ -98,7 +98,27 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/detailHeader"
-        tools:text="Alındığı gün 33,4 USD — bugün 26,1 USD"
+        tools:text="Alındığı gün 12,17 USD ediyordu"
+        tools:visibility="visible" />
+
+    <!--
+      The line that carries the argument, so it is the one that gets the weight: Body
+      rather than Caption, and the indexation colour, which is the same muted red the
+      balance screens use for "this part is inflation, not something you bought".
+    -->
+    <TextView
+        android:id="@+id/txDetailFxEquivalent"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="@dimen/screen_edge"
+        android:layout_marginTop="@dimen/space_1"
+        android:textAppearance="@style/TextAppearance.Fides.Body"
+        android:textColor="@color/balance_indexation"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/txDetailFx"
+        tools:text="Bugünkü kurla 586,78 TL"
         tools:visibility="visible" />
 
     <TextView
@@ -113,7 +133,7 @@
         android:text="@string/basket_section_label"
         android:textAppearance="@style/TextAppearance.Fides.Label"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/txDetailFx" />
+        app:layout_constraintTop_toBottomOf="@id/txDetailFxEquivalent" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/basketList"

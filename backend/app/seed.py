@@ -75,34 +75,40 @@ def seed(db: Session) -> None:
     # Same reason: transactions.customer_id is a FK to the rows just added.
     db.flush()
 
-    # u1 @ Ahmet Bakkal (c1): 50 + 30 - 40 = 40,00
+    # u1 @ Ahmet Bakkal (c1): 500 + 30 - 40 = 490,00
     #
-    # t1 is the one seeded entry with an ITEMISED basket, and it is dated LAST so it sits
-    # at the top of the history — the row a demo taps first. Every other entry here is
-    # money-only, so without this the basket screen had nothing to show unless a gateway
-    # handoff had been run on a device first.
+    # t1 is the one seeded entry with an ITEMISED basket. Every other entry here is
+    # money-only, so without it the basket screen has nothing to show unless a gateway
+    # handoff has been run on a device first.
     #
-    # ⚠️ The amount is unchanged (50,00) and so is the balance. c1's 40,00 is pinned by
-    # test_seed_demo.test_the_documented_accounts_are_untouched and written into six places
-    # in docs/test-hesaplari.md, including a chained scenario ("approve → 90,00"). Attaching
-    # a basket costs nothing; adding an entry would have quietly invalidated all of it.
+    # DATED A YEAR BACK, deliberately, and that is the whole point of the entry. The screen
+    # puts what the money was worth then beside what it is worth now, and over one month
+    # that difference rounds away to nothing — "12,17 USD → 12,10 USD" says less than
+    # silence. Over a year the same 500,00 lira falls from 12,17 dollars to 10,37: the
+    # product's actual argument, visible in one line. It costs the entry its place at the
+    # top of the list, which is the trade being made knowingly.
     #
-    # The lines are chosen to put the two scale rules ON SCREEN rather than only in a unit
-    # test: three quantity shapes (2 / 1 / 0,25 units) and two tax rates. A basket of round
-    # single units at one rate would render identically whether or not the ÷1000 and ÷100
-    # were right. Prices are plausible-ish rather than researched — what is being
-    # demonstrated is the arithmetic, not the going rate for cheese.
+    # ⚠️ 500,00 rather than 50,00 (Turn 45b), so c1's balance moves 40,00 → 490,00. That
+    # figure is pinned by test_seed_demo.test_the_documented_accounts_are_untouched and
+    # written into docs/test-hesaplari.md; both are updated with it. It is not a number to
+    # change casually — the device scenarios chain off it.
     #
-    # 15,00 + 24,50 + 8,50 + 2,00 = 50,00 — equal to the entry, which is exactly what the
-    # screen's footer total exists to let anyone check.
-    _basket(db, "b_t1", "2026-07-26T07:10:00", [
-        ("Ekmek",              750, 2000,  100),  # 2 adet    ×  7,50 = 15,00  KDV %1
-        ("Süt 1 L",           2450, 1000,  100),  # 1 adet    × 24,50 = 24,50  KDV %1
-        ("Beyaz peynir (kg)", 3400,  250,  100),  # 0,25 kg   × 34,00 =  8,50  KDV %1
-        ("Poşet",              200, 1000, 2000),  # 1 adet    ×  2,00 =  2,00  KDV %20
+    # The lines put the two scale rules ON SCREEN rather than only in a unit test: four
+    # quantity shapes (3 / 2 / 0,5 / 0,25) and two tax rates. A basket of round single units
+    # at one rate would render identically whether or not the ÷1000 and ÷100 were right.
+    #
+    # 45,00 + 68,00 + 170,00 + 90,00 + 95,00 + 32,00 = 500,00 — equal to the entry, which is
+    # exactly what the screen's footer total exists to let anyone check.
+    _basket(db, "b_t1", "2025-09-03T07:10:00", [
+        ("Ekmek",              1500, 3000,  100),  # 3 adet   ×  15,00 =  45,00  KDV %1
+        ("Süt 1 L",            3400, 2000,  100),  # 2 adet   ×  34,00 =  68,00  KDV %1
+        ("Beyaz peynir (kg)", 34000,  500,  100),  # 0,5 kg   × 340,00 = 170,00  KDV %1
+        ("Yumurta (15'li)",    9000, 1000,  100),  # 1 kutu   ×  90,00 =  90,00  KDV %1
+        ("Çay 1 kg",          38000,  250, 2000),  # 0,25 kg  × 380,00 =  95,00  KDV %20
+        ("Deterjan",           3200, 1000, 2000),  # 1 adet   ×  32,00 =  32,00  KDV %20
     ])
-    _tx(db, "t1", "u_owner", "c1", 5000, "DEBT", "Ahmet Bakkal alisveris", "2026-07-26T07:10:00",
-        basket_id="b_t1")
+    _tx(db, "t1", "u_owner", "c1", 50000, "DEBT", "Haftalık alışveriş",
+        "2025-09-03T07:10:00", basket_id="b_t1")
     _tx(db, "t2", "u_owner", "c1", 3000, "DEBT", "Peynir", "2026-07-21T07:40:00")
     _tx(db, "t3", "u_owner", "c1", 4000, "PAYMENT", "Nakit ödeme", "2026-07-22T15:00:00")
     # u1 @ Ayşe Market (m1): 120 + 45 - 65 = 100,00

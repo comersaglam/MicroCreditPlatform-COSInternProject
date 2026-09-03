@@ -22,7 +22,7 @@ def test_list_balances_are_derived(client, owner_auth):
         "/customers", headers=owner_auth
     ).json()}
 
-    assert balances == {"c1": 4000, "c2": 16500, "c3": 0, "c4": 2550, "c5": 21000}
+    assert balances == {"c1": 49000, "c2": 16500, "c3": 0, "c4": 2550, "c5": 21000}
 
 
 def test_list_requires_a_seller_account(client, buyer_auth):
@@ -37,7 +37,7 @@ def test_the_same_person_carries_a_different_balance_per_shop(client, owner_auth
     # u1 is c1 at Ahmet Bakkal (40,00) and m1 at Ayşe Market (100,00). One human, two
     # books, two numbers -- this is why balance is never stored on the customer row.
     owner_view = client.get("/customers/c1", headers=owner_auth).json()
-    assert owner_view["balance_minor"] == 4000
+    assert owner_view["balance_minor"] == 49000
 
     market = client.post(
         "/auth/otp/verify", json={"phone": "+905553334455", "code": "123456"}
@@ -158,7 +158,7 @@ def test_lookup_finds_a_customer_by_phone(client, owner_auth):
     )
     assert response.status_code == 200
     assert response.json()["customer_id"] == "c1"
-    assert response.json()["balance_minor"] == 4000
+    assert response.json()["balance_minor"] == 49000
 
 
 def test_lookup_matches_the_literal_path_not_the_id_route(client, owner_auth):
