@@ -1193,9 +1193,24 @@ gerçekten doldursun. Tablo şeması ve `fx.py` arayüzü **değişmez** — sad
 değişir.
 
 **Tur 43 durumu:** tablo (migration 0006), `fx.py` hesap katmanı ve `GET /fx-rates` **gerçek
-ve test edilmiş** (30 pytest). Uydurma olan yalnızca 549 satırlık serinin **içeriği**:
-`seed_demo._fx_series` USD'yi 31,80 → 44,19, TÜFE'yi ~%2,5/ay yürütüyor. Şekli inandırıcı,
-sayıları gerçek değil.
+ve test edilmiş** (30 pytest). Uydurma olan yalnızca 549 satırlık serinin **içeriği**.
+
+**Tur 45b güncellemesi — DOLAR ARTIK UYDURMA DEĞİL.** İki gerçek okumaya sabitlendi
+(Morningstar): **3 Eyl 2025 → 41,16 TL**, **3 Eyl 2026 → 48,31 TL**, yani yıllık %17,4.
+Gerçek eğri neredeyse doğrusal olduğu için tek bir bileşik günlük oran şeklini yeniden
+üretiyor; üstüne simetrik günlük gürültü biniyor.
+
+**Neden özellikle dolar:** sunumda izleyicinin **kendi telefonundan doğrulayabileceği tek
+rakam** bu. 31 TL diyen bir seri fark edilecek ilk şey olurdu ve geri kalan verinin de
+inandırıcılığını götürürdü.
+
+⚠️ **Euro, altın ve TÜFE hâlâ uydurma** — dolara oranlanmış, şekilleri makul, sayıları
+gerçek değil. Sunumda "gerçek TÜFE" iddiasında bulunulmamalı.
+
+⚠️ **Tur 45b'de bulunan bug:** dolar Tur 43'ten beri **100 kat yüksekti**
+(`3_180_00 / 100` = 3180, "31,80" değil). Bu bölüm zaten "31,80 → 44,19" yazıyordu, yani
+doküman niyeti doğru kaydetmiş, kod sapmıştı. Bir yıl boyunca kimse görmedi çünkü seriyi
+okuyan ekran yoktu; Tur 45'in kur notu ilk tüketici oldu ve "0,0 USD" gösterdi.
 
 ⚠️ **Bunun bir sonucu var:** endeksleme (§L.7) bu uydurma seriyi kullanıyor. Yani demo'da
 müşterilerin borcuna eklenen enflasyon farkı da uydurma bir orandan geliyor. Sunumda
@@ -1360,7 +1375,8 @@ tutarlı duruyor, sadece draft'taki incelik yakalanamadı.
 
 ### L.11 Sepet ekranında lira cinsinden enflasyon farkı YOK  ⬜ PLANLANDI (Tur 46)
 
-Sepet detay ekranı kur notunu gösteriyor (*"Alındığı gün 33,4 USD — bugün 26,1 USD"*),
+Sepet detay ekranı kur notunu iki satır olarak gösteriyor (*"Alındığı gün 12,17 USD
+ediyordu"* / *"Bugünkü kurla 586,78 TL"*),
 ama planın §Tur 45 metninde yazan *"Enflasyon farkı: +34,00 TL"* satırını **göstermiyor**.
 
 **Neden çıkarıldı:** bir sepetin kendi lira cinsinden enflasyon farkı **yok**. Enflasyon
@@ -1380,9 +1396,9 @@ kaynaktan gelecek. Doğru yer orası.
 ⚠️ **TÜFE endeksi de gösterilmiyor** (kullanıcı kararı): USD somut ve karşılığı herkesin
 kafasında; endeks sayısı (1842 → 2210) sunumda ayrıca açıklama gerektiriyor.
 
-⚠️ **§L.4'ün görünür sonucu:** kur serisi uydurma, ve artık bu **kullanıcıya görünüyor**.
-Şeritteki dolar değerleri `seed_demo._fx_series`'ten geliyor. Sunumda "gerçek kur"
-iddiasında bulunulmamalı.
+⚠️ **§L.4 ile bağı:** şeritteki dolar değerleri `seed_demo._fx_series`'ten geliyor. Tur
+45b'de dolar iki gerçek okumaya sabitlendi (41,16 → 48,31), yani bu ekrandaki rakamlar
+artık savunulabilir. Serinin geri kalanı (euro, altın, TÜFE) hâlâ uydurma.
 
 ### L.12 Room yazma yolu JVM testiyle örtülemiyor  ⚠️ AÇIK (Tur 45)
 
@@ -1404,3 +1420,27 @@ sayısının **artmaması** (idempotency) ve `transactions.basketId`'nin dolu ol
 **Ders (genel):** bir testin yeşil olması bir şey ölçtüğü anlamına gelmiyor. Yeni bir
 regresyon testi yazıldığında **kusuru geri koyup kırmızı görmek** tek gerçek kanıt —
 Tur 44'ün "bozuk verifier" dersinin test tarafındaki karşılığı.
+
+### L.13 Kur cache'i hiç tazelenmiyor — geçmiş için doğru, bugün için değil  ⚠️ AÇIK (Tur 45b)
+
+`OfflineFirstRepository.fxRateAt` read-through cache: Room'da varsa oradan, yoksa sunucudan
+alıp yazıyor. **Geçmiş bir tarih için kusursuz** — 3 Eylül 2025'in kuru bir daha değişmez,
+bir kez çekildi mi sonsuza kadar doğru.
+
+**Bugünün kuru için değil.** İlk açılışta yazılan satır, kur ertesi gün değişse bile
+yerinde kalıyor; cache tam tarih eşleşmesi yaptığı için ertesi gün yeni bir sorgu gidiyor,
+ama **aynı gün içinde** kur güncellenmiş olsa bile eski değer gösterilir.
+
+**Bugün neden sorun değil:** `fx_rates` günlük tek satır, gün içinde değişmiyor
+(`seed_demo` günlük üretiyor, gerçek kaynak da günlük olacak — §L.4). Yani "aynı gün içinde
+bayatlama" pratikte gün sonuna kadar sürüyor ve bir kur notu için kabul edilebilir.
+
+**İleride gerekecek olan:** satıra bir `fetchedAt` alanı ve TTL (örn. bugünün tarihi için 1
+saat, geçmiş tarihler için sonsuz). Room entity'si `FxRateEntity` şu an sadece
+`asOf` + değerler taşıyor, yani şema değişikliği gerekir.
+
+⚠️ **Bunun daha kötü bir hâli Tur 45b'de yaşandı ve KAPANDI:** cache `nearest()` kullanıyordu
+("bu tarihten önceki en yakın"), yani elindeki tek satır bir yıl uzaktaki bir tarihe cevap
+olarak dönüyordu. Sunucuda doğru olan bu fallback cache'te yanlış — orada seri **kısmi**.
+Sonuç: bir yıllık bir alışverişin kur notu "500 TL → 500 TL" diyordu, yani hiç değer
+kaybetmemiş gibi. Artık tam tarih eşleşmesi var; ıska bir istek, yanlış eşleşme sessiz.

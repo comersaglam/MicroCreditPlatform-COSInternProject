@@ -3474,3 +3474,97 @@ dersinin aynısı.
 **Sıradaki:** cihaz senaryosu (POS long-press → sepetli veresiye → onay → üç giriş
 noktasında satıra tıkla; artı dört negatif yol ve iki pull sonrası `basket_items` sayısının
 artmaması), sonra Tur 46 — toplam kırılımı + insights.
+
+---
+
+### 2026-09-03 — Tur 45b: cihaz doğrulaması, ve onun ortaya çıkardığı üç bug
+
+Tur 45'in kodu cihazda koştu. Sepet ekranı ilk denemede çalıştı — ama **kur notu "0,0 USD"
+gösterdi**, ve o ipin ucundan çekince arka arkaya üç ayrı hata çıktı. Üçü de aynı desenin
+örneği: *kimsenin okumadığı veride hata sessizce durur.*
+
+#### Bug 1 — dolar 100 kat pahalıydı (Tur 43'ten beri)
+
+`seed_demo.py`: `usd = 3_180_00 / 100`. Alt çizgiler "31,80" gibi okunuyor, ama Python için
+`3_180_00 = 318000` → bölü 100 = **3180 TL/dolar**. `deferred.md §L.4` *"31,80 → 44,19"*
+diyordu; doküman niyeti yazmış, kod 100 kat sapmıştı.
+
+**Neden görülmedi:** bu seriyi okuyan tek bir ekran yoktu. Tur 45'in kur notu ilk tüketici
+oldu ve 50,00 ÷ 4.327 = 0,0115 → ekranda **"0,0"**.
+
+#### Bug 2 — restart yeniden derlemez
+
+Düzeltmeyi yaptım, `docker compose restart` koştum, hâlâ eski değerler geldi. Container
+kodu image'ın içinde (`COPY app/ ./app/`), `--build` gerekiyordu.
+[[verify-running-artifact-not-source]] hafızada yazılı olmasına rağmen düştüm; container'ın
+içindeki kodu `grep`'leyince 30 saniyede anlaşıldı.
+
+#### Bug 3 — kur cache'i sorulmayan soruya cevap veriyordu ⚠️ en sinsisi
+
+Kullanıcı yakaladı: *"bugünkü kurla nasıl 500 ediyor ki?"*
+
+`cachedFxRate` DAO'nun `nearest()`'ini kullanıyordu — "bu tarihten önceki en yakın kayıt",
+yani sunucunun fallback'i. **Sunucuda doğru** (549 günlük seri var, hafta sonu Cuma ile
+dolar). **Cache'te yanlış**: orada sadece bakılan birkaç gün var, "önceki en yakın" bir yıl
+öteye düşebilir ve çağıran bunu anlayamaz.
+
+Cihazda tam olarak bu oldu: cache'te tek satır vardı (`2025-09-03 → 41,08`), hem "o günün
+kuru" hem "bugünün kuru" sorusuna aynı satırla cevap verdi. 500 ÷ 41,08 × 41,08 = **500**.
+%17 değer kaybetmiş bir alışveriş, hiç kaybetmemiş gibi göründü.
+
+**Düzeltme:** cache tam tarih eşleşmesi arıyor; read-through iki satır yazıyor — kaydın
+kendi tarihi (dürüst anahtar) + sorulan tarih (cache'in tutturabilmesi için). *Iska bir
+istek, yanlış eşleşme sessiz.*
+
+#### Yapılan diğer işler
+
+| Ne | Neden |
+|---|---|
+| Dolar **gerçek iki noktaya** sabitlendi: 41,16 (3 Eyl 2025) → 48,31 (3 Eyl 2026), Morningstar | Sunumda izleyicinin kendi telefonundan kontrol edebileceği tek rakam bu |
+| Euro'nun gürültüsü simetrik yapıldı | `uniform(0.9980, 1.0025)` ortalaması 1,00025 — günde hiç, yılda %15; euro 48 TL'lik dolara karşı 66 TL'ye çıkmıştı |
+| Seed'e sepet: `t1`, **500,00 TL**, altı kalem, bir yıl geriye | Bir aylık fark ekranda yuvarlanıp kayboluyordu ("12,17 → 12,10") |
+| Kur notu **ters çevrildi** | Aşağıda |
+
+#### Kur notu neden ters çevrildi (kullanıcı kararı)
+
+Önce şöyleydi: *"Alındığı gün 12,17 USD — bugün 10,37 USD"*. Doğru, ama **borç eriyormuş
+gibi okunuyor** — oysa kimse ödeme yapmadı, değişen liraydı.
+
+Şimdi iki satır:
+
+```
+Alındığı gün 12,17 USD ediyordu
+Bugünkü kurla 586,78 TL          <- endeksleme renginde, vurgulu
+```
+
+Deftere 500,00 yazılmıştı. Aradaki **86,78 TL** satıcının kaybı — ürünün asıl argümanı, tek
+satırda ve okuyanın düşündüğü para biriminde.
+
+⚠️ **Kur ile endeksleme AYRI şeyler, karıştırılmamalı:**
+
+| | Kaynak | Rol |
+|---|---|---|
+| Kur notu | `usd_minor` | Sadece **bilgi**. Ledger'a girmez, bakiyeyi değiştirmez |
+| Endeksleme | `cpi_index` | **Borcun kendisi**. INDEXATION satırı olarak ledger'a yazılır |
+
+`indexation.py` dolara hiç bakmıyor (`cpi_ratio` yalnız `cpi_index` okuyor). Ekranda ikisi
+birden görünüyor ama biri anlatım, diğeri muhasebe.
+
+#### Doğrulama
+
+- Backend: **sıfır yeni test hatası** (18 kırık test bu turdan önce de kırıktı —
+  `test_approvals`, seed'de `_approval` çağrıları yorum satırında)
+- 16 test güncellendi: c1 anaparası 40,00 → 490,00, `t1` artık en eski satır
+- `conftest.fx_series` fixture'ına düz bir **giriş yılı** eklendi — `rate_at` "önceki en
+  yakın" aradığı için 2026'da başlayan seri, 2025 tarihli kayda `None` dönüyordu
+- Cihazda: sepet 500,00'a tam toplandı, kur notu doğru, iki taraftan da görünüyor
+
+#### Öğrenilen
+
+**Kullanıcının "bu rakam mantıksız" demesi en iyi test.** Bug 3'ü ne derleyici, ne 154
+birim test, ne benim doğrulama komutlarım yakaladı — çünkü hepsi *kodun ne yaptığını*
+ölçüyordu, *sonucun anlamlı olup olmadığını* değil. 500 TL'nin bir yıl sonra yine 500 TL
+etmesi ancak ekrana bakan bir insana saçma gelir.
+
+**Sıradaki:** Tur 46 — toplam kırılımı + insights (kullanıcı planda kendi notunu düştü:
+müşteri/satıcı insights içeriği birlikte konuşulacak).

@@ -34,9 +34,18 @@ sandbox'ında). Aynı numara iki app'te farklı şey ifade edebilir — aşağı
 
 ## Müşteri kayıtları (Customer = satıcının defter satırı — giriş yapılamaz)
 
-| Numara | İsim | Durum | Hangi defterde | Bakiye |
+> ⚠️ **Bakiyeler seed'in yazdığı hâlidir — cihazda DAHA YÜKSEK görünür.** Endeksleme
+> (Tur 43) bir bakiye ilk okunduğunda tembel olarak işliyor, yani `seed_demo`'nun kur
+> serisi varken her hesaba aylık INDEXATION satırları ekleniyor. Aşağıdaki rakamlar
+> anaparadır; ekrandaki rakam = anapara + o güne kadar birikmiş enflasyon farkı.
+>
+> Örnek (Tur 45b sonrası): c1'in anaparası **490,00**, cihazda görünen **665,72** —
+> aradaki **175,72** on iki aylık endeksleme. Kart üzerindeki *"Bunun X TL'si enflasyon
+> farkı"* satırı tam olarak bunu söylüyor.
+
+| Numara | İsim | Durum | Hangi defterde | Bakiye (anapara) |
 |---|---|---|---|---|
-| 0555 111 2233 | Ahmet Yılmaz (c1) | app'li (CLAIMED→u1) | Ahmet Bakkal | 40,00 |
+| 0555 111 2233 | Ahmet Yılmaz (c1) | app'li (CLAIMED→u1) | Ahmet Bakkal | **490,00** |
 | 0555 111 2233 | Ahmet Y. (m1) | app'li (CLAIMED→u1) | Ayşe Market | 100,00 |
 | 0555 444 3322 | Ahmet Demirtaş (o1) | app'li (CLAIMED→u_owner) | Ayşe Market | 60,00 |
 | 0555 444 5566 | Mehmet Kaya (c3) | app'li (CLAIMED→u3) | Ahmet Bakkal | 0,00 |
@@ -59,12 +68,15 @@ sandbox'ında). Aynı numara iki app'te farklı şey ifade edebilir — aşağı
 
 ### Alıcı tarafı (Borçlarım)
 **`0555 111 2233`** — iki dükkana borcu olan tek hesap.
-- Borçlarım: Ayşe Market **100,00** + Ahmet Bakkal **40,00** = toplam **140,00**
+- Borçlarım: Ayşe Market **100,00** + Ahmet Bakkal **490,00** = toplam **590,00**
+  (anapara; endeksleme işledikten sonra cihazda ~105 + ~666 = **~771** görünür)
 - Bu ekran doğruysa: JOIN sorgusu + çok-dükkan gruplaması çalışıyor demektir
 
 ### Onay kutusu (Onaylar)
 **`0555 111 2233`** → bekleyen: Ahmet Bakkal'dan 50,00 veresiye.
-- Onayla → Ahmet Bakkal borcu 40,00 → **90,00** olmalı
+- Onayla → Ahmet Bakkal borcu **50,00 ARTMALI** (anapara 490,00 → 540,00)
+  ⚠️ Mutlak rakam yerine FARKA bak: endeksleme her ay yeni satır ekliyor, yani
+  ekrandaki başlangıç değeri hangi gün baktığına göre değişir.
 - Ayşe Market'teki 100,00 **değişmemeli** ← doğru deftere yazıldığının kanıtı
 
 **`0555 444 3322`** → bekleyen: Ayşe Market'ten 75,00.
@@ -100,7 +112,8 @@ Mehmet'e yazdıktan sonra çıkıp **`0555 444 5566`** ile girersen isteği Onay
 2. **Kendi Onaylar sekmene BAKMA** — orada **yeni bir şey ÇIKMAMALI** (sadece seed'deki p2 durur)
 3. Çık, **`0555 333 4455`** (Ayşe Market) ile gir → Onaylar'da **20,00 ödeme** olmalı
 4. Kartta senin müşteri adın ("Ahmet Bakkal") yazmalı, "Ayşe Market" değil
-5. Onayla → çık, `0555 444 3322` ile gir → Ayşe Market borcun 60,00 → **40,00** düşmüş olmalı
+5. Onayla → çık, `0555 444 3322` ile gir → Ayşe Market borcun **20,00 AZALMIŞ** olmalı
+   (anapara 60,00 → 40,00; ekranda endeksleme de eklendiği için farka bak, mutlak rakama değil)
 
 ### Yeni müşteri ekleme (FAB — üç dal)
 `0555 444 3322` (Ahmet Bakkal) ile girip Müşterilerim → sağ alt **+** butonu:
@@ -228,7 +241,7 @@ Tek satıcı var, müşteri listesi farklı.
 | Numara | Ne |
 |---|---|
 | **0555 444 3322** | **Giriş numarası** (esnaf hesabı, u_owner). POS'ta login bunu ister. |
-| 0555 111 2233 | Ahmet Yılmaz (c1), app'li — bakiye 40,00 |
+| 0555 111 2233 | Ahmet Yılmaz (c1), app'li — anapara 490,00 (+ endeksleme) |
 | 0555 222 3344 | Ayşe Demir (c2), **app'siz** — 165,00 ← *app-mobile'da bu kayıt YOK* |
 | 0555 444 5566 | Mehmet Kaya (c3), app'li — 0,00 |
 | 0555 666 7788 | Fatma Şahin (c4), app'siz — 25,50 |

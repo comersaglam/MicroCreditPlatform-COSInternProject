@@ -9,7 +9,7 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-09-02, Tur 45 kapandı.
+> Son güncelleme: 2026-09-03, Tur 45 + 45b kapandı (cihazda doğrulandı).
 
 ---
 
@@ -18,8 +18,8 @@
 | Tur | Konu | Durum |
 |-----|------|-------|
 | 43 | fx_rates + **endeksleme** + zengin seed | ✅ kapandı (progress.md Tur 43) — cihaz doğrulaması Tur 44'e |
-| 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihaz doğrulaması bekliyor |
-| 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ kapandı (progress.md Tur 45) — cihaz senaryosu bekliyor |
+| 44 | **Tema B-a** + T-Fides kimliği — iki app | ✅ kapandı (progress.md Tur 44) — cihazda görüldü (Tur 45b) |
+| 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 45 + 45b) |
 | 46 | Toplam kırılımı + insights | ⬜ başlamadı |
 | 47 | Ödeme seçici + KVKK + profil % | ⬜ başlamadı |
 | 48 | Admin backend | ⬜ başlamadı |
