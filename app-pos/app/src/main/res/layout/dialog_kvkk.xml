@@ -4,31 +4,46 @@
 
   Two things have to be true at once and they pull against each other: the notice is long
   on purpose and must be readable to the end, and the checkbox that gates acceptance must
-  always be reachable. The scrolling text therefore takes what is LEFT after the checkbox
-  has its space, never the other way round.
+  always be reachable. The scrolling text therefore gets a FIXED height and the checkbox
+  takes its own space beneath it — never the other way round.
+
+  ⚠️ IDENTICAL to app-mobile's copy of this file. Two apps, one notice, one shape; if one
+  is edited the other must be too, or the rule holds on one device and not the other.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
     android:paddingHorizontal="@dimen/space_5"
     android:paddingTop="@dimen/space_3">
 
     <!--
-      ⚠️ height=0dp with a weight, NOT wrap_content with a maxHeight.
+      ⚠️ A FIXED height. Not wrap_content, not maxHeight, not 0dp+weight.
 
-      It was the latter, and the checkbox below it never appeared: android:maxHeight is not
-      honoured by ScrollView, so 1500 characters of notice took the whole dialog and pushed
-      the checkbox off the bottom of the screen. With the checkbox unreachable the positive
-      button stayed permanently disabled — the notice could be cancelled but never accepted.
+      Three shapes were tried here and two of them hid the checkbox:
 
-      A weight of 1 makes the text take what is LEFT after the checkbox has its space, so
-      the control the button waits on is always the one guaranteed to be on screen.
+        wrap_content + maxHeight  ScrollView ignores android:maxHeight entirely, so 1500
+                                  characters of notice took the whole dialog and pushed the
+                                  checkbox off the bottom.
+        0dp + layout_weight="1"   Correct only when the parent has a bounded height to
+                                  divide. Inside an AlertDialog the body is measured with
+                                  an UNSPECIFIED-ish height, so "one share of what is left"
+                                  can resolve to everything — the same symptom returns, and
+                                  it returned on app-pos.
+
+      A concrete height is the one shape that cannot be reinterpreted by the parent's
+      measure pass: the text gets exactly this much room and the checkbox gets its own,
+      whatever the dialog decides it is. 280dp shows roughly twelve lines, which is enough
+      that the notice reads as a document rather than a keyhole, and short enough to leave
+      the checkbox on screen on a small phone.
+
+      With the checkbox unreachable the positive button stays permanently disabled — the
+      notice can be cancelled but never accepted. That is the bug this height prevents, and
+      it is invisible to every build step (deferred.md §L.18).
     -->
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="280dp"
         android:scrollbars="vertical">
 
         <TextView
@@ -43,11 +58,14 @@
     <!--
       The checkbox the positive button waits on. Not pre-checked, and there is no way to
       make it so: a consent that arrives already given is not consent.
+
+      minHeight so the touch target stays a target even where the label wraps to one line.
     -->
     <com.google.android.material.checkbox.MaterialCheckBox
         android:id="@+id/kvkkAcceptCheck"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:minHeight="48dp"
         android:layout_marginTop="@dimen/space_3"
         android:text="@string/kvkk_accept"
         android:textAppearance="@style/TextAppearance.Fides.Caption" />

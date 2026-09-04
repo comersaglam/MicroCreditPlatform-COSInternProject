@@ -23,7 +23,7 @@ export function Shell() {
     <div className="shell">
       <nav className="sidebar">
         <div className="brand">
-          <img src="/logo-fides.png" alt="" />
+          <img src="/tfides-logo.png" alt="T-Fides" />
           <div>
             <div className="brand-name">T-Fides</div>
             <div className="brand-role">Admin</div>

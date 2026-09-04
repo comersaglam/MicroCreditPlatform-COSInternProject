@@ -31,7 +31,7 @@ export function Login() {
           definition rather than by decoration. */}
       <form className="card edge-trail login-card" onSubmit={submit}>
         <div className="brand" style={{ padding: '0 0 20px' }}>
-          <img src="/logo-fides.png" alt="" />
+          <img src="/tfides-logo.png" alt="T-Fides" />
           <div>
             <div className="brand-name">T-Fides</div>
             <div className="brand-role">Admin paneli</div>

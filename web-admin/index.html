@@ -2,7 +2,18 @@
 <html lang="tr">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/logo-fides.png" />
+    <!--
+      A distinct filename, not the generic /logo-fides.png it was.
+
+      Browsers cache a favicon against the ORIGIN, and localhost:5173 is the default Vite
+      port -- so any other project previously run on it leaves its icon behind, and that is
+      what showed here: a different app's logo on a page serving the right file. A name of
+      our own makes the collision impossible rather than something to clear by hand.
+
+      128px rather than the 1031px source: a favicon is drawn at 16-32px, and shipping
+      809KB to render 16 was 50x the bytes for none of the pixels.
+    -->
+    <link rel="icon" type="image/png" href="/tfides-icon-128.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>T-Fides Admin</title>
   </head>
