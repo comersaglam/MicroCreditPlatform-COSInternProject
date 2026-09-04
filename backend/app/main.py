@@ -82,7 +82,10 @@ async def validation_exception_handler(
 # browser treats the two as different origins.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    # 5174, not Vite's default 5173: the panel was moved off it because Chrome caches
+    # favicons per origin and another project on 5173 kept supplying its own icon here.
+    # See web-admin/vite.config.ts.
+    allow_origins=["http://localhost:5174", "http://127.0.0.1:5174"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

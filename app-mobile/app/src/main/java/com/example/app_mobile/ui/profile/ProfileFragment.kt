@@ -39,6 +39,13 @@ class ProfileFragment : Fragment() {
     private var currentEmail: String = ""
     private var currentShop: String = ""
 
+    // The signed-in number, kept for the KVKK gate: consent is keyed per person, and this
+    // is who the person is. Cached from render() alongside the fields above rather than
+    // read from uiState at the moment it is needed -- stateIn(WhileSubscribed) holds null
+    // whenever nothing is collecting, which is the same trap ProfileViewModel.currentUserId
+    // documents.
+    private var currentPhone: String = ""
+
     // Dialogs held so onDestroyView can dismiss them; a dialog outliving its fragment is
     // a leaked window.
     private var becomeSellerDialog: AlertDialog? = null
@@ -102,6 +109,7 @@ class ProfileFragment : Fragment() {
         currentName = user.displayName
         currentEmail = user.email.orEmpty()
         currentShop = user.sellerInfo?.shopName.orEmpty()
+        currentPhone = user.phone
 
         binding.displayNameText.text =
             user.displayName.ifEmpty { getString(R.string.profile_not_set) }
@@ -134,7 +142,7 @@ class ProfileFragment : Fragment() {
                 // Read BEFORE the gate: onGranted runs after this dialog is gone, and the
                 // TextInputEditText goes with it.
                 val shopName = input.text?.toString()?.trim().orEmpty()
-                requireKvkkConsent(consentStore, onShown = { kvkkDialog = it }) {
+                requireKvkkConsent(consentStore, currentPhone, onShown = { kvkkDialog = it }) {
                     viewModel.becomeSeller(shopName)
                 }
             }

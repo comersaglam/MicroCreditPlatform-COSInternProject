@@ -187,7 +187,10 @@ class LoginFragment : Fragment() {
                 // its view with it, so the code has to be captured here rather than inside
                 // the lambda.
                 val code = binding.codeInput.text?.toString()?.trim().orEmpty()
-                requireKvkkConsent(consentStore, onShown = { kvkkDialog = it }) {
+                // `phone` is the E.164 form the view model normalised, which is what keys
+                // the consent: the notice belongs to the person registering, not to this
+                // handset.
+                requireKvkkConsent(consentStore, phone, onShown = { kvkkDialog = it }) {
                     viewModel.register(code)
                 }
             }

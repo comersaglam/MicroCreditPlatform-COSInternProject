@@ -9,7 +9,17 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    // NOT 5173, Vite's default, and the reason is a favicon.
+    //
+    // Chrome caches favicons per ORIGIN -- scheme+host+port -- not per file path. Another
+    // project of this user's also runs on 5173, so its icon was still being painted on
+    // this page even after ours was renamed and served correctly: same origin, cached
+    // entry, no request made. Renaming the file could not fix that; only a different
+    // origin can. 5174 is ours.
+    port: 5174,
+    // Fail loudly rather than sliding to 5175 if something else holds the port -- a panel
+    // silently on another port is a demo spent typing URLs.
+    strictPort: true,
     proxy: {
       '/admin': { target: 'http://localhost:4010', changeOrigin: true },
       '/health': { target: 'http://localhost:4010', changeOrigin: true },

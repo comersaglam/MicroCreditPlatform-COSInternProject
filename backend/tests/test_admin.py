@@ -457,9 +457,9 @@ def test_the_panels_origin_is_allowed(client):
     :4010 directly -- on stage, as a blank screen with an error in a console nobody has
     open. Cheaper to check here.
     """
-    response = client.get("/health", headers={"Origin": "http://localhost:5173"})
+    response = client.get("/health", headers={"Origin": "http://localhost:5174"})
 
-    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5174"
 
 
 def test_reset_is_locked_even_though_it_exists(client, owner_auth):

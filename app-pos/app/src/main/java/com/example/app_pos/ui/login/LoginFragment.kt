@@ -153,7 +153,10 @@ class LoginFragment : Fragment() {
             .setTitle(R.string.register_confirm_title)
             .setMessage(getString(R.string.register_confirm_message, phone))
             .setPositiveButton(R.string.register_confirm_positive) { _, _ ->
-                requireKvkkConsent(consentStore, onShown = { kvkkDialog = it }) {
+                // `phone` is the E.164 form the view model normalised, which is what keys
+                // the consent: the notice belongs to the person registering, not to this
+                // till.
+                requireKvkkConsent(consentStore, phone, onShown = { kvkkDialog = it }) {
                     viewModel.register()
                 }
             }
