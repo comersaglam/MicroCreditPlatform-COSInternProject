@@ -64,6 +64,172 @@ def test_an_admin_token_is_not_a_user_token(client, admin_auth):
     assert client.get("/users/me", headers=admin_auth).status_code == 401
 
 
+# --- lists ---
+
+
+def test_the_seller_list_matches_the_seeded_shops(client, admin_auth):
+    rows = client.get("/admin/sellers", headers=admin_auth).json()
+
+    assert {row["user_id"] for row in rows} == {"u_owner", "u_market"}
+    # Biggest book first.
+    assert rows[0]["receivable_minor"] >= rows[-1]["receivable_minor"]
+
+
+def test_a_shops_receivable_equals_its_ledger(client, admin_auth, db_session):
+    """
+    The endpoint's figure against ledger.py's own -- an equality, not a pinned constant.
+
+    This is the test that catches a second definition of the balance. If someone writes a
+    fresh SUM(CASE ...) inside the router and gets a sign or a type wrong, the two sides
+    of this assert stop agreeing.
+    """
+    from app.ledger import balances_by_customer
+
+    rows = client.get("/admin/sellers", headers=admin_auth).json()
+    owner = next(row for row in rows if row["user_id"] == "u_owner")
+
+    assert owner["receivable_minor"] == sum(
+        balances_by_customer(db_session, "u_owner").values()
+    )
+
+
+def test_the_seller_list_reports_the_pinned_seed_balances(client, admin_auth):
+    """
+    890,50 TL -- 490,00 + 165,00 + 25,50 + 210,00, the figures test_seed_balances.py pins
+    and the phone displays. The panel showing the same number as the till is the whole
+    claim it exists to make.
+    """
+    rows = client.get("/admin/sellers", headers=admin_auth).json()
+    owner = next(row for row in rows if row["user_id"] == "u_owner")
+
+    assert owner["receivable_minor"] == 89050
+
+
+def test_the_buyer_list_travels_customer_records(client, admin_auth, db_session):
+    """
+    u1 is c1 at one shop and m1 at another. A buyer's debt has to go through those rows --
+    there is no user_id on a ledger line -- so this asserts the join, not just a total.
+    """
+    from app.ledger import debts_by_seller
+
+    rows = client.get("/admin/buyers", headers=admin_auth).json()
+    u1 = next(row for row in rows if row["user_id"] == "u1")
+
+    assert u1["shop_count"] == 2
+    assert u1["debt_minor"] == sum(debts_by_seller(db_session, ["c1", "m1"]).values())
+
+
+def test_an_unclaimed_customer_belongs_to_no_buyer(client, admin_auth):
+    """
+    c4 and c5 are written down by the shopkeeper for people with no app. They owe money,
+    it shows in their shop's receivable, and it must NOT be attributed to any user.
+    """
+    sellers = client.get("/admin/sellers", headers=admin_auth).json()
+    buyers = client.get("/admin/buyers", headers=admin_auth).json()
+
+    total_owed = sum(row["receivable_minor"] for row in sellers)
+    attributed = sum(row["debt_minor"] for row in buyers)
+
+    # The difference is exactly the three unclaimed customers in u_owner's book:
+    # c2 165,00 + c4 25,50 + c5 210,00.
+    assert total_owed - attributed == 16500 + 2550 + 21000
+
+
+# --- details ---
+
+
+def test_seller_detail_decomposes_the_same_number(client, admin_auth):
+    """
+    breakdown.py's invariant, checked through the panel: principal + indexation - paid
+    equals outstanding, and outstanding equals the list's receivable.
+    """
+    body = client.get("/admin/sellers/u_owner", headers=admin_auth).json()
+    parts = body["breakdown"]
+
+    assert (
+        parts["principal_minor"] + parts["indexation_minor"] - parts["total_paid_minor"]
+        == parts["outstanding_minor"]
+    )
+    assert parts["outstanding_minor"] == body["seller"]["receivable_minor"]
+
+
+def test_seller_detail_lists_the_book_with_balances(client, admin_auth):
+    body = client.get("/admin/sellers/u_owner", headers=admin_auth).json()
+
+    by_id = {row["customer_id"]: row for row in body["customers"]}
+    assert by_id["c1"]["balance_minor"] == 49000
+    assert by_id["c2"]["balance_minor"] == 16500
+    assert by_id["c4"]["claim_status"] == "UNCLAIMED"
+
+
+def test_seller_detail_entries_carry_the_customers_name(client, admin_auth):
+    entries = client.get("/admin/sellers/u_owner", headers=admin_auth).json()[
+        "recent_entries"
+    ]
+
+    assert entries
+    assert all(entry["counterparty"] for entry in entries)
+    # Newest first, so the table opens on what just happened.
+    assert entries == sorted(entries, key=lambda e: e["created_at"], reverse=True)
+
+
+def test_buyer_detail_splits_the_debt_by_shop(client, admin_auth):
+    body = client.get("/admin/buyers/u1", headers=admin_auth).json()
+
+    by_shop = {row["seller_id"]: row for row in body["debts_by_shop"]}
+    assert by_shop["u_owner"]["balance_minor"] == 49000
+    assert by_shop["u_market"]["balance_minor"] == 10000
+    # Buyer-facing screens name the SHOP, not the person behind it.
+    assert by_shop["u_owner"]["shop_name"] == "Ahmet Bakkal"
+
+
+def test_a_missing_seller_is_a_404(client, admin_auth):
+    response = client.get("/admin/sellers/nobody", headers=admin_auth)
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "seller_not_found"
+
+
+def test_a_buyer_is_not_reachable_through_the_seller_route(client, admin_auth):
+    """u1 is a real user but not a shop; the seller route must not serve them."""
+    assert client.get("/admin/sellers/u1", headers=admin_auth).status_code == 404
+
+
+def test_the_lists_need_the_admin_token(client, owner_auth):
+    for path in ("/admin/sellers", "/admin/buyers", "/admin/sellers/u_owner"):
+        assert client.get(path).status_code == 401, path
+        assert client.get(path, headers=owner_auth).status_code == 401, path
+
+
+def test_reading_the_panel_writes_no_indexation(client, admin_auth, db_session, fx_series):
+    """
+    The panel is an observer.
+
+    routers/customers.py writes this month's indexation when a shopkeeper reads their own
+    book, and that pattern looks like something to copy here. It must not be: opening the
+    panel would append rows to an append-only ledger for every customer on the platform
+    (deferred.md §L.7). fx_series is requested so a rate table EXISTS -- without it the
+    write could not happen anyway and this test would pass for the wrong reason.
+    """
+    from app import models
+    from sqlalchemy import func, select
+
+    def indexation_rows():
+        return db_session.execute(
+            select(func.count())
+            .select_from(models.Transaction)
+            .where(models.Transaction.type == "INDEXATION")
+        ).scalar_one()
+
+    before = indexation_rows()
+    client.get("/admin/sellers", headers=admin_auth)
+    client.get("/admin/sellers/u_owner", headers=admin_auth)
+    client.get("/admin/buyers", headers=admin_auth)
+    client.get("/admin/buyers/u1", headers=admin_auth)
+
+    assert indexation_rows() == before
+
+
 # --- /admin/me ---
 
 

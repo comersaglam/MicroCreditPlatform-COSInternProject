@@ -37,14 +37,16 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import text
 
-from .. import models, seed, seed_demo
+from sqlalchemy import func, select
+
+from .. import ledger, models, seed, seed_demo
 from ..admin_auth import AdminAuth, verify_password
+from ..breakdown import breakdown_for
 from ..config import settings
 from ..deps import DbSession
 from ..reset import _TABLES
-from ..schemas import IsoUtc
-from ..security import ADMIN_SUBJECT, api_error, create_admin_token
-from sqlalchemy import func, select
+from ..schemas import IsoUtc, LedgerBreakdown
+from ..security import api_error, create_admin_token
 
 router = APIRouter(tags=["admin"])
 
@@ -59,6 +61,69 @@ class AdminLogin(BaseModel):
 class AdminSession(BaseModel):
     token: str
     expires_at: IsoUtc
+
+
+class AdminSellerRow(BaseModel):
+    user_id: str
+    display_name: str
+    shop_name: str | None
+    phone: str
+    customer_count: int
+    entry_count: int
+    receivable_minor: int
+    created_at: IsoUtc
+
+
+class AdminBuyerRow(BaseModel):
+    user_id: str
+    display_name: str
+    phone: str
+    is_seller: bool
+    shop_count: int
+    debt_minor: int
+    created_at: IsoUtc
+
+
+class AdminEntry(BaseModel):
+    """A ledger line, flattened for a table. Not schemas.Transaction: no basket here."""
+
+    transaction_id: str
+    seller_id: str
+    customer_id: str
+    counterparty: str
+    amount_minor: int
+    type: str
+    description: str | None
+    created_at: IsoUtc
+
+
+class AdminCustomerRow(BaseModel):
+    customer_id: str
+    display_name: str
+    phone: str
+    claim_status: str
+    balance_minor: int
+
+
+class AdminShopDebt(BaseModel):
+    seller_id: str
+    shop_name: str | None
+    display_name: str
+    balance_minor: int
+
+
+class AdminSellerDetail(BaseModel):
+    seller: AdminSellerRow
+    breakdown: LedgerBreakdown
+    customers: list[AdminCustomerRow]
+    recent_entries: list[AdminEntry]
+
+
+class AdminBuyerDetail(BaseModel):
+    buyer: AdminBuyerRow
+    breakdown: LedgerBreakdown
+    debts_by_shop: list[AdminShopDebt]
+    recent_entries: list[AdminEntry]
 
 
 class InventoryItem(BaseModel):
@@ -157,6 +222,244 @@ def admin_login(body: AdminLogin) -> AdminSession:
 
     token, expires_at = create_admin_token()
     return AdminSession(token=token, expires_at=expires_at)
+
+
+@router.get("/admin/sellers", response_model=list[AdminSellerRow])
+def list_sellers(admin: AdminAuth, db: DbSession) -> list[AdminSellerRow]:
+    """
+    Every shop, with what it is owed. Three queries, whatever the number of shops.
+
+    The counts come back as two grouped queries rather than a subquery per row. Customer
+    counts are taken from the LEDGER, which slightly under-counts: a customer written down
+    but never charged belongs to a book (ledger.book_customer_ids exists for exactly that
+    case) yet has no entries. Accepted here because this is a list column, not a balance --
+    the shop's own screen uses book_customer_ids and gets the exact answer.
+    """
+    sellers = db.execute(
+        select(models.User).where(models.User.is_seller)
+    ).scalars().all()
+
+    receivables = ledger.receivables_by_seller(db)
+
+    counts = {
+        seller_id: (customers, entries)
+        for seller_id, customers, entries in db.execute(
+            select(
+                models.Transaction.seller_id,
+                func.count(func.distinct(models.Transaction.customer_id)),
+                func.count(),
+            ).group_by(models.Transaction.seller_id)
+        ).all()
+    }
+
+    rows = [
+        AdminSellerRow(
+            user_id=seller.user_id,
+            display_name=seller.display_name,
+            shop_name=seller.shop_name,
+            phone=seller.phone,
+            customer_count=counts.get(seller.user_id, (0, 0))[0],
+            entry_count=counts.get(seller.user_id, (0, 0))[1],
+            receivable_minor=receivables.get(seller.user_id, 0),
+            created_at=seller.created_at,
+        )
+        for seller in sellers
+    ]
+    # Biggest book first: the panel's first screen should open on the shops that matter.
+    return sorted(rows, key=lambda row: row.receivable_minor, reverse=True)
+
+
+@router.get("/admin/sellers/{user_id}", response_model=AdminSellerDetail)
+def seller_detail(user_id: str, admin: AdminAuth, db: DbSession) -> AdminSellerDetail:
+    """
+    One shop: its book, its balance decomposed, and its last entries.
+
+    The decomposition is breakdown_for(seller_id=...) -- the same function, called the
+    same way, that answers the shopkeeper's own /customers/breakdown. Nothing about the
+    figure is recomputed for the panel, so the panel cannot disagree with the till.
+    """
+    seller = db.get(models.User, user_id)
+    if seller is None or not seller.is_seller:
+        raise api_error(404, "seller_not_found", "No such seller")
+
+    balances = ledger.balances_by_customer(db, user_id)
+    customers = db.execute(
+        select(models.Customer).where(
+            models.Customer.customer_id.in_(balances.keys() or [""])
+        )
+    ).scalars().all()
+
+    customer_rows = sorted(
+        (
+            AdminCustomerRow(
+                customer_id=customer.customer_id,
+                display_name=customer.display_name,
+                phone=customer.phone,
+                claim_status=customer.claim_status,
+                balance_minor=balances.get(customer.customer_id, 0),
+            )
+            for customer in customers
+        ),
+        key=lambda row: row.balance_minor,
+        reverse=True,
+    )
+
+    entry_count = db.execute(
+        select(func.count()).where(models.Transaction.seller_id == user_id)
+    ).scalar_one()
+
+    return AdminSellerDetail(
+        seller=AdminSellerRow(
+            user_id=seller.user_id,
+            display_name=seller.display_name,
+            shop_name=seller.shop_name,
+            phone=seller.phone,
+            customer_count=len(balances),
+            entry_count=entry_count,
+            receivable_minor=sum(balances.values()),
+            created_at=seller.created_at,
+        ),
+        breakdown=breakdown_for(db, seller_id=user_id),
+        customers=customer_rows[:20],
+        recent_entries=_recent_entries(
+            db, models.Transaction.seller_id == user_id
+        ),
+    )
+
+
+@router.get("/admin/buyers", response_model=list[AdminBuyerRow])
+def list_buyers(admin: AdminAuth, db: DbSession) -> list[AdminBuyerRow]:
+    """
+    Every buyer, with what they owe across all their shops.
+
+    A buyer's debt is not a seller_id grouping -- it travels their customer records, one
+    per shop (ledger.debts_by_buyer). The shop count is the same journey, counted rather
+    than summed.
+    """
+    buyers = db.execute(
+        select(models.User).where(models.User.is_buyer)
+    ).scalars().all()
+
+    debts = ledger.debts_by_buyer(db)
+
+    shop_counts = {
+        user_id: count
+        for user_id, count in db.execute(
+            select(
+                models.Customer.claimed_by_user_id,
+                func.count(func.distinct(models.Transaction.seller_id)),
+            )
+            .join(
+                models.Transaction,
+                models.Transaction.customer_id == models.Customer.customer_id,
+            )
+            .where(models.Customer.claimed_by_user_id.is_not(None))
+            .group_by(models.Customer.claimed_by_user_id)
+        ).all()
+    }
+
+    rows = [
+        AdminBuyerRow(
+            user_id=buyer.user_id,
+            display_name=buyer.display_name,
+            phone=buyer.phone,
+            is_seller=buyer.is_seller,
+            shop_count=shop_counts.get(buyer.user_id, 0),
+            debt_minor=debts.get(buyer.user_id, 0),
+            created_at=buyer.created_at,
+        )
+        for buyer in buyers
+    ]
+    return sorted(rows, key=lambda row: row.debt_minor, reverse=True)
+
+
+@router.get("/admin/buyers/{user_id}", response_model=AdminBuyerDetail)
+def buyer_detail(user_id: str, admin: AdminAuth, db: DbSession) -> AdminBuyerDetail:
+    """
+    One buyer: what they owe, to whom, decomposed.
+
+    breakdown_for(customer_ids=...) is the third of that function's four documented modes
+    -- literally the buyer's own /me/debts/breakdown, read from the other side of the
+    counter.
+    """
+    buyer = db.get(models.User, user_id)
+    if buyer is None or not buyer.is_buyer:
+        raise api_error(404, "buyer_not_found", "No such buyer")
+
+    customer_ids = list(
+        db.execute(
+            select(models.Customer.customer_id).where(
+                models.Customer.claimed_by_user_id == user_id
+            )
+        ).scalars().all()
+    )
+
+    per_shop = ledger.debts_by_seller(db, customer_ids)
+    shops = db.execute(
+        select(models.User).where(models.User.user_id.in_(per_shop.keys() or [""]))
+    ).scalars().all()
+
+    return AdminBuyerDetail(
+        buyer=AdminBuyerRow(
+            user_id=buyer.user_id,
+            display_name=buyer.display_name,
+            phone=buyer.phone,
+            is_seller=buyer.is_seller,
+            shop_count=len(per_shop),
+            debt_minor=sum(per_shop.values()),
+            created_at=buyer.created_at,
+        ),
+        breakdown=breakdown_for(db, customer_ids=customer_ids),
+        debts_by_shop=sorted(
+            (
+                AdminShopDebt(
+                    seller_id=shop.user_id,
+                    shop_name=shop.shop_name,
+                    display_name=shop.display_name,
+                    balance_minor=per_shop.get(shop.user_id, 0),
+                )
+                for shop in shops
+            ),
+            key=lambda shop: shop.balance_minor,
+            reverse=True,
+        ),
+        recent_entries=_recent_entries(
+            db, models.Transaction.customer_id.in_(customer_ids or [""])
+        ),
+    )
+
+
+def _recent_entries(db: DbSession, condition) -> list[AdminEntry]:
+    """
+    The last 20 ledger lines matching a condition, with the customer's name attached.
+
+    One join rather than a name lookup per row -- twenty round trips for a table nobody
+    scrolls would be the same N+1 the balance queries were batched to avoid.
+    """
+    rows = db.execute(
+        select(models.Transaction, models.Customer.display_name)
+        .join(
+            models.Customer,
+            models.Customer.customer_id == models.Transaction.customer_id,
+        )
+        .where(condition)
+        .order_by(models.Transaction.created_at.desc())
+        .limit(20)
+    ).all()
+
+    return [
+        AdminEntry(
+            transaction_id=entry.transaction_id,
+            seller_id=entry.seller_id,
+            customer_id=entry.customer_id,
+            counterparty=name,
+            amount_minor=entry.amount_minor,
+            type=entry.type,
+            description=entry.description,
+            created_at=entry.created_at,
+        )
+        for entry, name in rows
+    ]
 
 
 @router.get("/admin/me", response_model=AdminMe)

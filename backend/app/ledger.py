@@ -138,3 +138,49 @@ def debts_by_seller(db: Session, customer_ids: list[str]) -> dict[str, int]:
         .group_by(models.Transaction.seller_id)
     ).all()
     return {seller_id: balance for seller_id, balance in rows}
+
+
+# The two below answer the same questions as the four above, but for EVERY book at once --
+# the admin panel's view. They live here rather than in routers/admin.py for the reason
+# this whole module exists: the balance has one implementation. A platform total assembled
+# from its own SUM(CASE ...) inside a route would be the eleventh copy of the rule at the
+# top of this file, and the first one no test compares against the others.
+
+
+def receivables_by_seller(db: Session) -> dict[str, int]:
+    """
+    What every shop is owed, keyed by seller_id. One grouped query for the whole platform.
+
+    balances_by_customer with the grouping key swapped: that one asks "who owes this shop
+    what", this one asks "what is each shop owed in total". Same _BALANCE, same single
+    pass -- a seller list that called balance_of per row would be one query per shop, and
+    per customer under that.
+    """
+    rows = db.execute(
+        select(models.Transaction.seller_id, _BALANCE).group_by(
+            models.Transaction.seller_id
+        )
+    ).all()
+    return {seller_id: balance for seller_id, balance in rows}
+
+
+def debts_by_buyer(db: Session) -> dict[str, int]:
+    """
+    What every buyer owes across all their books, keyed by user_id.
+
+    The mirror of debts_by_seller, and the join is the interesting part: a buyer has no
+    rows in the ledger. The ledger is written against CUSTOMER records, and a person holds
+    one of those per shop, so the sum has to travel customers.claimed_by_user_id to reach
+    a user. Unclaimed customers -- the ones written down by a shopkeeper for someone with
+    no app -- have no user to belong to and correctly fall out of this.
+    """
+    rows = db.execute(
+        select(models.Customer.claimed_by_user_id, _BALANCE)
+        .join(
+            models.Transaction,
+            models.Transaction.customer_id == models.Customer.customer_id,
+        )
+        .where(models.Customer.claimed_by_user_id.is_not(None))
+        .group_by(models.Customer.claimed_by_user_id)
+    ).all()
+    return {user_id: balance for user_id, balance in rows}
