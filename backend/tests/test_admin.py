@@ -8,7 +8,10 @@ whole proof that they are apart; without it, every signed-in shopkeeper would be
 key to the platform and nothing would say so.
 """
 
+from datetime import timedelta
+
 import pytest
+from sqlalchemy import func, select
 
 from app.config import settings
 
@@ -173,6 +176,61 @@ def test_seller_detail_entries_carry_the_customers_name(client, admin_auth):
     assert entries == sorted(entries, key=lambda e: e["created_at"], reverse=True)
 
 
+def test_indexation_cannot_crowd_out_the_trading_history(
+    client, admin_auth, db_session
+):
+    """
+    The entry table must show what the shop actually did, not only what the index did.
+
+    Found on screen: all twenty rows came back as identical "Eylül 2026 enflasyon farkı"
+    lines, and the shop's year of trading was pushed off the bottom. Indexation is stamped
+    on the first of each month and the warming pass wrote rows dated AFTER the last real
+    purchase, so ordering by date alone buried every sale and payment. The query was
+    correct and the table was useless -- the failure [[plausibility-check-the-output]]
+    describes.
+
+    ⚠️ The condition has to be BUILT here. A first version of this test called
+    ensure_indexed_book and asserted on whatever came out; it stayed green with the defect
+    put back, because the core seed has too few entries for indexation to bury them. It
+    measured nothing. So this writes 25 indexation rows dated after the seed's newest
+    entry -- the shape the live database actually had -- and with `ORDER BY created_at
+    LIMIT 20` restored it fails, as it should.
+    """
+    from datetime import UTC, datetime
+
+    from app import models
+
+    newest = db_session.execute(
+        select(func.max(models.Transaction.created_at))
+    ).scalar_one()
+    if newest.tzinfo is None:
+        newest = newest.replace(tzinfo=UTC)
+
+    for index in range(25):
+        db_session.add(
+            models.Transaction(
+                transaction_id=f"idx_{index}",
+                seller_id="u_owner",
+                customer_id="c1",
+                amount_minor=100 + index,
+                type="INDEXATION",
+                description=f"Endeks {index}",
+                created_at=newest + timedelta(days=index + 1),
+            )
+        )
+    db_session.commit()
+
+    entries = client.get("/admin/sellers/u_owner", headers=admin_auth).json()[
+        "recent_entries"
+    ]
+    types = {entry["type"] for entry in entries}
+
+    assert "INDEXATION" in types, "indexation must stay visible -- it is the argument"
+    assert types & {"DEBT", "PAYMENT"}, "and it must not be the only thing visible"
+    # Still newest-first once the per-type windows are merged.
+    assert entries == sorted(entries, key=lambda e: e["created_at"], reverse=True)
+
+
 def test_buyer_detail_splits_the_debt_by_shop(client, admin_auth):
     body = client.get("/admin/buyers/u1", headers=admin_auth).json()
 
@@ -279,6 +337,22 @@ def test_the_monthly_series_groups_in_either_dialect(client, admin_auth):
     assert months == sorted(months, key=lambda point: point["month"])
 
 
+def test_the_trailing_month_is_flagged_partial(client, admin_auth):
+    """
+    The last bucket holds however many days the data reached into that month, not thirty.
+
+    Found on screen, not in a test: both lines fell vertically to zero at the right edge of
+    every chart, which reads as collections collapsing. The real numbers were 660 entries
+    in August and 106 in the September the data stops in. The flag lets the panel leave
+    that month out and say so instead of drawing a cliff.
+    """
+    months = client.get("/admin/stats/sellers", headers=admin_auth).json()["monthly"]
+
+    assert months[-1]["partial"] is True
+    # Exactly one: only the month the data ends inside is incomplete.
+    assert [point["partial"] for point in months].count(True) == 1
+
+
 def test_the_series_sums_back_to_the_breakdown(client, admin_auth):
     """
     Per-month totals against the whole-ledger decomposition. Both come from _total_of, and
@@ -328,6 +402,8 @@ def test_the_debt_bands_count_people_not_money(client, admin_auth):
 
     bands = body["debt_bands"]
     assert [band["label"] for band in bands][0] == "0"
+    # Short labels: these are axis ticks, and the long form overlapped its neighbour.
+    assert all(len(band["label"]) <= 8 for band in bands)
     # Every buyer carrying a balance falls in exactly one band.
     assert sum(band["amount_minor"] for band in bands) == 3  # u1, u3, u_owner
 

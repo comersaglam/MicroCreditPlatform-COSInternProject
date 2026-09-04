@@ -136,6 +136,11 @@ class MonthPoint(BaseModel):
     payment_minor: int
     indexation_minor: int
     entry_count: int
+    # True when the month is not over in the DATA -- the last bucket usually holds a few
+    # days, not thirty. Without this flag the panel draws a cliff at the right edge of
+    # every chart and it reads as collections collapsing, which is the opposite of what the
+    # numbers say. Measured: 660 entries in August, 106 in the September that follows it.
+    partial: bool = False
 
 
 class NamedAmount(BaseModel):
@@ -473,21 +478,34 @@ def buyer_detail(user_id: str, admin: AdminAuth, db: DbSession) -> AdminBuyerDet
 
 def _recent_entries(db: DbSession, condition) -> list[AdminEntry]:
     """
-    The last 20 ledger lines matching a condition, with the customer's name attached.
+    The most recent ledger lines matching a condition, with the customer's name attached.
 
-    One join rather than a name lookup per row -- twenty round trips for a table nobody
+    ⚠️ NOT simply "the last 20 by date", and the reason is worth keeping. Indexation rows
+    are all stamped on the FIRST of a month, and the warming pass wrote the newest of them
+    dated after the last real purchase -- so a plain ORDER BY date LIMIT 20 came back as
+    twenty identical "Eylül 2026 enflasyon farkı" lines and the shop's actual trading
+    history was pushed off the bottom. The table was correct and told you nothing.
+
+    So the window is taken per type and then merged: the last ten purchases and payments,
+    the last six indexation rows. Indexation stays visible -- it is the product's argument
+    -- without being able to crowd out what it is charged on.
+
+    One join rather than a name lookup per row: twenty round trips for a table nobody
     scrolls would be the same N+1 the balance queries were batched to avoid.
     """
-    rows = db.execute(
-        select(models.Transaction, models.Customer.display_name)
-        .join(
-            models.Customer,
-            models.Customer.customer_id == models.Transaction.customer_id,
-        )
-        .where(condition)
-        .order_by(models.Transaction.created_at.desc())
-        .limit(20)
-    ).all()
+    def newest(types: tuple[str, ...], limit: int):
+        return db.execute(
+            select(models.Transaction, models.Customer.display_name)
+            .join(
+                models.Customer,
+                models.Customer.customer_id == models.Transaction.customer_id,
+            )
+            .where(condition, models.Transaction.type.in_(types))
+            .order_by(models.Transaction.created_at.desc())
+            .limit(limit)
+        ).all()
+
+    rows = newest(("DEBT", "PAYMENT"), 14) + newest(("INDEXATION",), 6)
 
     return [
         AdminEntry(
@@ -500,7 +518,9 @@ def _recent_entries(db: DbSession, condition) -> list[AdminEntry]:
             description=entry.description,
             created_at=entry.created_at,
         )
-        for entry, name in rows
+        for entry, name in sorted(
+            rows, key=lambda pair: pair[0].created_at, reverse=True
+        )
     ]
 
 
@@ -603,6 +623,9 @@ def _monthly_series(db: DbSession) -> list[MonthPoint]:
         .order_by("y", "m")
     ).all()
 
+    # Which bucket the data stops inside. Everything before it is a whole month.
+    last_month = f"{last.year:04d}-{last.month:02d}"
+
     points = [
         MonthPoint(
             month=f"{int(year):04d}-{int(month):02d}",
@@ -610,6 +633,7 @@ def _monthly_series(db: DbSession) -> list[MonthPoint]:
             payment_minor=payment,
             indexation_minor=indexation,
             entry_count=count,
+            partial=f"{int(year):04d}-{int(month):02d}" == last_month,
         )
         for year, month, debt, payment, indexation, count in rows
     ]
@@ -673,12 +697,15 @@ def _debt_bands(debts: dict[str, int]) -> list[NamedAmount]:
     amount_minor carries a COUNT of people here, not money. The field is reused rather
     than a third model added for one chart; the panel labels the axis.
     """
+    # Labels kept SHORT because they sit on a chart axis. "500-2.000 TL" and "100-500 TL"
+    # side by side overlapped and became unreadable; the lira unit belongs in the axis
+    # caption, not repeated in every tick.
     bands = [
         ("0", lambda amount: amount <= 0),
-        ("0-100 TL", lambda amount: 0 < amount <= 10_000),
-        ("100-500 TL", lambda amount: 10_000 < amount <= 50_000),
-        ("500-2.000 TL", lambda amount: 50_000 < amount <= 200_000),
-        ("2.000 TL+", lambda amount: amount > 200_000),
+        ("1-100", lambda amount: 0 < amount <= 10_000),
+        ("100-500", lambda amount: 10_000 < amount <= 50_000),
+        ("500-2B", lambda amount: 50_000 < amount <= 200_000),
+        ("2B+", lambda amount: amount > 200_000),
     ]
     return [
         NamedAmount(

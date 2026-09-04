@@ -34,3 +34,7 @@ local.properties
 # --- OS ---
 .DS_Store
 Thumbs.db
+
+# web-admin (Tur 49)
+node_modules/
+dist/

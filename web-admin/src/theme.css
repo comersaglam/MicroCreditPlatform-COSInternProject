@@ -1,0 +1,541 @@
+/*
+ * T-Fides Admin -- the third surface.
+ *
+ * Every value below is lifted from app-mobile/app/src/main/res/values/colors.xml, and the
+ * comments there are the reasoning for them. Two files, one palette: the POS, the phone
+ * and this panel are meant to read as one product, and the cheapest way to keep that true
+ * is for the hexes to be greppable in both places rather than "roughly the same blue".
+ *
+ * No Tailwind. The panel is nine screens with one theme, so a hand-written file this size
+ * is smaller than the config a framework would need -- and the orbiting trail below has to
+ * be real CSS anyway, because @property cannot live inside an @layer.
+ */
+
+/* ---- registered so the browser can interpolate the trail's rotation ----
+ *
+ * MUST stay at the top level. Inside a layer the angle is not animatable and the trail
+ * simply sits still -- which is also the graceful degradation on a browser without
+ * @property support, so a mistake here fails quietly rather than visibly. */
+@property --trail-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+:root {
+  /* Backgrounds carry a slight blue cast rather than being neutral grey: related to the
+     brand without reading as coloured. Pure black is avoided -- on OLED it makes edges
+     look cut out. */
+  --bg: #0b0d12;
+  --surface: #14171f;
+  --surface-elev: #1b1f29;
+
+  /* The focus card's three-stop gradient. Three rather than two because a straight fade
+     made the card look like it was dissolving. */
+  --card-top: #1a1e28;
+  --card-mid: #14171f;
+  --card-bottom: #0f1219;
+
+  /* Token blue is a FILL: buttons, chips, the stripe. White on it clears 8:1.
+     It is NOT text on a dark ground -- there it measures about 3:1 and fails AA.
+     --primary-light is the same hue opened up for that job. */
+  --primary: #2151f3;
+  --primary-light: #5b87ff;
+  --primary-container: #152a5e;
+
+  --accent: #22c55e;
+  --error: #ff6b6b;
+  --warn: #f5a524;
+
+  --on-bg: #e8eaf0;
+  --muted: #8b92a4;
+  --outline: #262b36;
+  --on-primary: #ffffff;
+
+  /* Money direction, from the same four-tone system the apps use: red leaves, green
+     arrives. */
+  --debt: #ff9090;
+  --credit: #4ade80;
+
+  /* The trail's own pair. RECollabAI's trail runs a DARK head because its ground is light
+     metal; ours is #0B0D12, so the head is near-white and the flanks are the brand blue
+     opened up. Same technique, inverted for the ground it sits on. */
+  --glow-a: 222 100% 68%;
+  --glow-b: 226 89% 54%;
+  --trail-head: 220 30% 97%;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    sans-serif;
+  /* Tabular figures so a column of money lines up on the decimal. */
+  --font-money: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--on-bg);
+  background-color: var(--bg);
+  /* "Broken metallic": three very low-alpha sheens over the flat ground plus a shallow
+     diagonal. Kept faint on purpose -- the ground is what the numbers sit on, and any
+     more contrast here starts competing with them. Fixed, because metal is a surface the
+     page rests on, not something that scrolls with it. */
+  background-image:
+    radial-gradient(1200px 620px at 10% -10%, hsl(var(--glow-b) / 0.09), transparent 60%),
+    radial-gradient(1000px 520px at 92% 2%, hsl(var(--glow-a) / 0.06), transparent 62%),
+    radial-gradient(760px 700px at 55% 118%, hsl(226 60% 40% / 0.06), transparent 66%),
+    linear-gradient(158deg, #12151d 0%, #0b0d12 46%, #090b10 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+
+/* ---- surfaces ---- */
+
+.card {
+  background: linear-gradient(
+    180deg,
+    var(--card-top),
+    var(--card-mid) 55%,
+    var(--card-bottom)
+  );
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  /* No shadow anywhere in this theme. On a dark ground a shadow is not a lift, it is a
+     smudge around the corners -- the same rule colors.xml states for the phone. */
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-md);
+}
+
+/* ---- the orbiting edge trail ----
+ *
+ * A short light travelling the border. A conic gradient is painted over the whole element
+ * and then masked down to a 1.5px band: `padding` defines the band's width and
+ * mask-composite carves the middle out, which is what turns a filled rectangle into a
+ * ring. border-radius: inherit means the trail follows whatever corner the host has.
+ *
+ * ⚠️ ONLY on KPI cards. The phone's rule is that the focus card appears on six screens
+ * out of forty, because an accent that is everywhere is not an accent; this is that rule
+ * on the web. Tables, chart frames and list rows stay flat. */
+.edge-trail {
+  position: relative;
+}
+
+.edge-trail::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  z-index: 2;
+  background:
+    conic-gradient(
+      from var(--trail-angle, 0deg),
+      transparent 0deg,
+      transparent 292deg,
+      hsl(var(--glow-b) / 0.45) 330deg,
+      hsl(var(--trail-head) / 0.95) 346deg,
+      hsl(var(--glow-a) / 0.5) 353deg,
+      transparent 360deg
+    ),
+    /* The static layer underneath: a lit top edge that fades out. This is what remains
+       under reduced motion, so the card still reads as top-lit rather than losing its
+       border entirely. */
+    linear-gradient(180deg, hsl(var(--glow-a) / 0.22), transparent 60%);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .edge-trail::before {
+    animation: trail-orbit 5.5s linear infinite;
+    /* NEGATIVE delay. A positive one freezes each trail at its starting angle until the
+       delay elapses, so a row of cards visibly catches up on load; negating it starts
+       each one already advanced, with the same spacing and no freeze. */
+    animation-delay: calc(-1 * var(--trail-delay, 0s));
+  }
+}
+
+@keyframes trail-orbit {
+  to {
+    --trail-angle: 360deg;
+  }
+}
+
+/* ---- typography ---- */
+
+h1 {
+  font-size: 22px;
+  font-weight: 650;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--on-bg);
+}
+
+.sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.money {
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+}
+
+.pos {
+  color: var(--credit);
+}
+.neg {
+  color: var(--debt);
+}
+
+/* ---- kpi ---- */
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.kpi-value {
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+  font-size: 26px;
+  font-weight: 620;
+  letter-spacing: -0.02em;
+}
+
+.kpi-note {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* ---- tables ---- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 550;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--outline);
+  white-space: nowrap;
+}
+
+td {
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--outline);
+}
+
+tbody tr:hover {
+  background: hsl(var(--glow-b) / 0.06);
+}
+
+tbody tr.clickable {
+  cursor: pointer;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-family: var(--font-money);
+  font-variant-numeric: tabular-nums;
+  /* A figure must not wrap. "55.529,31" breaking before its "TL" reads as two rows of
+     data, and in a column of money that is the one thing the eye cannot recover from. */
+  white-space: nowrap;
+}
+
+/* Names are the column that SHOULD give way when the table is narrow -- so nothing else
+   has to. */
+td:first-child,
+th:first-child {
+  min-width: 120px;
+}
+
+/* ---- shell ---- */
+
+.shell {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  border-right: 1px solid var(--outline);
+  padding: 20px 14px;
+  background: linear-gradient(180deg, hsl(226 30% 12% / 0.6), transparent 40%);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 20px;
+}
+
+.brand img {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+}
+
+.brand-name {
+  font-weight: 640;
+  letter-spacing: -0.01em;
+}
+
+.brand-role {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.nav-group {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 16px 10px 6px;
+}
+
+.nav-item {
+  display: block;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--on-bg);
+  text-decoration: none;
+  font-size: 13.5px;
+  margin-bottom: 2px;
+}
+
+.nav-item:hover {
+  background: var(--surface-elev);
+}
+
+.nav-item.active {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-weight: 550;
+}
+
+.nav-item.disabled {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.content {
+  padding: 26px 30px 60px;
+  max-width: 1280px;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+/* ---- controls ---- */
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--outline);
+  background: var(--surface-elev);
+  color: var(--on-bg);
+  padding: 8px 14px;
+}
+
+button:hover:not(:disabled) {
+  border-color: hsl(var(--glow-a) / 0.4);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+  font-weight: 550;
+}
+
+button.danger {
+  background: transparent;
+  border-color: hsl(0 70% 60% / 0.5);
+  color: var(--error);
+}
+
+input {
+  font: inherit;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--outline);
+  background: var(--bg);
+  color: var(--on-bg);
+}
+
+input:focus {
+  outline: none;
+  border-color: hsl(var(--glow-a) / 0.55);
+}
+
+/* ---- badges ---- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--outline);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.badge.mock {
+  border-color: hsl(38 90% 55% / 0.4);
+  color: var(--warn);
+  background: hsl(38 90% 55% / 0.08);
+}
+
+.badge.real {
+  border-color: hsl(142 70% 45% / 0.4);
+  color: var(--accent);
+  background: hsl(142 70% 45% / 0.08);
+}
+
+.badge.missing {
+  border-color: hsl(0 70% 60% / 0.4);
+  color: var(--error);
+  background: hsl(0 70% 60% / 0.08);
+}
+
+/* A strip that says a whole screen is not live. Warm rather than red: this is a
+   disclosure, not a failure. */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid hsl(38 90% 55% / 0.3);
+  background: hsl(38 90% 55% / 0.07);
+  color: var(--on-bg);
+  font-size: 13px;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.state {
+  padding: 40px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spread {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+a.back {
+  color: var(--primary-light);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+/* ---- login ---- */
+
+.login-wrap {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+}
+
+.error-text {
+  color: var(--error);
+  font-size: 13px;
+  margin: 12px 0 0;
+}
