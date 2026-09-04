@@ -438,6 +438,54 @@ kasasına iş koyamaz.
 
 ---
 
+## A.9 Admin paneli (Tur 48) — `web-admin`'e özel
+
+⚠️ **Bu bölüm `shared-contracts/openapi.yaml`'a GİRMEZ.** O dosya üç istemcinin (app-pos,
+app-mobile, backend) ortak sözleşmesi; buradaki şekilleri **yalnız web-admin** okuyor.
+Aynı sebeple Pydantic modelleri `schemas.py`'a değil
+[`routers/admin.py`](../backend/app/routers/admin.py) içine yazıldı.
+
+**Auth:** `Authorization: Bearer <admin token>`. Kullanıcı access token'ı **kabul
+edilmez** — token `typ:"admin"` taşımalı ([deferred.md §L.6](deferred.md)). Hata gövdesi
+diğer uçlarla aynı: `{"error":{"code","message"}}`.
+
+| Uç | İş | Not |
+|---|---|---|
+| `POST /admin/login` | `{password}` → `{token, expires_at}` | Yanlış şifre 401 `invalid_credentials` |
+| `GET /admin/sellers` | Her dükkân: müşteri/hareket sayısı, alacak | Tek `GROUP BY`, alacağa göre sıralı |
+| `GET /admin/sellers/{user_id}` | Dükkân + `breakdown` + defter (ilk 20) + son hareketler | Satıcı değilse 404 `seller_not_found` |
+| `GET /admin/buyers` | Her alıcı: dükkân sayısı, toplam borç | Borç `customers.claimed_by_user_id` üzerinden |
+| `GET /admin/buyers/{user_id}` | Kişi + `breakdown` + dükkân bazında borç + hareketler | 404 `buyer_not_found` |
+| `GET /admin/stats/sellers` | Platform toplamı, 12 aylık seri, dükkân sıralaması, tahsilat oranı, riskli müşteriler | |
+| `GET /admin/stats/buyers` | Aynı ledger alıcı tarafından: kategori dağılımı, borç bantları, en borçlular | |
+| `GET /admin/me` | Oturum, tablo satır sayıları, migration head, seed durumu, **mock/gerçek envanteri** | Satır sayıları `reset._TABLES`'ı geziyor |
+| `POST /admin/reset?with_demo=true` | Wipe + `seed` + `seed_demo` + `warm_indexation` | ⚠️ §F.4'ün kararını geri alıyor ([§L.19](deferred.md)) |
+
+**Yazılmayan uçlar, bilerek:**
+
+| Uç | Neden yok |
+|---|---|
+| `POST /admin/users/{id}/ban\|suspend\|activate` | `users.status` kolonu yazılmadı; butonlar yalnız ekranda ([§L.20](deferred.md)) |
+| `POST /admin/transactions/{id}/adjust` | Kimsenin çağırmadığı 501 ölü kod; açıklama panelde ([§L.2](deferred.md)) |
+| `GET /admin/traffic` | Trafik sekmesi tamamen frontend mock ([§L.21](deferred.md)) |
+
+**Neden dikkat edilmesi gerekenler:**
+
+- **Bakiye burada yeniden tanımlanmıyor.** Her toplam `ledger._SIGNED_AMOUNT`/`_BALANCE`
+  veya `breakdown._total_of` üzerinden geçiyor. Platform geneli gruplamalar için
+  `ledger.py`'a `receivables_by_seller` ve `debts_by_buyer` eklendi — router'a değil.
+- **Panel yazmıyor.** Hiçbir uç `ensure_indexed*` çağırmıyor: paneli açmak ledger'a geri
+  alınamaz satır yazmamalı. Isıtma ayrı komut (`python -m app.warm_indexation`).
+- **Liste başına tek sorgu.** 107 müşteri × 5803 işlemde satır başına bakiye sorgusu bir
+  ekranı yüz round-trip'e çevirirdi.
+- **Aylık gruplama `func.extract`** — `date_trunc` SQLite'ta, `strftime` Postgres'te yok.
+- **Zaman pencereleri `max(created_at)`'ten geriye**, `now()`'dan değil: demo verisi sabit
+  bir tarihte bitiyor, saat ise durmuyor.
+- **Son ay `partial:true` dönüyor** — kısmi kova çizilirse grafikte çöküş gibi okunuyor
+  ([§L.22](deferred.md)).
+
+---
+
 # BÖLÜM B — İLERİ FAZ endpoint'leri (premature ama planlı)
 
 Şu an gerçek kullanım yok; contract'ta yer tutucu + Aşama 3'te Room entity+DAO+interface iskeleti

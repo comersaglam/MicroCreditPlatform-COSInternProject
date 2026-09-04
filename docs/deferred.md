@@ -1152,10 +1152,21 @@ mevcut uçlara dokunmaz).
 `seed_demo` 3500 satır dolduruyor (hafta içi/sonu farkı, öğle ve akşam tepesi, ~%10 hata).
 Yazan middleware **yok** — panel geçmişi gösterecek, canlı olayı göstermeyecek.
 
-### L.2 Ödeme düzeltme mock — ledger append-only  ⬜ PLANLANDI (Tur 48)
+**Tur 49 durumu:** panel yazıldı ve trafiği **hiç okumuyor** — §L.21'e bak. Yani bu madde
+iki kat geçerli: tabloya canlı yazan yok, ve panel tabloyu okumuyor bile. Tablodaki 3499
+satır (canlıda ölçüldü) yerinde duruyor, kullanılmıyor.
 
-Admin panelindeki "ödemeyi düzelt" butonu `POST /admin/transactions/{id}/adjust`'a
-gider, uç **501 döner** ve nedenini açıklar.
+### L.2 Ödeme düzeltme mock — ledger append-only  ✅ UYGULANDI (Tur 49), ama planlanandan farklı
+
+⚠️ **Uç YAZILMADI.** Plan `POST /admin/transactions/{id}/adjust`'ın **501 dönmesini**
+öngörüyordu; onun yerine panelde işlem tablosunun başında **pasif bir buton** ve yanında
+tek cümle var
+([`Entries.tsx`](../web-admin/src/components/Entries.tsx)): *"Ledger append-only —
+düzeltme ters kayıtla yapılır, bu faz kapsamında değil."*
+
+**Neden böyle:** kimsenin çağırmadığı bir 501 ölü koddur. İzleyicinin okuduğu bir cümle
+ise asıl mesajın kendisi — mimari "hayır" dedi ve panel nedenini biliyor. Aşağıdaki gerekçe
+aynen geçerli.
 
 **Neden:** `transactions` DB seviyesinde append-only (migration 0001'deki
 `trg_transactions_append_only` trigger'ı). Bir satırı düzeltmek mimarinin en temel
@@ -1287,6 +1298,16 @@ cevabı yok — birden fazla kişi aynı şifreyi kullanırsa ayırt edilemez.
 **Yapılması gereken (ileride):** `users.is_admin` kolonu + `require_admin` bağımlılığı,
 mevcut OTP akışının üstüne. O zaman admin işlemleri de `audit_log`'a gerçek bir
 `actor_user_id` ile düşer (bkz. §L.1).
+
+**Tur 48'de uygulandı.** Kod: [`admin_auth.py`](../backend/app/admin_auth.py) (kapı),
+[`security.create_admin_token`](../backend/app/security.py) (üçüncü token tipi),
+`config.Settings.admin_password`. Ayrımı koruyan tek şey `decode_token`'ın **mevcut `typ`
+kontrolü** — access/refresh ayrımını zaten o sağlıyordu; üçüncü tip aynı kapıdan geçiyor.
+Kanıtı `test_a_user_access_token_is_not_an_admin_token`: kontrol `"access"` yapılınca test
+200 döndü, yani kural olmadan **her giriş yapmış esnaf platformun tamamını okuyabiliyordu**.
+
+⚠️ **Bu anahtarın ucu Tur 48'de keskinleşti:** artık `POST /admin/reset`'i de açıyor
+(§L.19). *"Admin bir kullanıcı değil, bir anahtar"* cümlesi yazıldığı zamandan daha ağır.
 
 ### L.7 Endeks satırı geri alınamaz — itiraz akışı yok  ⚠️ AÇIK (Tur 43)
 
@@ -1596,6 +1617,14 @@ tetikleniyor, yani bir okuma yapılmadan satır oluşmuyor. Kod doğru, veri yok
    toplam istiyor, ikisi farklı şeyler.
 2. **Endeksleme ısıtması** — demo öncesi her hesap için endeksleme tetikleyen uçlara birer
    istek. 210.088 TL açık bakiye ve %58 kümülatif TÜFE ile ciddi rakamlar çıkar.
+
+   ✅ **Tur 48'de yapıldı:** [`warm_indexation.py`](../backend/app/warm_indexation.py),
+   `python -m app.warm_indexation`. Ölçüldü: **22 → 1222 satır**, toplam enflasyon farkı
+   **204,70 TL → 67.663,98 TL**. Yani bu maddenin teşhisi doğruydu ve maliyeti 15 satırdı.
+   Uç değil komut, çünkü satırlar geri alınamıyor (§L.7); tek istisna `POST /admin/reset`,
+   o da sildiğini geri koymak için çağırıyor (§L.19). ⚠️ Çekirdek seed hesapları
+   (`u_owner`/`u_market`) **0 yeni satır** yazdı — zaten günceldiler, yani
+   `test_seed_balances.py`'nin sabitlediği bakiyeler kaymadı.
 3. **Kalem bazında için ayrıca:** `BasketDao`'ya toplu sorgu (`IN (:ids)` veya join —
    bugün yalnız tek-id okuma var), domain `Transaction`'a `basketId`, ve `seed_demo.py`'ye
    sepet yazımı. Bu üçü olmadan kart boş çalışır.
@@ -1641,3 +1670,90 @@ instrumentation yok (§L.12) ve 8GB makinede her turda ödenecek bir bedel deği
 
 ⚠️ Özellikle **bir kontrolün diğerini etkinleştirdiği** yerlerde: görünmeyen bir kontrol,
 etkinleştirdiği butonu sessizce sonsuza kadar pasif bırakır.
+
+### L.19 `POST /admin/reset` — §F.4'ün kararı bilinçli olarak geri alındı  ⚠️ AÇIK (Tur 48)
+
+[§F.4/3](#f4) *"reset asla bir uç olmasın"* diyordu — **token korumalı veya debug korumalı
+bile olmasın**. Gerekçesi şuydu: kullanıcının defterini yanlışlıkla silebiliyor **olması**,
+kapının ne kadar iyi kilitlendiğinden bağımsız olarak başlı başına bir sorundur.
+
+**Tur 48'de bu karar geri alındı** (kullanıcı kararı 48.4). Değişen şey: sunum arasında
+sistemi terminal açmadan sıfırlamak gerekiyor. §F.4'ün gerekçesi *uygulamaları kullanan
+insanlar* içindi ve onlar için hâlâ geçerli — bu kapıya **hiçbir telefon veya POS akışı
+ulaşamıyor**: ayrı bir kimlik (`typ:"admin"`), hiçbir istemcinin taşımadığı bir şifre, ve
+panelde `SIFIRLA` yazdıran iki aşamalı onay.
+
+⚠️ **Kalan risk yazılı olsun:** tek paylaşılan şifre, rate-limit yok, kilitleme yok, ve
+artık **veritabanını silen bir uç** da bu şifrenin arkasında. "Kim bastı" sorusunun cevabı
+yok (§L.6). Demo için kabul edilebilir, başka hiçbir şey için değil.
+
+**İki adım daha gerekti — ikisi de canlıda ölçüldü:**
+
+1. `reset()` yalnız `seed()` çalıştırıyor. İlk hâliyle uç **5803 → 37 satır** yapıyordu:
+   demoyu geri yüklemesi gereken buton demoyu boşaltıyordu. → `seed_demo(db)` eklendi.
+2. `seed_demo` **endeksleme yazmıyor** (tembel, §L.17). İkinci hâliyle 5781 satır geri
+   geliyordu ama **1222 INDEXATION satırının hepsi gitmişti**: alacak yerindeydi, üzerindeki
+   enflasyon **sıfırdı** — yani demonun asıl argümanı sessizce kaybolmuştu. →
+   `warm_indexation(db)` son adım olarak bağlandı.
+
+**Testi yok, olamaz:** `reset()` `TRUNCATE ... RESTART IDENTITY CASCADE` kullanıyor; SQLite
+bunu tanımıyor ve `transactions`'ın append-only trigger'ı yüzünden DELETE'e çevrilemiyor.
+Kapı test edildi (yetkisiz erişim 401), silme **canlı Postgres'te elle** doğrulandı — bu,
+`conftest.py`'ın trigger için zaten yazdığı duruşun aynısı.
+
+### L.20 Ban / askıya alma butonları görsel — `users.status` kolonu yok  ⬜ PLANLANDI (Tur 48'de vitrin)
+
+Panelin alıcı ve satıcı detay sayfalarındaki **Askıya al / Yasakla / Aktifleştir**
+butonları yalnız kendi bileşen state'ini değiştiriyor
+([`AccountActions.tsx`](../web-admin/src/components/AccountActions.tsx)). Sayfa
+yenilenince eski hâline döner ve yanında bunu söyleyen bir rozet duruyor.
+
+⚠️ **Bu, [faz6-sunum-plani.md](faz6-sunum-plani.md) §2 karar 2.7 ve §4'ün Tur 48 tablosuyla
+ÇELİŞİYOR** — ikisi de banı *gerçek* + migration 0008 diye yazıyordu. Kapsam kullanıcı
+kararıyla daraltıldı (48.2): **migration 0008 yazılmadı, head 0007'de kaldı.**
+
+⚠️ **Dürüst sonucu:** faz6 §6'nın 7. adımı — *"panelden bir kullanıcıyı banla → app-mobile'dan
+giriş 403"* — **gösterilemez**. O doğrulama maddesi düzeltildi; yerine mock rozetinin
+kontrolü kondu. Yapılamayacak bir adımı doğrulama listesinde bırakmak, listeyi izleyen
+kişiye kırık bir sistem gösterir.
+
+**Gerçek implementasyon:** `users.status` kolonu + migration 0008 + üç yazma ucu +
+`/auth/otp/verify`'da 403 kontrolü. Kolon eklendiğinde `AccountActions`'ın state'i
+`api.post`'a çevrilir; bileşenin arayüzü değişmez.
+
+### L.21 Trafik sekmesi tamamen frontend mock — `audit_log` okunmuyor  ⬜ PLANLANDI (Tur 49)
+
+[`Traffic.tsx`](../web-admin/src/pages/Traffic.tsx)'in **her rakamı sabit**. `GET
+/admin/traffic` ucu **yazılmadı**; sayfa veritabanına hiç dokunmuyor.
+
+Bu, §L.1'den **bir adım daha ileri**: §L.1 tablonun yalnız seed'den dolduğunu söylüyor,
+§L.21 panelin o tabloyu **okumadığını** da söylüyor. Kullanıcı kararı: sekmenin işi bir
+operasyon görünümünün *şeklini* göstermek, ve üretilmiş satırları grafiğe dökmek uydurma
+veriyi ölçüm gibi giydirirdi.
+
+⚠️ **Teknik engel yok, ve bu bilinsin:** `audit_log`'da **3499 gerçek desenli satır hazır
+bekliyor** — canlıda ölçüldü: öğle 661 / akşam 758 tepesi, cumartesi yoğunluğu, uç bazında
+%5–12 hata oranı. Sekmeyi gerçek veriye bağlamak **tek bir `GROUP BY`** sorgusu. Ertelenen
+şey iş değil, karar.
+
+Sayfanın en üstünde bunu söyleyen bir şerit var — okuyan kişi hangi rakamın canlı olduğunu
+hatırlamak zorunda kalmasın.
+
+### L.22 Grafik doğruluğu ile grafik anlamı ayrı şeyler  ⚠️ AÇIK (Tur 49)
+
+Tur 49'un dört hatası da **derleme, tip kontrolü ve testlerden geçti**, ekranda çıktı:
+
+| Ne göründü | Kök neden |
+|---|---|
+| Dört grafik kutusu **tamamen boş** (4 container, 330×260, **0 SVG**, konsolda hata yok) | `ResponsiveContainer` tek çocuğunu ölçüp *klonluyor*; `children` prop'undan geçirip `ReactElement`'a cast etmek bunu bozuyor |
+| İki çizgi de sağ kenarda **dikey olarak sıfıra düşüyor** | Veri ayın 1'inde bitiyor (Ağustos 660, Eylül 106 satır) — "tahsilat çöktü" gibi okunuyor |
+| Hareket tablosunun **20 satırı da aynı** ("Eylül 2026 enflasyon farkı") | Endeksleme ayın 1'ine damgalı ve ısıtma son gerçek satıştan *sonraya* yazdı |
+| Beş bant etiketi **üçe düştü**, barlar hiçbir etiketle hizalı değil | Recharts çakışacağını düşündüğü tick'leri seyreltiyor |
+
+⚠️ **İkisi "yanlış veri" değil.** Sorgular doğruydu, rakamlar doğruydu; **anlamı** yanlıştı.
+Bu, [[plausibility-check-the-output]]'un tam tarifi ve §L.18'in web tarafındaki karşılığı:
+*derleme yeşil, veri yeşil, ekran yanlış anlatıyor.*
+
+**Kalıcı sınır:** bu depoda frontend testi yok ve bu turda da eklenmedi. Yeni bir grafik
+veya tablo eklendiğinde **ekran görüntüsü alınmalı** ve üç şey sorulmalı: (1) çizildi mi,
+(2) eksen etiketleri barlarla hizalı mı, (3) **son nokta kısmi bir dönem mi**.

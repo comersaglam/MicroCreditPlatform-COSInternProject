@@ -3798,3 +3798,152 @@ yerleşim yalnız ekranda doğrulanır.**
 çalışıyor" bilgisi, sorunu diyalogun tamamından checkbox'a bağlı olan tek butona indirdi.
 
 **Faz 6'nın mobil tarafı BİTTİ (43-47).** Sıradaki: Tur 48 — admin backend.
+
+---
+
+### 2026-09-04 — Tur 48: admin backend — anahtar, dört okuma ve geri getiren bir reset
+
+Panelin yaslanacağı API. Bu turun tamamı `backend/`; **iki app'e dokunulmadı.** Kapsam
+sunum yakınlığı yüzünden bilinçli daraltıldı: **okumalar gerçek, yazmalar mock**
+(faz6 §2 kararları 48.1–48.6).
+
+Backend'deki 22 ucun hepsi kullanıcı-kapsamlı ve bu **yük taşıyan** bir tasarım: bir
+satıcının başkasının defterini okumasını engelleyen şey o. Panel ise tam tersini istiyor,
+o yüzden `/admin/*` mevcut uçlarda açılan bir delik değil, **bilinçli bir istisna**.
+
+#### Yapılanlar
+
+| Ne | Nerede | Gerçek mi? |
+|---|---|---|
+| Üçüncü token tipi (`typ:"admin"`) | `security.create_admin_token` | **Gerçek** |
+| Kapı | [`admin_auth.py`](../backend/app/admin_auth.py) | **Gerçek** |
+| `POST /admin/login` | `routers/admin.py` | **Gerçek** |
+| Alıcı/satıcı listesi + detay (4 uç) | `routers/admin.py` | **Gerçek SQL** |
+| İki istatistik ucu | `routers/admin.py` | **Gerçek SQL** |
+| `GET /admin/me` + mock/gerçek envanteri | `routers/admin.py` | **Gerçek** |
+| `POST /admin/reset` | `routers/admin.py` | **Gerçek** — §F.4'ü geri alıyor |
+| Endeksleme ısıtması | [`warm_indexation.py`](../backend/app/warm_indexation.py) | **Gerçek** |
+| CORS (uygulamanın ilk middleware'i) | `main.py` | **Gerçek** |
+| Ban / askıya alma | — | ⬜ **YAZILMADI** (§L.20) |
+| Ödeme düzeltme ucu | — | ⬜ **YAZILMADI** (§L.2) |
+| Trafik ucu | — | ⬜ **YAZILMADI** (§L.21) |
+
+`ledger.py`'a iki yardımcı eklendi: `receivables_by_seller` ve `debts_by_buyer`. Router'a
+değil **oraya**, çünkü bakiye formülü bu depoda on yerde yazılı ve on birinci kopya hiçbir
+testin karşılaştırmadığı ilk kopya olurdu. `breakdown_for(db)`'nin iki selektörü de `None`
+bırakılınca platform geneli kırılımını **bedavaya** veriyor — turun en büyük yeniden
+kullanım kazancı.
+
+⚠️ **Panel yazmıyor.** `routers/customers.py` esnaf kendi defterini okuduğunda o ayın
+endekslemesini yazıyor ve bu kopyalanacak gibi duran bir desen. Kopyalansaydı **paneli
+açmak** 107 müşteri için geri alınamaz satır yazardı (§L.7). Bunu koruyan bir test var.
+
+#### Doğrulama
+
+- `pytest -q`: **291 geçti, 18 atlandı** (taban 256/18 idi; atlananlar §L.14'ün `skipif`'i)
+- Canlı Postgres'te (5803 işlem): satıcı listesi **26 ms**, N+1 yok
+- `u_owner` → `c1` **490,00**, `c2` **165,00** — `test_seed_balances.py:37-38`'in
+  testle sabitlediği rakamlar, yani panel–test–cihaz aynı sayıyı söylüyor
+- Kırılım invariant'ı: 111050 + 19643 − 22000 = 108693 ✓
+- Kullanıcı access token'ıyla `/admin/buyers` → **401**
+- **Reset canlıda:** 7003 → (reset) → 4768 borç + 1013 ödeme + 1222 endeksleme,
+  67.663,98 TL enflasyon farkı geri geldi
+
+#### Öğrenilen
+
+**"Reset"in ne geri getirdiğini kimse sormamış.** `reset()` yalnız `seed()` çağırıyor.
+İlk hâliyle uç **5803 → 37 satır** yapıyordu: demoyu geri yüklemesi gereken buton demoyu
+boşaltıyordu, sahnede. `seed_demo` eklendikten sonra da bitmedi — endeksleme **tembel**
+olduğu için 1222 satırın hepsi gitmişti: alacak yerindeydi, üzerindeki enflasyon **sıfırdı**.
+Yani demonun asıl argümanı sessizce kaybolmuştu. Restore üç adım: wipe + seed + **ısıt**.
+
+**Tembel tetikleme "kod doğru, veri yok" demektir.** Platformda 22 endeksleme satırı vardı
+ve hepsi cihaz testinin açtığı iki hesaba aitti. Toplam enflasyon farkı **204,70 TL**.
+Altı demo dükkanında sıfır — çünkü o hesaplara hiç kimse girmemişti. 15 satırlık bir komut
+22 → **1222 satır**, 204,70 → **67.663,98 TL** yaptı. §L.17 bunu teşhis etmişti;
+maliyeti gerçekten küçüktü.
+
+**Üç token tipini bir kapıdan geçirmek, ayrımı bir kez tanımlamaktır.**
+`decode_token`'ın mevcut `typ` kontrolü access/refresh ayrımını zaten koruyordu.
+Kontrol `"access"` yapılınca `test_a_user_access_token_is_not_an_admin_token` **200
+döndü** — yani kural olmadan her giriş yapmış esnaf platformun tamamını okuyabiliyordu.
+Kırmızıyı görmek testin bir şey ölçtüğünün tek kanıtı ([[prove-the-test-fails-first]]).
+
+**Planın bulduğu bir eksik zaten kapanmıştı.** faz6 §4 *"`reset.py`'da `pgw_jobs` yok"*
+diyordu; `_TABLES` dokuz tablonun hepsini içeriyor. Bayat bir TODO, doğrulanıp silindi.
+
+**Sıradaki:** Tur 49 — web panel.
+
+---
+
+### 2026-09-04 — Tur 49: T-Fides Admin — dokuz ekran ve ekranın söylediği dört şey
+
+`web-admin/`: React 18 + Vite + Recharts, TypeScript, **Tailwind yok**. Palet
+[`colors.xml`](../app-mobile/app/src/main/res/values/colors.xml)'den **değer değer**
+kopyalandı — üç yüzeyin aynı ürün olduğu iddiası iki dosyayı grep'leyerek doğrulanabilsin.
+
+Zemin app'in `#0B0D12`'si üstüne üç çok soluk sheen ve sığ bir diyagonal: fırçalanmış metal
+gibi okunacak kadar, üstündeki rakamlarla yarışmayacak kadar. Orbit trail **yalnız KPI
+kartlarında** — telefonun *"odak kartı kırk ekrandan altısında"* kuralının web karşılığı;
+tek bileşenin içinde tutmak bunu zorluyor, tabloya serpilecek başıboş bir class yok.
+
+#### Ekranlar
+
+| Rota | İçerik | Veri |
+|---|---|---|
+| `/login` | Şifre + T-Fides kimliği | **Gerçek** |
+| `/buyers`, `/buyers/:id` | 4 KPI + tablo; detayda dükkân bazında borç | **Gerçek** |
+| `/sellers`, `/sellers/:id` | 4 KPI + tablo; detayda defter + kırılım + hareketler | **Gerçek** |
+| `/stats/buyers` | Kategori donut'u, borç bantları, aylık harcama, en borçlular | **Gerçek** |
+| `/stats/sellers` | Veresiye/tahsilat, dükkân alacakları, **aylık enflasyon farkı**, riskli müşteriler | **Gerçek** |
+| `/traffic` | DAU, uç dağılımı, durum kodları, saat×gün heatmap | ⚠️ **Tamamen mock** (§L.21) |
+| `/profile` | Oturum, satır sayıları, **mock/gerçek envanteri**, reset | **Gerçek** |
+
+**Dürüstlük panelin kendi tasarımının parçası:** `/profile`'daki envanter tablosu
+`deferred.md §L`'yi ekranda gösteriyor, trafik sayfasının başında şerit var, mock butonların
+yanında rozet var. Sunumu yapan kişi hangi rakamın canlı olduğunu hatırlamak zorunda kalmasın
+— Tur 46'nın telefonda yaptığı şeyin aynısı.
+
+#### Doğrulama
+
+`npm run dev` + ekran görüntüsü, altı sayfa. `tsc -b` temiz, `npm run build` temiz.
+
+- Satıcılar → `Yıldız Bakkal / 22 müşteri / 1.566 hareket / 55.529,31 TL`
+- `dseller_0` detayı: 248.015,00 + 13.076,31 − 205.562,00 = **55.529,31** ✓
+- Alıcılar → `Yasemin Kaya / 3 defter / 18.625,00 TL`; `u1` **iki dükkânda**
+- Satıcı ist. → 278.802,48 TL alacağın **67.663,98'i** enflasyon farkı, tahsilat %81,1
+- Trail: KPI kartlarında dönüyor (kareler arası açı farkından görüldü), tablolarda **yok**
+
+#### Öğrenilen
+
+**Dördü de derlemeden, tip kontrolünden ve testlerden geçti; ekranda çıktı.** (§L.22)
+
+**1. Bütün grafikler boştu.** Dört `ResponsiveContainer`, doğru ölçülmüş (330×260),
+**0 SVG çocuk**, konsolda **hiç hata yok**. Sebep: container tek çocuğunu ölçüp
+*boyutlarla klonluyor*; grafiği `children` prop'undan geçirip `ReactElement`'a cast etmek
+o klonlamayı bozuyor. Her grafik artık kendi container'ını taşıyor. **Sessiz hiçbir şey
+yapmama**, en pahalı hata türü.
+
+**2. İki çizgi de sağ kenarda dikey olarak sıfıra düşüyordu.** Veri ayın 1'inde bitiyor
+(Ağustos **660** satır, Eylül **106**), ama grafik *"tahsilat çöktü"* diyordu. Sorgu
+doğru, rakam doğru, **anlamı yanlış**. Backend artık o kovayı `partial` işaretliyor, panel
+çizmiyor ve nedenini yazıyor. [[plausibility-check-the-output]]'un tam tarifi.
+
+**3. Hareket tablosunun 20 satırı da aynıydı** — *"Eylül 2026 enflasyon farkı"*. Endeksleme
+ayın 1'ine damgalı ve ısıtma son gerçek satıştan **sonraya** yazmış; tarihe göre sıralamak
+bir yıllık alışverişi tablonun altından attı. Artık tür bazında pencere: 14 alışveriş/ödeme
++ 6 endeksleme.
+
+⚠️ **Bu testin ilk hâli hiçbir şey ölçmüyordu.** `ensure_indexed_book` çağırıp çıktıya
+bakıyordu ve kusur geri konduğunda **yeşil kaldı** — çekirdek seed'de gömülecek kadar
+hareket yok. Test artık koşulu **kendisi kuruyor** (son satırdan sonraya 25 endeksleme
+satırı) ve kusurla kırmızıya dönüyor. Yeşil bir test, bir şey ölçtüğü anlamına gelmiyor.
+
+**4. Beş bant etiketi üçe düştü**, barlar hiçbir etiketle hizalı değildi — Recharts
+çakışacağını düşündüğü tick'leri seyreltiyor. `interval={0}`, ve bant etiketleri kısaldı.
+
+**Kalıcı sınır:** bu depoda frontend testi yok. Yeni bir grafik eklendiğinde ekran
+görüntüsü alınmalı ve üç şey sorulmalı: çizildi mi, eksen hizalı mı, son nokta kısmi
+dönem mi.
+
+**Faz 6'nın panel tarafı BİTTİ (48-49).** Sıradaki: Tur 50 — Gemini chatbot (opsiyonel).

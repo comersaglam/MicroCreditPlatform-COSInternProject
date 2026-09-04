@@ -23,8 +23,8 @@
 | 45 | Sepet detay ekranı (§J.6 kuyruğu) | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 45 + 45b) |
 | 46 | Toplam kırılımı + insights | ✅ **kapandı ve CİHAZDA DOĞRULANDI** — insights mock (§L.17), kırılım sheet'i ertelendi |
 | 47 | Ödeme seçici + KVKK + profil % | ✅ **kapandı ve CİHAZDA DOĞRULANDI** (progress.md Tur 47 + 47b) |
-| 48 | Admin backend | ⬜ başlamadı |
-| 49 | web-admin (React + Vite) | ⬜ başlamadı |
+| 48 | Admin backend | ✅ **kapandı** (progress.md Tur 48) — okumalar gerçek, ban mock (§L.20) |
+| 49 | web-admin (React + Vite) | ✅ **kapandı** (progress.md Tur 49) — dokuz ekran, ekranda doğrulandı |
 | 50 | Gemini chatbot | ⬜ başlamadı |
 
 *Her tur bitince bu tablo güncellenir: ⬜ → 🔄 (devam) → ✅ (kapandı, progress.md'de Tur N).*
@@ -75,6 +75,23 @@ başlarken yeniden tartışılmaz** — değişirse burası güncellenir.
 | 2.11 | Sepet detay | **Her iki app**, işlem satırına tıkla → yeni Fragment | Veri zaten domain'de hazır |
 | 2.12 | **Enflasyon** | **Endeksleme** — gösterge değil, borcun parçası | *"ödeme yaparken inflated halini ödemesini istiyoruz"* (Tur 43'te eklendi) |
 | 2.13 | Endeksleme yöntemi | **INDEXATION ledger satırı**, aylık + bileşik, tembel tetikleme | Bakiye formülü 10 yerde yazılı; satır eklemek formülü değiştirmiyor |
+
+### Tur 48–49 oturumunda alınan kararlar (2026-09-04)
+
+Sunuma az kaldığı için kapsam bilinçli daraltıldı: **okumalar gerçek, yazmalar mock.**
+
+| # | Karar | Gerekçe / sonucu |
+|---|---|---|
+| 48.1 | **Altı sekme** + login (planda olduğu gibi) | Beşe indirmek yerine trafik sekmesi mock bırakıldı |
+| 48.2 | Ban/askıya alma **mock** — `users.status` ve migration 0008 **yazılmadı** | ⚠️ Karar 2.7'yi geçersiz kılar; §6'nın 8. adımı düştü ([§L.20](deferred.md)) |
+| 48.3 | Admin auth **gerçek** (`ADMIN_PASSWORD` + `typ:"admin"` JWT) | Panelin "gerçek platform" iddiasının en ucuz kanıtı; `decode_token` yeniden kullanıldı |
+| 48.4 | `POST /admin/reset` **gerçek uç** | ⚠️ deferred §F.4'ün *"asla uç olmasın"* kararının bilinçli geri alınması ([§L.19](deferred.md)) |
+| 48.5 | Trafik sekmesi **statik mock**, `audit_log` okunmuyor | Üretilmiş satırı grafiğe dökmek uydurmayı ölçüm gibi giydirirdi ([§L.21](deferred.md)) |
+| 48.6 | Chatbot (Tur 50) **kapsam dışı** | Panelde pasif yer tutucu |
+| 49.1 | Zemin **kırık metalik siyah** (`#0B0D12` + üç soluk sheen) | Palet `colors.xml`'den değer değer; üç yüzey tek ürün |
+| 49.2 | Orbit trail **yalnız KPI kartlarında** | Telefonun *"odak kartı 6 ekranda"* kuralının web karşılığı |
+| 49.3 | **Tailwind yok**, tek el yazımı `theme.css` | 8GB + `@property`'nin `@layer` içinde çalışmaması |
+| 49.4 | Ödeme düzeltme: **501 uç yerine pasif buton + açıklama** | Kimsenin çağırmadığı 501 ölü kod; okunacak cümle asıl mesaj ([§L.2](deferred.md)) |
 
 ### Karar 2.12 nasıl girdi
 
@@ -415,20 +432,26 @@ bağımlılığı `deps.py`'a.
 | Satıcılar (bireysel) | `GET /admin/sellers`, `/admin/sellers/{id}` |
 | Alıcı istatistikleri | `GET /admin/stats/buyers` |
 | Satıcı istatistikleri | `GET /admin/stats/sellers` |
-| Trafik | `GET /admin/traffic` (DAU, endpoint dağılımı, saat-gün heatmap) |
-| Admin profili | `GET /admin/me` |
+| Trafik | ~~`GET /admin/traffic`~~ ⚠️ **YAZILMADI** — sekme tamamen frontend mock ([§L.21](deferred.md)) |
+| Admin profili | `GET /admin/me` — oturum, satır sayıları, migration head, **mock/gerçek envanteri** |
+
+⚠️ **Tur 48'de eklenen, planda olmayan:** `GET /admin/overview` yerine `/admin/stats/*`
+uçları `breakdown_for(db)`'yi selektörsüz çağırıyor — platform geneli kırılımı bedavaya
+geliyor. Ayrıca `ledger.py`'a iki yardımcı eklendi (`receivables_by_seller`,
+`debts_by_buyer`); bakiyenin ikinci tanımının router'a sızmaması için.
 
 **Yönetim işlemleri**
 
-| İşlem | Durum |
-|---|---|
-| `users.status` (`ACTIVE\|SUSPENDED\|BANNED`) → migration `0008` | **Gerçek** — banlı kullanıcı `/auth/otp/verify`'da 403 |
-| `POST /admin/users/{id}/suspend` / `/ban` / `/activate` | **Gerçek** |
-| `POST /admin/reset` → mevcut `reset.py` | **Gerçek** |
-| `POST /admin/transactions/{id}/adjust` | **MOCK**, 501 + açıklama |
+| İşlem | Planlanan | **Gerçekleşen (Tur 48)** |
+|---|---|---|
+| `users.status` → migration `0008` | Gerçek, banlıya 403 | ⚠️ **YAZILMADI** — kapsam daraldı, head **0007**'de kaldı ([deferred.md §L.20](deferred.md)) |
+| `POST /admin/users/{id}/suspend` / `/ban` / `/activate` | Gerçek | ⚠️ **YAZILMADI** — butonlar yalnız ekranda, rozetli (§L.20) |
+| `POST /admin/reset` → mevcut `reset.py` | Gerçek | ✅ Gerçek, ama **§F.4'ün kararını geri alıyor** ve `seed_demo` + `warm_indexation` da çalıştırıyor ([§L.19](deferred.md)) |
+| `POST /admin/transactions/{id}/adjust` | MOCK, 501 | ⚠️ **UÇ YAZILMADI** — açıklama panelde pasif buton olarak ([§L.2](deferred.md)) |
 
-⚠️ **`reset.py`'da bulunan eksik:** `_TABLES` listesinde **`pgw_jobs` yok** — reset
-sonrası kuyruk satırları kalıyor. Bu turda eklenecek.
+⚠️ ~~**`reset.py`'da bulunan eksik:** `_TABLES` listesinde `pgw_jobs` yok~~ — **zaten
+kapatılmış.** `_TABLES` dokuz tablonun hepsini içeriyor (`pgw_jobs`, `fx_rates`,
+`audit_log` dahil). Bu satır bayattı, Tur 48'de doğrulandı.
 
 ⚠️ **Ödeme düzeltme neden mock:** ledger append-only, düzeltme ters kayıt gerektirir.
 Panelde bunu açıklayan bir not gösterilir. §L.2'ye yazılır.
@@ -454,7 +477,7 @@ web-admin/
   vite.config.ts        (proxy -> localhost:4010)
   src/
     api/client.ts       (fetch + admin JWT, localStorage)
-    theme.css           (Tur 44'un C temasi: #0D0D0F, neon aksan)
+    theme.css           (Tur 44'un B-a temasi: #0B0D12 -- ASAGIYA BAK)
     components/         (StatCard, NeonChart, DataTable, Sidebar)
     pages/
       Login.tsx
@@ -465,11 +488,21 @@ web-admin/
       AdminProfile.tsx
 ```
 
-⚠️ **Tema mobil ile aynı dili konuşur:** aynı zemin/yüzey/aksan renkleri, aynı neon
-rakam vurgusu. Sunumda üç yüzey (POS / telefon / panel) tek ürün gibi görünmeli.
+⚠️ **Yukarıdaki iki hata Tur 49'da düzeltildi:** seçilen tema **C değil B-a** (§2.9 zaten
+böyle diyor) ve zemin **`#0B0D12`**, `#0D0D0F` değil. Neon da kullanılmadı — §2'nin tema
+notu *"parlama/neon KULLANILMADI"* diyor. Panelin paleti
+[`colors.xml`](../app-mobile/app/src/main/res/values/colors.xml)'den değer değer kopyalandı.
+
+⚠️ **Tailwind KULLANILMADI** (bu plan öneriyordu): 8GB makinede üçüncü toolchain'e
+PostCSS+JIT eklemek pahalı, ve orbit trail'in `@property`'si `@layer` **içinde
+çalışmıyor**. Tek el yazımı `theme.css` yazıldı.
+
+⚠️ **Tema mobil ile aynı dili konuşur:** aynı zemin/yüzey/aksan renkleri. Sunumda üç yüzey
+(POS / telefon / panel) tek ürün gibi görünmeli. Orbit trail **yalnız KPI kartlarında** —
+telefonun *"odak kartı yalnız 6 ekranda"* kuralının web karşılığı.
 
 Grafikler Recharts (bar, line, donut, heatmap); renkler `theme.css`'ten, ayrı palet
-yok. Ban/askıya alma gerçek çağrı; ödeme düzeltme mock uyarısını gösterir.
+yok. ⚠️ Ban/askıya alma **mock** (§L.20); ödeme düzeltme pasif buton + açıklama (§L.2).
 
 ⚠️ **8GB makine:** `npm run dev` üçüncü bir toolchain. Bu tur boyunca Android Studio
 kapalı tutulmalı — kasmanın sebebi leak değil swap thrashing.
@@ -526,16 +559,26 @@ anlatılır. 46 kısaltılabilir. 48-49-50 birlikte düşer (panel ya hep ya hi�
 
 ## §6. Faz sonu uçtan uca doğrulama
 
-1. `docker compose up -d --build` → `alembic upgrade head` 0008'e kadar koşar
+1. `docker compose up -d --build` → `alembic upgrade head` **0007**'ye kadar koşar
+   (0008 yazılmadı, §L.20)
 2. `docker compose exec api python -m app.seed_demo` → zengin veri
-3. `pytest -q` → eski ~190 + yeni testler yeşil
-4. `assembleDebug` her iki app → ⚠️ **dex'i grep'le** (compile APK üretmez),
+3. `docker compose exec api python -m app.warm_indexation` → endeksleme **22 → 1222 satır**
+   (bu adım olmadan enflasyon kartı boş çıkar, §L.17)
+4. `pytest -q` → **291 geçti, 18 atlandı** (atlananlar §L.14'ün bilinçli `skipif`'i)
+5. `assembleDebug` her iki app → ⚠️ **dex'i grep'le** (compile APK üretmez),
    `adb uninstall` + kur
-5. **Cihaz senaryosu:** POS'ta long-press → sepetli veresiye → telefonda KVKK'lı yeni
+6. **Cihaz senaryosu:** POS'ta long-press → sepetli veresiye → telefonda KVKK'lı yeni
    kayıt → onay → sepet detayında üç kalem + kur şeridi → toplam kırılımı → insights
    grafikleri → ödeme yöntemi seçici
-6. `npm run dev` → altı sekme + chatbot'a *"en riskli müşteriler"*
-7. Panelden bir kullanıcıyı banla → app-mobile'dan giriş 403
+7. `cd web-admin && npm run dev` → `localhost:5173`, şifre `admin` → altı sekme veri
+   gösterir. ⚠️ Chatbot **yok** (Tur 50); kenar çubuğunda pasif yer tutucu duruyor.
+8. ⚠️ ~~Panelden bir kullanıcıyı banla → app-mobile'dan giriş 403~~ — **bu adım
+   GÖSTERİLEMEZ.** `users.status` yazılmadı, butonlar mock ([§L.20](deferred.md)).
+   Yerine: butona bas → satırın etiketi ve rengi değişir, yanında *"veritabanına
+   yazılmıyor"* rozeti çıkar. Panelin dürüstlüğü **Admin profili** sekmesindeki
+   mock/gerçek envanterinde toplu olarak görülür.
+9. **Ekranda kontrol** (§L.22): KPI kartlarında iz dönüyor mu, tablolarda **yok** mu;
+   grafiklerin son noktası kısmi ay mı (öyleyse çizilmemiş ve notu yazılmış olmalı).
 
 ---
 
