@@ -41,7 +41,10 @@ from sqlalchemy import func, select
 
 from .. import ledger, models, seed, seed_demo
 from ..admin_auth import AdminAuth, verify_password
-from ..breakdown import breakdown_for
+# _total_of is breakdown.py's own building block -- the same CASE-inside-SUM the balance
+# decomposition uses. Imported rather than rewritten so the monthly series cannot classify
+# an entry type differently from the breakdown sitting beside it on the same screen.
+from ..breakdown import _total_of, breakdown_for
 from ..config import settings
 from ..deps import DbSession
 from ..reset import _TABLES
@@ -124,6 +127,44 @@ class AdminBuyerDetail(BaseModel):
     breakdown: LedgerBreakdown
     debts_by_shop: list[AdminShopDebt]
     recent_entries: list[AdminEntry]
+
+
+class MonthPoint(BaseModel):
+    month: str  # "2026-03"
+    debt_minor: int
+    payment_minor: int
+    indexation_minor: int
+    entry_count: int
+
+
+class NamedAmount(BaseModel):
+    label: str
+    amount_minor: int
+
+
+class SellerStats(BaseModel):
+    seller_count: int
+    customer_count: int
+    total_receivable_minor: int
+    breakdown: LedgerBreakdown
+    monthly: list[MonthPoint]
+    top_sellers: list[NamedAmount]
+    riskiest_customers: list[NamedAmount]
+    collection_rate: float
+    data_through: IsoUtc | None
+
+
+class BuyerStats(BaseModel):
+    buyer_count: int
+    claimed_customer_count: int
+    unclaimed_customer_count: int
+    total_debt_minor: int
+    breakdown: LedgerBreakdown
+    monthly: list[MonthPoint]
+    top_debtors: list[NamedAmount]
+    by_category: list[NamedAmount]
+    debt_bands: list[NamedAmount]
+    data_through: IsoUtc | None
 
 
 class InventoryItem(BaseModel):
@@ -460,6 +501,214 @@ def _recent_entries(db: DbSession, condition) -> list[AdminEntry]:
         )
         for entry, name in rows
     ]
+
+
+@router.get("/admin/stats/sellers", response_model=SellerStats)
+def seller_stats(admin: AdminAuth, db: DbSession) -> SellerStats:
+    """
+    The platform from the shopkeepers' side: what is owed, how it moves, who is at risk.
+    """
+    receivables = ledger.receivables_by_seller(db)
+    names = _seller_labels(db, receivables.keys())
+
+    return SellerStats(
+        seller_count=db.execute(
+            select(func.count()).select_from(models.User).where(models.User.is_seller)
+        ).scalar_one(),
+        customer_count=db.execute(
+            select(func.count()).select_from(models.Customer)
+        ).scalar_one(),
+        total_receivable_minor=sum(receivables.values()),
+        # Both selectors left None: breakdown_for's fourth mode is the whole ledger, so
+        # the platform's decomposition costs nothing new.
+        breakdown=breakdown_for(db),
+        monthly=_monthly_series(db),
+        top_sellers=_top(
+            [(names.get(sid, sid), amount) for sid, amount in receivables.items()], 5
+        ),
+        riskiest_customers=_riskiest_customers(db),
+        collection_rate=_collection_rate(db),
+        data_through=_data_through(db),
+    )
+
+
+@router.get("/admin/stats/buyers", response_model=BuyerStats)
+def buyer_stats(admin: AdminAuth, db: DbSession) -> BuyerStats:
+    """
+    The same ledger from the buyers' side.
+
+    ⚠️ total_debt_minor here and total_receivable_minor on the sellers tab are THE SAME
+    NUMBER minus what unclaimed customers owe -- one ledger, read from either end. Both
+    come from _BALANCE; if they ever disagree, a second definition of the balance has been
+    written somewhere.
+    """
+    debts = ledger.debts_by_buyer(db)
+    names = _buyer_labels(db, debts.keys())
+
+    claimed, unclaimed = (
+        db.execute(
+            select(
+                func.count().filter(models.Customer.claim_status == "CLAIMED"),
+                func.count().filter(models.Customer.claim_status == "UNCLAIMED"),
+            )
+        ).one()
+    )
+
+    return BuyerStats(
+        buyer_count=db.execute(
+            select(func.count()).select_from(models.User).where(models.User.is_buyer)
+        ).scalar_one(),
+        claimed_customer_count=claimed,
+        unclaimed_customer_count=unclaimed,
+        total_debt_minor=sum(debts.values()),
+        breakdown=breakdown_for(db),
+        monthly=_monthly_series(db),
+        top_debtors=_top(
+            [(names.get(uid, uid), amount) for uid, amount in debts.items()], 10
+        ),
+        by_category=_by_category(db),
+        debt_bands=_debt_bands(debts),
+        data_through=_data_through(db),
+    )
+
+
+def _monthly_series(db: DbSession) -> list[MonthPoint]:
+    """
+    Twelve months of the ledger, grouped in SQL.
+
+    ⚠️ func.extract, NOT date_trunc or strftime. The tests run on SQLite and production on
+    Postgres, and each dialect is missing the other's function -- extract is the one both
+    understand.
+
+    The window ends at the LAST ENTRY rather than at today. seed_demo stops on a fixed
+    date while the clock keeps going, so a window measured back from now() would open with
+    an empty stretch and, a month after the demo, would be empty throughout. Anchoring to
+    the data means these charts stay full however long after the seed they are read.
+    """
+    last = _data_through(db)
+    if last is None:
+        return []
+
+    rows = db.execute(
+        select(
+            func.extract("year", models.Transaction.created_at).label("y"),
+            func.extract("month", models.Transaction.created_at).label("m"),
+            _total_of("DEBT"),
+            _total_of("PAYMENT"),
+            _total_of("INDEXATION"),
+            func.count(),
+        )
+        .group_by("y", "m")
+        .order_by("y", "m")
+    ).all()
+
+    points = [
+        MonthPoint(
+            month=f"{int(year):04d}-{int(month):02d}",
+            debt_minor=debt,
+            payment_minor=payment,
+            indexation_minor=indexation,
+            entry_count=count,
+        )
+        for year, month, debt, payment, indexation, count in rows
+    ]
+    return points[-12:]
+
+
+def _riskiest_customers(db: DbSession) -> list[NamedAmount]:
+    """
+    Who owes the most, across every book.
+
+    "Risk" here is simply size of balance -- the seed gives each account a settling habit
+    (seed_demo._entries) so the ranking does find the people who let a tab run, but this
+    is not a credit model and the panel should not call it one.
+    """
+    rows = db.execute(
+        select(models.Customer.display_name, ledger._BALANCE)
+        .join(
+            models.Transaction,
+            models.Transaction.customer_id == models.Customer.customer_id,
+        )
+        .group_by(models.Customer.customer_id, models.Customer.display_name)
+        .order_by(ledger._BALANCE.desc())
+        .limit(5)
+    ).all()
+    return [NamedAmount(label=name, amount_minor=balance) for name, balance in rows]
+
+
+def _collection_rate(db: DbSession) -> float:
+    """What share of everything ever charged has actually been paid. 0.0 when nothing has."""
+    charged, paid = db.execute(
+        select(_total_of("DEBT"), _total_of("PAYMENT"))
+    ).one()
+    return round(paid / charged, 4) if charged else 0.0
+
+
+def _by_category(db: DbSession) -> list[NamedAmount]:
+    """
+    What the credit was spent on, by the entry's own description.
+
+    seed_demo draws descriptions from ten shopping categories, so this is a real grouping
+    of real rows -- not a mock. Payments are excluded: "Nakit ödeme" is not a category of
+    goods.
+    """
+    rows = db.execute(
+        select(models.Transaction.description, func.sum(models.Transaction.amount_minor))
+        .where(models.Transaction.type == "DEBT")
+        .group_by(models.Transaction.description)
+        .order_by(func.sum(models.Transaction.amount_minor).desc())
+        .limit(10)
+    ).all()
+    return [
+        NamedAmount(label=label or "(açıklamasız)", amount_minor=total)
+        for label, total in rows
+    ]
+
+
+def _debt_bands(debts: dict[str, int]) -> list[NamedAmount]:
+    """
+    How debt is distributed across people -- the shape a single average hides.
+
+    amount_minor carries a COUNT of people here, not money. The field is reused rather
+    than a third model added for one chart; the panel labels the axis.
+    """
+    bands = [
+        ("0", lambda amount: amount <= 0),
+        ("0-100 TL", lambda amount: 0 < amount <= 10_000),
+        ("100-500 TL", lambda amount: 10_000 < amount <= 50_000),
+        ("500-2.000 TL", lambda amount: 50_000 < amount <= 200_000),
+        ("2.000 TL+", lambda amount: amount > 200_000),
+    ]
+    return [
+        NamedAmount(
+            label=label,
+            amount_minor=sum(1 for amount in debts.values() if matches(amount)),
+        )
+        for label, matches in bands
+    ]
+
+
+def _top(pairs: list[tuple[str, int]], count: int) -> list[NamedAmount]:
+    ranked = sorted(pairs, key=lambda pair: pair[1], reverse=True)[:count]
+    return [NamedAmount(label=label, amount_minor=amount) for label, amount in ranked]
+
+
+def _seller_labels(db: DbSession, user_ids) -> dict[str, str]:
+    """Shop names for a set of sellers -- buyer-facing language names the SHOP."""
+    rows = db.execute(
+        select(models.User.user_id, models.User.shop_name, models.User.display_name)
+        .where(models.User.user_id.in_(list(user_ids) or [""]))
+    ).all()
+    return {user_id: shop or name for user_id, shop, name in rows}
+
+
+def _buyer_labels(db: DbSession, user_ids) -> dict[str, str]:
+    rows = db.execute(
+        select(models.User.user_id, models.User.display_name).where(
+            models.User.user_id.in_(list(user_ids) or [""])
+        )
+    ).all()
+    return dict(rows)
 
 
 @router.get("/admin/me", response_model=AdminMe)

@@ -230,6 +230,114 @@ def test_reading_the_panel_writes_no_indexation(client, admin_auth, db_session, 
     assert indexation_rows() == before
 
 
+# --- stats ---
+
+
+def test_both_stats_tabs_report_the_same_ledger(client, admin_auth):
+    """
+    The identity worth saying out loud in the demo, and the test that protects it.
+
+    A seller's receivable and a buyer's debt are the same rows read from opposite ends.
+    They differ by exactly what unclaimed customers owe -- people with no app, so no user
+    to attribute the debt to. If a second definition of the balance is ever written, this
+    is the assert that stops agreeing.
+    """
+    sellers = client.get("/admin/stats/sellers", headers=admin_auth).json()
+    buyers = client.get("/admin/stats/buyers", headers=admin_auth).json()
+
+    unclaimed_owed = 16500 + 2550 + 21000  # c2, c4, c5
+    assert (
+        sellers["total_receivable_minor"] - buyers["total_debt_minor"] == unclaimed_owed
+    )
+    # And both decompose from the same call, so their breakdowns are identical.
+    assert sellers["breakdown"] == buyers["breakdown"]
+
+
+def test_the_platform_breakdown_reconciles(client, admin_auth):
+    parts = client.get("/admin/stats/sellers", headers=admin_auth).json()["breakdown"]
+
+    assert (
+        parts["principal_minor"] + parts["indexation_minor"] - parts["total_paid_minor"]
+        == parts["outstanding_minor"]
+    )
+
+
+def test_the_monthly_series_groups_in_either_dialect(client, admin_auth):
+    """
+    Runs on SQLite here and Postgres in production, which is why the grouping uses
+    func.extract -- date_trunc and strftime each exist in only one of them. A months
+    label that came back malformed would show up as a broken axis, not an error.
+    """
+    months = client.get("/admin/stats/sellers", headers=admin_auth).json()["monthly"]
+
+    assert months
+    assert len(months) <= 12
+    for point in months:
+        year, month = point["month"].split("-")
+        assert len(year) == 4 and 1 <= int(month) <= 12
+    # Chronological, so a line chart can plot it without sorting.
+    assert months == sorted(months, key=lambda point: point["month"])
+
+
+def test_the_series_sums_back_to_the_breakdown(client, admin_auth):
+    """
+    Per-month totals against the whole-ledger decomposition. Both come from _total_of, and
+    the point of asserting it is that the monthly path adds a GROUP BY -- the place a
+    filter could silently drop rows.
+    """
+    body = client.get("/admin/stats/sellers", headers=admin_auth).json()
+
+    assert sum(point["debt_minor"] for point in body["monthly"]) == body["breakdown"][
+        "principal_minor"
+    ]
+    assert sum(point["payment_minor"] for point in body["monthly"]) == body[
+        "breakdown"
+    ]["total_paid_minor"]
+
+
+def test_seller_stats_rank_the_shops_and_the_risk(client, admin_auth):
+    body = client.get("/admin/stats/sellers", headers=admin_auth).json()
+
+    # Shops are named by their SHOP name, the way buyer-facing screens name them.
+    assert body["top_sellers"][0]["label"] == "Ahmet Bakkal"
+    assert body["riskiest_customers"][0]["amount_minor"] == 49000  # c1
+    assert 0.0 <= body["collection_rate"] <= 1.0
+
+
+def test_buyer_stats_count_claimed_and_unclaimed(client, admin_auth):
+    body = client.get("/admin/stats/buyers", headers=admin_auth).json()
+
+    assert body["claimed_customer_count"] == 4
+    assert body["unclaimed_customer_count"] == 3
+
+
+def test_buyer_stats_group_spending_by_category(client, admin_auth):
+    """Descriptions are real ledger text, so this chart is a grouping and not a mock."""
+    categories = client.get("/admin/stats/buyers", headers=admin_auth).json()[
+        "by_category"
+    ]
+
+    assert categories
+    assert all(item["amount_minor"] > 0 for item in categories)
+    # Payments are not a category of goods.
+    assert not any("ödeme" in item["label"].lower() for item in categories)
+
+
+def test_the_debt_bands_count_people_not_money(client, admin_auth):
+    body = client.get("/admin/stats/buyers", headers=admin_auth).json()
+
+    bands = body["debt_bands"]
+    assert [band["label"] for band in bands][0] == "0"
+    # Every buyer carrying a balance falls in exactly one band.
+    assert sum(band["amount_minor"] for band in bands) == 3  # u1, u3, u_owner
+
+
+def test_the_stats_need_the_admin_token(client, owner_auth):
+    for path in ("/admin/stats/sellers", "/admin/stats/buyers"):
+        assert client.get(path).status_code == 401, path
+        assert client.get(path, headers=owner_auth).status_code == 401, path
+
+
 # --- /admin/me ---
 
 
