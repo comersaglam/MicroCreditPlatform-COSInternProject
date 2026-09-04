@@ -336,7 +336,7 @@ class PgwJobCreate(BaseModel):
     # another shop's till.
 
 
-# --- error ---11
+# --- error ---
 
 
 class ErrorBody(BaseModel):

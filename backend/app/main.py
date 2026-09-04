@@ -19,7 +19,7 @@ from .routers import (
     users,
 )
 from .seed import is_empty, seed
-1
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
