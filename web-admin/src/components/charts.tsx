@@ -56,6 +56,13 @@ const tooltipStyle = {
     fontSize: 12,
   },
   labelStyle: { color: '#E8EAF0' },
+  // ⚠️ itemStyle is deliberately NOT set. Recharts prints each value in its own series
+  // colour, and that colour is CARRYING INFORMATION: on the two-line chart it is the only
+  // thing saying whether you are reading veresiye or tahsilat. Forcing it to white made
+  // every tooltip legible and identical, which is a worse trade -- legibility bought by
+  // deleting the label.
+  //
+  // The palette below is what makes the colours readable at this size instead.
 };
 
 /**
@@ -104,10 +111,17 @@ export function MoneyLines({
 }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 4 }}>
+      <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -2 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="label" {...AXIS} tickLine={false} axisLine={{ stroke: GRID }} />
-        <YAxis {...AXIS} tickLine={false} axisLine={false} tickFormatter={moneyShort} />
+        {/* Same narrowed axis as the bars -- see the note there. */}
+        <YAxis
+          {...AXIS}
+          width={38}
+          tickLine={false}
+          axisLine={false}
+          tickFormatter={moneyShort}
+        />
         <Tooltip {...tooltipStyle} formatter={(value) => money(Number(value))} />
         <Legend wrapperStyle={{ fontSize: 12, color: '#8B92A4' }} />
         {lines.map((line) => (
@@ -154,7 +168,7 @@ export function MoneyBars({
       <BarChart
         data={data}
         layout={horizontal ? 'vertical' : 'horizontal'}
-        margin={{ top: 8, right: 8, bottom: 0, left: 4 }}
+        margin={{ top: 8, right: 8, bottom: 0, left: -2 }}
       >
         <CartesianGrid stroke={GRID} vertical={!horizontal} horizontal={horizontal} />
         {horizontal ? (
@@ -166,7 +180,7 @@ export function MoneyBars({
               {...AXIS}
               tickLine={false}
               axisLine={false}
-              width={110}
+              width={84}
             />
           </>
         ) : (
@@ -185,7 +199,19 @@ export function MoneyBars({
                 value.length > 12 ? `${value.slice(0, 11)}…` : value
               }
             />
-            <YAxis {...AXIS} tickLine={false} axisLine={false} tickFormatter={tick} />
+            {/*
+              width=38, not the default 60. The ticks here are short -- "24", "140 B" --
+              and the default reserved almost three times the right-hand gap on the left,
+              so every chart sat visibly off-centre in its card. Measured: 43px left
+              against 14px right.
+            */}
+            <YAxis
+              {...AXIS}
+              width={38}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={tick}
+            />
           </>
         )}
         <Tooltip
@@ -209,15 +235,22 @@ export function MoneyBars({
 export function Donut({ data }: { data: Point[] }) {
   return (
     <ResponsiveContainer width="100%" height="100%">
+      {/*
+        The ring sits in the left half, the legend in the right. cx is where its CENTRE
+        goes, so it has to leave room for the radius on both sides of itself: at 32% with
+        a 76% radius the left edge fell 12px outside the card and the ring came out
+        clipped, while 185px of empty space sat on the right. 26% centres the ring inside
+        the space the legend leaves it.
+      */}
       <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
         <Pie
           data={data}
           dataKey="value"
           nameKey="label"
-          cx="32%"
+          cx="36%"
           cy="50%"
-          innerRadius="48%"
-          outerRadius="76%"
+          innerRadius="44%"
+          outerRadius="70%"
           paddingAngle={2}
           stroke="none"
         >
@@ -225,13 +258,21 @@ export function Donut({ data }: { data: Point[] }) {
             <Cell key={index} fill={CATEGORICAL[index % CATEGORICAL.length]} />
           ))}
         </Pie>
-        <Tooltip {...tooltipStyle} formatter={(value) => money(Number(value))} />
+        <Tooltip
+          {...tooltipStyle}
+          formatter={(value) => money(Number(value))}
+          position={{ x: 0, y: 0 }}
+          itemStyle={{ color: '#E8EAF0' }}
+        />
         <Legend
           layout="vertical"
           align="right"
           verticalAlign="middle"
-          iconSize={8}
-          wrapperStyle={{ fontSize: 11, color: '#8B92A4', lineHeight: '17px' }}
+          iconSize={9}
+          // The same weight and colour a table's row text gets. It was --muted grey at
+          // 11px, which reads as a caption -- but these are the chart's labels, the way the
+          // bar chart's axis ticks are, and a label you have to squint at is not a label.
+          wrapperStyle={{ fontSize: 12, color: '#E8EAF0', lineHeight: '19px' }}
         />
       </PieChart>
     </ResponsiveContainer>

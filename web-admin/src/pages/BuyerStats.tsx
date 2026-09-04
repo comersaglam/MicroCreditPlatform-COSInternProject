@@ -49,7 +49,7 @@ export function BuyerStats() {
       <div className="grid-2">
         <ChartBox
           title="Ne alınıyor"
-          note="İşlem satırlarının kendi açıklamalarından gruplandı — ödemeler dışarıda, çünkü ödeme bir ürün kategorisi değil."
+          note="İşlem satırlarının kendi açıklamalarından gruplandı — ödemeler dışarıda."
         >
           <Donut
             data={data.by_category.map((row) => ({ label: row.label, value: row.amount_minor }))}

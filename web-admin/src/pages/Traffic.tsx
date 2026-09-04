@@ -68,16 +68,7 @@ export function Traffic() {
         </div>
       </div>
 
-      <div className="notice">
-        <span>⚠️</span>
-        <div>
-          <strong>Bu sekmedeki rakamların tamamı örnektir.</strong> Sistem canlıya
-          alınmadığı için gerçek istek kaydı yok: <code>audit_log</code> tablosuna canlı
-          yazan bir middleware bilinçli olarak yazılmadı (deferred.md §L.1) ve bu sayfa o
-          tabloyu okumuyor da (§L.21). Panelin diğer sekmeleri gerçek veritabanından
-          besleniyor — burası operasyon görünümünün <em>şeklini</em> gösteriyor.
-        </div>
-      </div>
+
 
       <KpiRow>
         <Kpi index={0} label="Günlük ortalama istek" value="48" note="son 30 gün" />
@@ -86,6 +77,15 @@ export function Traffic() {
         <Kpi index={3} label="En yoğun gün" value="Cumartesi" />
       </KpiRow>
 
+      <div className="notice">
+        <span>⚠️</span>
+        <div>
+          <strong>Bu sekmedeki rakamların tamamı örnektir.</strong> Sistem canlıya
+          alınmadığı için gerçek istek kaydı yok: <code>audit_log</code> tablosuna canlı
+          yazan bir middleware bilinçli olarak yazılmadı. Panelin diğer sekmeleri gerçek veritabanından
+          besleniyor — burası operasyon görünümünün <em>şeklini</em> gösteriyor.
+        </div>
+      </div>
       <div className="grid-2">
         <ChartBox title="Günlük istek (30 gün)">
           <MoneyBars data={DAILY} unit="count" />
