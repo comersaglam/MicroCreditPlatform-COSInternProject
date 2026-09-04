@@ -3947,3 +3947,78 @@ görüntüsü alınmalı ve üç şey sorulmalı: çizildi mi, eksen hizalı mı
 dönem mi.
 
 **Faz 6'nın panel tarafı BİTTİ (48-49).** Sıradaki: Tur 50 — Gemini chatbot (opsiyonel).
+
+---
+
+### 2026-09-04 — Tur 49b: cihazın söylediği iki şey
+
+Panel bittikten sonra kullanıcı iki app'i ve paneli elle gezdi. İkisi de derlemeden,
+testlerden ve benim ekran doğrulamamdan geçmiş, ikisi de cihazda çıktı.
+
+#### 1. KVKK onayı yanlış şeye aitti
+
+**Bulgu:** bir numarayla kayıt ol → onayla → çıkış → **ikinci numarayla** kayıt ol →
+**metin hiç çıkmıyor.**
+
+`ConsentStore` tek bir cihaz-genel boolean tutuyordu, ve dosyanın kendi yorumu bunu
+*"cihaz seviyesinde bir gerçek"* diye savunuyordu. Savunma yanlıştı: KVKK'da rıza **ilgili
+kişinin** kendi verisi hakkında verdiği bir şey. Bir telefonda A'nın onayı B'nin yerine
+geçemez, ve paylaşılan cihaz (aile, tezgâh) bu üründe **istisna değil normal durum**.
+
+Sonucu sadece "metin çıkmadı" değil: ikinci kişi, **kendisine hiç gösterilmemiş** bir şeye
+onay vermiş olarak kaydedildi. Onay kapısının engellemek için var olduğu tek sonuç bu.
+
+**Düzeltme:** onay telefon numarasıyla anahtarlanıyor — uygulamanın zaten tek yerde
+normalize ettiği kanonik E.164. Kapı çalıştığında kullanıcı satırı henüz yok, yani numara
+o anda kişi hakkında bilinen tek şey. Üç kapı da geçiriyor.
+
+⚠️ Ayrı DataStore dosyası artık **daha** kritik: çıkış bir onayı geri almamalı, başkası
+olarak girmek bir onayı devralmamalı — iki ayrı gereksinim, ikisini ayıran şey anahtar.
+
+**Bunu hiçbir test yakalayamazdı, çünkü testi yoktu.** Asıl bulgu bu. `ConsentScopeTest`
+iki app'te de yazıldı ve tek-boolean fake geri konarak doğrulandı: kullanıcının yaşadığı
+**tam iki senaryo** kırmızıya döndü.
+
+#### 2. POS'ta onay kutusu yine görünmüyordu
+
+Tur 47b `wrap_content+maxHeight`'ı `0dp+layout_weight` yapmıştı. Teşhis doğru, şekil
+yanlış: **ağırlık sınırlı bir yüksekliği paylaştırır**, `AlertDialog` ise gövdesini sınırsız
+ölçüyor, yani *"kalanın bir payı"* yine *"hepsi"*ne çözülebiliyor — ve POS'ta çözüldü.
+Checkbox ekran dışında kalınca onay butonu sonsuza kadar pasif: metin iptal edilebiliyor
+ama onaylanamıyor.
+
+Artık sabit `280dp` — ölçüm geçişinin yeniden yorumlayamayacağı tek şekil. İki app'in
+layout'u tekrar birebir aynı.
+
+⚠️ **Cihazda doğrulanmadı** (telefon bağlı değildi). §L.18 bu sınırı zaten yazıyor:
+görsel yerleşim yalnız ekranda doğrulanır. Sunum öncesi bakılacak.
+
+#### 3. Panelin favicon'u başka bir projenin logosuydu
+
+Dosya doğruydu, sunucu doğrusunu veriyordu, `<link rel=icon>` doğruyu gösteriyordu — ekranda
+yine de başka bir projenin ikonu vardı. Chrome favicon'u **origin başına** saklıyor (şema +
+host + **port**), dosya yoluna bakmadan. `:5173` Vite'ın varsayılanı ve o portta başka bir
+proje çalışmış.
+
+⚠️ İlk düzeltmem yanlıştı: dosyayı yeniden adlandırmak origin seviyesindeki bir cache'i
+çözmez. Panel **5174**'e taşındı; CORS ve doküman da öyle. `strictPort: true`, çünkü sessizce
+başka bir porta kaymak sunumda URL yazarak geçen dakika demek.
+
+#### Doğrulama
+
+- İki app: `compileDebugKotlin` + `testDebugUnitTest` + `assembleDebug` yeşil
+- **APK dex'inde** `kvkk_accepted_` öneki iki pakette de var (derlemeye değil pakete bakıldı)
+- Panel `localhost:5174` üzerinden login + 8 dükkan ✓
+- Backend: 291 test yeşil (CORS testi yeni porta güncellendi)
+
+#### Öğrenilen
+
+**Bir yorumun bir kararı savunuyor olması, kararın doğru olduğu anlamına gelmiyor.**
+`ConsentStore` cihaz kapsamını gerekçesiyle birlikte yazmıştı; gerekçe ikna ediciydi ve
+yanlıştı. Kod incelemesinde en zor görülen hata türü: kendini açıklamış bir yanlış.
+
+**"Düzeltildi" ile "doğru şekle kavuştu" farklı şeyler.** KVKK layout'u Tur 47b'de
+düzeltilmişti — doğru teşhis, yanlış şekil, ve hata farklı bir app'te geri döndü. Bir
+ölçüm hatasının çözümü, ebeveynin yeniden yorumlayamayacağı bir değer olmalı.
+
+**Sıradaki:** cihaz turu (KVKK'nın iki app'te de ekranda doğrulanması), sonra Tur 50.

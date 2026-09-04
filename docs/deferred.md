@@ -1264,6 +1264,34 @@ müşterilerin borcuna eklenen enflasyon farkı da uydurma bir orandan geliyor. 
 sadeleşiyor. 100'den başlayan seri ile 100000'den başlayan aynı cevabı veriyor — kaynak
 değiştiğinde çağıranların hiçbiri etkilenmiyor.
 
+### L.23 KVKK onayı CİHAZ bazlıydı — kişi bazlı olmalıydı  ✅ DÜZELTİLDİ (Tur 49b)
+
+`ConsentStore` tek bir cihaz-genel boolean tutuyordu ve dosyanın kendi yorumu bunu
+*"cihaz seviyesinde bir gerçek, hesap seviyesinde değil"* diye **savunuyordu**. Savunma
+yanlıştı.
+
+**Cihazda bulundu:** bir numarayla kayıt ol → metni onayla → çıkış yap → **ikinci bir
+numarayla** kayıt ol → **metin hiç çıkmadı**. İkinci kişi, kendisine hiç gösterilmemiş bir
+şeye onay vermiş olarak kaydedildi. Bir onay kapısının engellemek için var olduğu tek sonuç
+budur, ve kapı onu üretiyordu.
+
+**Neden yanlıştı:** KVKK'da rıza *ilgili kişinin kendi verisi hakkında* verdiği bir şeydir.
+Bir telefonda A kişisinin onayı, o telefonu sonra kullanan B kişisinin yerine geçemez.
+Paylaşılan cihaz (aile, tezgâh) istisna değil, **normal durum**.
+
+**Düzeltme:** onay **telefon numarasıyla** anahtarlanıyor — uygulamanın zaten tek yerde
+normalize ettiği kanonik E.164 ([[phone-canonical-e164-single-place]]). Kapı çalıştığında
+kullanıcı satırı henüz yok, yani numara o anda kişi hakkında bilinen **tek şey**; anahtar
+olarak da doğru olan bu.
+
+⚠️ **Ayrı DataStore dosyasında olması artık daha önemli:** çıkış yapmak bir onayı geri
+almamalı, başkası olarak girmek bir onayı devralmamalı. Bunlar **iki ayrı gereksinim** ve
+ikisini ayıran şey anahtarın kendisi.
+
+**Bunu hiçbir test yakalayamazdı, çünkü testi yoktu — asıl bulgu bu.** Artık iki app'te de
+var (`ConsentScopeTest`), ve tek-boolean fake geri konarak doğrulandı: kullanıcının yaşadığı
+**tam iki senaryo** kırmızıya dönüyor ([[prove-the-test-fails-first]]).
+
 ### L.5 TC / kimlik fotoğrafı yerelde kalıyor — KVKK kararı  ✅ KARAR GEÇERLİ (Tur 47)
 
 ⚠️ **Tur 47'de kapsam DARALDI, §L.16'ya bak.** Bu bölüm *"Room'a yazılır"* diyordu; öyle

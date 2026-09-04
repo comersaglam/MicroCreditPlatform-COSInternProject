@@ -9,8 +9,10 @@
 > Dondurulmuş PGW sözleşmesi: [deferred.md §K](deferred.md#k-cihazda-doğrulanmış-pgw-sözleşmesi---değiştirme) 🔒
 > — sepete veya geçide dokunan her tur önce oraya baksın.
 >
-> Son güncelleme: 2026-09-03. **Mobil taraf BİTTİ (43-47), hepsi cihazda doğrulandı.**
-> Kalan: 48-49-50 — admin backend, web panel, chatbot.
+> Son güncelleme: 2026-09-04. **Mobil taraf ve panel BİTTİ (43-49).** Kalan: Tur 50
+> (chatbot, opsiyonel) ve KVKK düzeltmesinin cihaz turu (progress.md Tur 49b).
+>
+> Panel: `cd web-admin && npm run dev` → **localhost:5174**, şifre `admin`.
 
 ---
 
@@ -456,7 +458,7 @@ kapatılmış.** `_TABLES` dokuz tablonun hepsini içeriyor (`pgw_jobs`, `fx_rat
 ⚠️ **Ödeme düzeltme neden mock:** ledger append-only, düzeltme ters kayıt gerektirir.
 Panelde bunu açıklayan bir not gösterilir. §L.2'ye yazılır.
 
-**CORS:** `main.py`'a `CORSMiddleware` (Vite dev server `localhost:5173`). Bugün hiç
+**CORS:** `main.py`'a `CORSMiddleware` (Vite dev server `localhost:5174`). Bugün hiç
 yok.
 
 Tüm agregasyonlar `ledger.py`'ın mevcut yapı taşlarını kullanır — bakiye ikinci kez
@@ -474,7 +476,7 @@ tanımlanmaz.
 ```
 web-admin/
   package.json          (react, react-router, recharts, tailwind)
-  vite.config.ts        (proxy -> localhost:4010)
+  vite.config.ts        (port 5174, proxy -> localhost:4010)
   src/
     api/client.ts       (fetch + admin JWT, localStorage)
     theme.css           (Tur 44'un B-a temasi: #0B0D12 -- ASAGIYA BAK)
@@ -570,7 +572,7 @@ anlatılır. 46 kısaltılabilir. 48-49-50 birlikte düşer (panel ya hep ya hi�
 6. **Cihaz senaryosu:** POS'ta long-press → sepetli veresiye → telefonda KVKK'lı yeni
    kayıt → onay → sepet detayında üç kalem + kur şeridi → toplam kırılımı → insights
    grafikleri → ödeme yöntemi seçici
-7. `cd web-admin && npm run dev` → `localhost:5173`, şifre `admin` → altı sekme veri
+7. `cd web-admin && npm run dev` → `localhost:5174`, şifre `admin` → altı sekme veri
    gösterir. ⚠️ Chatbot **yok** (Tur 50); kenar çubuğunda pasif yer tutucu duruyor.
 8. ⚠️ ~~Panelden bir kullanıcıyı banla → app-mobile'dan giriş 403~~ — **bu adım
    GÖSTERİLEMEZ.** `users.status` yazılmadı, butonlar mock ([§L.20](deferred.md)).
