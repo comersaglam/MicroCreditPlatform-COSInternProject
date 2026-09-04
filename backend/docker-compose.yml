@@ -22,6 +22,9 @@ services:
       JWT_SECRET: dev-secret-not-for-production
       TOKEN_TTL_SECONDS: 3600
       SEED_ON_STARTUP: "true"
+      # The admin panel's only credential -- see config.Settings.admin_password for what
+      # this one string opens.
+      ADMIN_PASSWORD: admin
     # 4010 is what app-pos's debug build already points at (http://10.0.2.2:4010/, the
     # Prism port). Mapping to it here means the Android side needs no change at all.
     ports:

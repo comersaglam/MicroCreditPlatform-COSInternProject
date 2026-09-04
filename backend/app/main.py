@@ -4,11 +4,13 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import SessionLocal
 from .routers import (
+    admin,
     approvals,
     auth,
     buyer,
@@ -70,6 +72,23 @@ async def validation_exception_handler(
     )
 
 
+# The app's FIRST middleware of any kind, and it exists for exactly one caller: the admin
+# panel's Vite dev server. The Android apps are unaffected -- OkHttp sends no preflight.
+#
+# Origins are listed rather than "*" because "*" together with allow_credentials=True is
+# silently rejected by browsers, and pinning the list now keeps that trap from being
+# reintroduced later. Credentials are off: the panel authenticates with a bearer header,
+# not a cookie. Both spellings of localhost are here because Vite prints one of them and a
+# browser treats the two as different origins.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(customers.router)
@@ -78,6 +97,7 @@ app.include_router(buyer.router)
 app.include_router(approvals.router)
 app.include_router(pgw_jobs.router)
 app.include_router(fx_rates.router)
+app.include_router(admin.router)
 
 
 @app.get("/health", tags=["meta"])

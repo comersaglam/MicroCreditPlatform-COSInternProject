@@ -20,5 +20,14 @@ class Settings(BaseSettings):
 
     seed_on_startup: bool = True
 
+    # The admin panel's only credential. Weak by default for the same reason jwt_secret
+    # is: a value that works out of the box on a laptop, and is obviously not one to ship.
+    #
+    # ⚠️ Understand what this single string opens. There is no admin user, no role column,
+    # no rate limit and no lockout (deferred.md §L.6) -- and since Turn 48 it also opens
+    # POST /admin/reset, which truncates every table. Anyone holding it holds the whole
+    # database. Acceptable for a demo behind a laptop; acceptable for nothing else.
+    admin_password: str = "admin"
+
 
 settings = Settings()

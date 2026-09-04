@@ -45,6 +45,28 @@ def create_refresh_token(user_id: str) -> str:
     return token
 
 
+# The `sub` of an admin token. A constant, not a user id, because there is no user row
+# behind it -- the admin is a key, not an account (deferred.md §L.6). That is also why this
+# takes no argument where the two above take a user_id.
+ADMIN_SUBJECT = "admin"
+
+
+def create_admin_token() -> tuple[str, datetime]:
+    """
+    Mint the panel's bearer. A THIRD token type, beside access and refresh.
+
+    It lives here rather than in admin_auth.py so all three minting functions stay in one
+    place and nothing has to reach across a module for `_encode`. What makes the type
+    matter is decode_token below: an access token presented to an admin endpoint fails on
+    `typ` exactly the way a refresh token already fails on an access-only one. Without a
+    distinct type, every signed-in shopkeeper would hold an admin bearer.
+
+    Same TTL as an access token. A panel session outliving a shop session would only widen
+    the window on a credential that has no rotation of its own.
+    """
+    return _encode(ADMIN_SUBJECT, settings.token_ttl_seconds, "admin")
+
+
 def decode_token(token: str, expected_type: str) -> str:
     """Return the subject (user_id), or raise 401."""
     try:
