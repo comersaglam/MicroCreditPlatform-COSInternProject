@@ -17,38 +17,48 @@ the one number the admin panel would have shown as roughly zero.
 The code was right and the data was absent. That is deferred.md §L.17's finding, and this
 command is its fix.
 
-DELIBERATELY NOT AN ENDPOINT, for the same reason `reset.py` is not one. Indexation rows
+NOT AN ENDPOINT OF ITS OWN, for the same reason `reset.py` is not one: indexation rows
 land in an append-only table (migration 0001's trigger) and cannot be taken back
 (deferred.md §L.7). `ensure_indexed` is idempotent per month, so a second run is harmless
 -- but a button that writes irreversible rows should not be one mistap away, and the panel
-has no business triggering it (routers/admin.py keeps the panel a pure reader).
+stays a pure reader (routers/admin.py).
+
+The one exception is POST /admin/reset, which calls `warm_indexation` below as the last
+step of restoring the demo. That is not the panel deciding to index: it is the panel
+putting back what the reset just deleted.
 """
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from . import models
 from .db import SessionLocal
 from .indexation import ensure_indexed_book
 
 
+def warm_indexation(db: Session) -> int:
+    """
+    Index every book on the platform. Returns rows written.
+
+    Per seller rather than per customer: ensure_indexed_book already fetches the book once
+    and loops inside, which is the batching the customer list needed.
+    """
+    sellers = db.execute(
+        select(models.Transaction.seller_id).distinct()
+    ).scalars().all()
+
+    return sum(ensure_indexed_book(db, seller_id) for seller_id in sellers)
+
+
 def main() -> None:
     db = SessionLocal()
     try:
         before = _rows(db)
-
-        sellers = db.execute(
-            select(models.Transaction.seller_id).distinct()
-        ).scalars().all()
-
-        # Per seller rather than per customer: ensure_indexed_book already fetches the
-        # book once and loops inside, which is the batching the customer list needed.
-        for seller_id in sellers:
-            written = ensure_indexed_book(db, seller_id)
-            print(f"{seller_id}: {written} rows")
-
+        written = warm_indexation(db)
         after = _rows(db)
-        print(f"\nINDEXATION rows: {before} -> {after} (+{after - before})")
-        if after == before:
+
+        print(f"INDEXATION rows: {before} -> {after} (+{written})")
+        if not written:
             print(
                 "Nothing written. Either every month is already indexed, or fx_rates "
                 "does not reach the months in question (see fx.cpi_ratio)."

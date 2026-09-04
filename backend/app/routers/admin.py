@@ -47,9 +47,10 @@ from ..admin_auth import AdminAuth, verify_password
 from ..breakdown import _total_of, breakdown_for
 from ..config import settings
 from ..deps import DbSession
-from ..reset import _TABLES
+from ..reset import _TABLES, reset
 from ..schemas import IsoUtc, LedgerBreakdown
 from ..security import api_error, create_admin_token
+from ..warm_indexation import warm_indexation
 
 router = APIRouter(tags=["admin"])
 
@@ -738,6 +739,51 @@ def admin_me(admin: AdminAuth, db: DbSession) -> AdminMe:
         data_through=_data_through(db),
         inventory=_INVENTORY,
     )
+
+
+@router.post("/admin/reset", response_model=AdminMe)
+def admin_reset(
+    admin: AdminAuth, db: DbSession, with_demo: bool = True
+) -> AdminMe:
+    """
+    Wipe the database back to the demo data. THE ONE ENDPOINT HERE THAT WRITES.
+
+    ⚠️ THIS REVERSES A DELIBERATE DECISION. deferred.md §F.4/3 refused to expose reset over
+    HTTP at all -- not even token-gated or debug-gated -- on the grounds that a user being
+    ABLE to erase their ledger by accident is a problem on its own, however well the door
+    is locked. That reasoning was about the people using the apps, and it still holds for
+    them: nothing on a phone or a till can reach this.
+
+    What changed is that a demo needs to be resettable between runs, by the person giving
+    it, without a terminal. The door now stands behind a credential no client ships and no
+    device flow knows about, and the panel puts a two-step confirmation in front of it. It
+    is a real weakening of §F.4 and it is written down rather than smuggled -- see
+    deferred.md §L.19.
+
+    ⚠️ with_demo defaults TRUE, and that default matters. reset() reseeds seed() only: the
+    four core accounts and their handful of rows. Without the demo seed behind it, pressing
+    this button five minutes before a presentation would empty every chart in the panel --
+    the reset would look like it had broken the system it was meant to restore.
+
+    ⚠️ AND THE WARMING HAS TO RUN TOO. seed_demo writes debts and payments; it does not
+    write indexation, because indexation is lazy -- it appears when a balance is read
+    (deferred.md §L.17, app/warm_indexation.py). Measured on a real reset: 7003 rows before,
+    5781 after, and every one of the 1222 INDEXATION rows gone. The receivable was intact
+    and the inflation on it was zero, which is precisely the argument this demo exists to
+    make. So the restore is not complete until the indexation is back.
+
+    Returns the same body as GET /admin/me so the panel can show the after-state without a
+    second round trip.
+    """
+    reset(db)
+
+    if with_demo:
+        # After reset(), which commits. seed_demo is idempotent and no-ops if the demo
+        # population somehow survived.
+        seed_demo.seed_demo(db)
+        warm_indexation(db)
+
+    return admin_me(admin, db)
 
 
 def _migration_head(db: DbSession) -> str | None:

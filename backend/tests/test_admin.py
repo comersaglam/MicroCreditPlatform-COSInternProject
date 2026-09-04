@@ -386,6 +386,21 @@ def test_the_panels_origin_is_allowed(client):
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_reset_is_locked_even_though_it_exists(client, owner_auth):
+    """
+    §F.4 refused this endpoint outright; Turn 48 wrote it anyway, behind the admin key
+    (deferred.md §L.19). The least this file can do is prove the key is required.
+
+    ⚠️ The happy path is NOT tested here and cannot be: reset() issues TRUNCATE ... RESTART
+    IDENTITY CASCADE, which SQLite does not have, and it cannot be softened to a DELETE
+    because the append-only trigger on `transactions` refuses those. Verified by hand
+    against real Postgres instead -- the same posture conftest.py already documents for the
+    trigger itself.
+    """
+    assert client.post("/admin/reset").status_code == 401
+    assert client.post("/admin/reset", headers=owner_auth).status_code == 401
+
+
 def test_me_carries_the_mock_inventory(client, admin_auth):
     """
     The panel renders deferred.md §L as a table. If this list ever empties, the panel
